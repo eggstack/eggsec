@@ -16,6 +16,8 @@ These checks run on every pull request and push to `main`. They cover core archi
 | Clippy | `make clippy` (engine lib + leaf crates, `-D warnings`) | Code quality on engine and leaf crates |
 | Package tests | `cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast` | All integration tests (MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more) |
 | Report envelope | `cargo test -p eggsec-output --tests` + `cargo test -p eggsec-report-model --tests` | Output rendering tests + model contract roundtrip |
+| Policy kernel | `cargo test -p eggsec-policy --tests` | Deterministic authorization semantics (`eggsec-policy` is a leaf) |
+| Knowledge corpus | `cargo test -p eggsec-{service-db,secrets,payloads,udp-scan} --tests` | Corpus data (service tables, secret patterns, payloads, UDP verdicts) — data-only leaves, engine owns I/O |
 | Architecture drift | `bash scripts/check-architecture-guards.sh` | Static grep checks for stale terminology and bypass patterns (requires ripgrep) |
 
 In CI these run as three jobs in `ci.yml`: `rust` (full `make check`,
@@ -40,6 +42,11 @@ make clippy
 cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 cargo test -p eggsec-report-model --tests
+cargo test -p eggsec-policy --tests
+cargo test -p eggsec-service-db --tests
+cargo test -p eggsec-secrets --tests
+cargo test -p eggsec-payloads --tests
+cargo test -p eggsec-udp-scan --tests
 bash scripts/check-architecture-guards.sh
 ```
 

@@ -14,7 +14,7 @@
 //! 2. `TaskKind` is a wire adapter: engine adapters delegate to the single
 //!    wire-side match (no parallel operation-ID/target tables), and the
 //!    canonical typed conversion (`CanonicalOperationRequest::from_task_kind`)
-//!    agrees on identity/target/route for all 29 variants.
+//!    agrees on identity/target/route for all 30 variants.
 //! 3. Wire JSON stability: every `TaskKind` round-trips through serde with a
 //!    stable `kind` tag; unknown tags are rejected.
 //! 4. No-target/interface families carry `None` and fail descriptor resolution
@@ -40,6 +40,10 @@ use eggsec_runtime::request::*;
 use eggsec_runtime::RuntimeSurface;
 
 fn all_task_kinds() -> Vec<TaskKind> {
+    // Every `TaskKind` variant, in declaration order. Kept exhaustive on
+    // purpose: `task_kind_variant_count_is_pinned` below is only a real
+    // tripwire while this list covers the enum, otherwise a new variant can
+    // slip in without any of the closure checks ever seeing it.
     vec![
         TaskKind::LoadTest(LoadTestParams {
             target: "https://example.com".into(),
@@ -81,6 +85,12 @@ fn all_task_kinds() -> Vec<TaskKind> {
             output_format: None,
             output_file: None,
             session_path: None,
+        }),
+        // Resume is a distinct wire kind with no target of its own (the
+        // target lives inside the checkpoint), so it is listed here to keep
+        // the helper exhaustive over `TaskKind` and the pinned count honest.
+        TaskKind::Resume(ResumeParams {
+            session_path: "/tmp/scan.session.json".into(),
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),
@@ -235,12 +245,77 @@ fn surface_conversion_round_trips_without_loss() {
 
 #[test]
 fn task_kind_variant_count_is_pinned() {
+    // The *compiler* is the real tripwire for a new variant: `capability_name`,
+    // `operation_id`, `canonical_target` and `route_for_command_id` in
+    // `eggsec-runtime::request`, plus the capability, session, TUI and
+    // ui-model matches, are all exhaustive with no wildcard arm. These counts
+    // catch the other direction — an accidental removal, or a helper list that
+    // stops covering the enum — and name the places to re-check on purpose.
     assert_eq!(
         all_task_kinds().len(),
-        29,
+        EXPECTED_TASK_KIND_VARIANTS,
         "TaskKind variant count changed — update the bridge, the canonical \
          conversion, capabilities, and this test together"
     );
+    assert_eq!(
+        TASK_KIND_VARIANT_NAMES.len(),
+        EXPECTED_TASK_KIND_VARIANTS,
+        "the `TaskKind` enum in eggsec-runtime and this test disagree — \
+         update the bridge, the canonical conversion, capabilities, and this \
+         test together"
+    );
+}
+
+/// Number of `TaskKind` variants, pinned deliberately. Update with the enum.
+const EXPECTED_TASK_KIND_VARIANTS: usize = 30;
+
+/// Variant names of `TaskKind`, enumerated from the wire schema so a new
+/// variant cannot be added to the enum without tripping the count assertion.
+const TASK_KIND_VARIANT_NAMES: &[&str] = &[
+    "LoadTest",
+    "StressTest",
+    "PortScan",
+    "EndpointScan",
+    "Fingerprint",
+    "Fuzz",
+    "Waf",
+    "WafStress",
+    "Pipeline",
+    "Resume",
+    "Recon",
+    "PacketCapture",
+    "PacketTraceroute",
+    "PacketSend",
+    "GraphQl",
+    "OAuth",
+    "AuthTest",
+    "Nse",
+    "Hunt",
+    "Browser",
+    "Compliance",
+    "Storage",
+    "Integrations",
+    "Workflow",
+    "Vuln",
+    "Wireless",
+    "WirelessActive",
+    "DbPentest",
+    "Intercept",
+    "C2",
+];
+
+/// Asserts the enumerated wire tags match the serde representation of
+/// [`TaskKind`], so the name list cannot drift from the enum.
+#[test]
+fn enumerated_task_kind_wire_tags_match_the_enum() {
+    for (name, kind) in TASK_KIND_VARIANT_NAMES.iter().zip(all_task_kinds()) {
+        let json = serde_json::to_value(&kind).expect("TaskKind must serialize");
+        assert_eq!(
+            json.get("kind").and_then(|v| v.as_str()),
+            Some(*name),
+            "wire tag drifted from the pinned variant list for {name}"
+        );
+    }
 }
 
 #[cfg(feature = "cli")]

@@ -29,12 +29,19 @@ excluded_ports = [22, 3389]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `require_explicit_scope` | bool | No | When `true`, targets must match an `allowed_targets` rule. When `false` and no rules exist, all non-private targets are allowed. |
-| `max_requests_per_second` | int | No | Rate limit (1..=10000). Null means no limit. |
+| `require_explicit_scope` | bool | No | When `true`, targets must match an `allowed_targets` rule — and at least one rule must exist. When `false` with no rules, only non-public addresses are rejected. |
+| `max_requests_per_second` | int | No | Rate limit (1..=10000). Null means no limit. `0` and values above 10000 are rejected at load. |
 | `allowed_targets` | list | No | Rules defining permitted targets. Empty list + `require_explicit_scope = true` = deny all. |
 | `excluded_targets` | list | No | Rules that override `allowed_targets`. Exclusion always wins. |
 | `allowed_ports` | list | No | Restrict scanning to specific ports. Null means all non-excluded ports. |
 | `excluded_ports` | list | No | Ports always blocked regardless of `allowed_ports`. |
+| `scope_file` | string | No | Recorded provenance path; not a matching rule. |
+
+`Scope` is the pure policy type in `eggsec-policy` (no filesystem, no DNS).
+Filesystem and DNS stay engine-side in `policy_bridge::resolver`:
+`load_scope_from_file()` picks the parser by extension (`.yaml`/`.yml` → YAML,
+otherwise TOML), and `resolve_hostname_facts_with()` turns a target string into
+a `TargetScope` through a `HostResolver` (`SystemResolver` by default).
 
 ## Allowed Targets
 
@@ -66,14 +73,29 @@ Evaluation order: excluded_ports wins, then allowed_ports is checked.
 
 ## How Scope Is Enforced
 
-Every target-bearing operation (scan, fuzz, stress test, agent run) goes through scope validation:
+Every target-bearing operation (scan, fuzz, stress test, agent run) is evaluated
+by `Scope::evaluate_facts(&TargetScope)` — pure policy that takes resolved
+address facts supplied by the engine's resolver bridge (`HostResolver`,
+`SystemResolver` by default). Adapters never check scope themselves.
 
-1. **Private IP check** - If no CIDR rules exist in `allowed_targets` or `excluded_targets`, the target string is parsed. If it resolves to a private/loopback IP (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, IPv6 ULA/link-local), it is rejected. Hostnames that resolve to private IPs are also blocked.
-2. **Exclusion check** - If the target matches any `excluded_targets` rule, it is rejected.
-3. **Allowed check** - If `allowed_targets` is non-empty, the target must match at least one rule.
-4. **Port check** - If `allowed_ports` or `excluded_ports` are configured, ports are filtered accordingly.
+1. **Exclusion check** — if the target matches any `excluded_targets` rule, it is rejected. Exclusion always wins.
+2. **Empty allowlist** — if `allowed_targets` is empty and `require_explicit_scope = true`, deny all. If it is empty and `require_explicit_scope = false`, only **non-public** addresses are rejected.
+3. **Allowed check** — when `allowed_targets` is non-empty, the target must match at least one rule. Resolved addresses are evaluated individually when DNS facts are available, so a hostname resolving to both a public and a private address does not silently pass.
+4. **Non-public fallback** — a target that matches no allowed rule is rejected if it is a non-public address.
+5. **Port check** — ports are filtered by `is_port_allowed()`: `excluded_ports` always wins, then `allowed_ports` applies when set.
 
-**When CIDR rules are present** (any rule with a `cidr` field), the private IP check is skipped. This allows CIDR ranges like `10.0.0.0/8` to match private IPs. Use this for lab/internal testing environments where you need to scan private network ranges.
+**Loopback is exempt.** `127.0.0.0/8` / `::1` classify as `Loopback`, not merely
+non-public, and are never blocked by the non-public checks — they are inherently
+local and represent no scope violation. This makes localhost testing work with
+an explicit rule instead of requiring a CIDR workaround.
+
+**CIDR rules are checked like any other rule.** A `cidr` field is *not* a switch
+that disables the non-public check; it is an alternative matcher inside the same
+rule. An `allowed_targets` entry with a `cidr` (either the `cidr` field or a
+CIDR-shaped `pattern`) matches any of the target's resolved addresses within
+that network, which is what allows internal ranges like `10.0.0.0/8` to be
+authorized. Pattern matching supports exact hosts, `*.suffix` wildcards (which
+also match the bare suffix), the glob-all `"*"`, and CIDR-shaped patterns.
 
 ## Example: Localhost Scope (Safe Testing)
 
@@ -96,11 +118,20 @@ pattern = "*.local"
 description = "Local development"
 ```
 
-**Note:** Direct IP `127.0.0.1` is blocked by the private IP check. Use `localhost` as the hostname instead, or run against a non-loopback address in a lab network.
+**Note:** loopback (`127.0.0.0/8`, `::1`) is exempt from the non-public address
+checks, so `127.0.0.1` and `localhost` are both usable here. Keep the explicit
+rules anyway — without them, `require_explicit_scope = true` still denies all.
 
 ```bash
 eggsec scan localhost --profile quick --scope examples/scope-localhost.toml
 ```
+
+`--scope` is a **global** flag (`eggsec --scope <path> <command>`, or after the
+subcommand — clap marks it `global = true`). An operator-supplied path that does
+not exist is a hard error (fail closed); with no `--scope`, Eggsec falls back to
+`find_scope_file()` and, failing that, to `LoadedScope::default_empty()`.
+`LoadedScope::is_explicit_manifest()` distinguishes a real manifest from that
+default-empty fallback — strict networked surfaces require the former.
 
 ## Example: Internal Lab Scope
 
@@ -129,23 +160,32 @@ description = "Network gateway - do not test"
 excluded_ports = [22, 3389, 8443]
 ```
 
-## Private IP Blocking (Known Limitation)
+## Non-Public Address Handling
 
-When no CIDR rules are configured, private IPs are blocked before scope rule evaluation. This prevents accidental scanning of internal networks. However, when CIDR rules are present, the private IP check is skipped, allowing the CIDR rules to match private IPs:
+`Scope` blocks non-public addresses (`RFC1918`, link-local, CGNAT, IPv6 ULA) in
+two places: when the allowlist is empty and `require_explicit_scope = false`,
+and as a fallback when a target matches no allowed rule. A `cidr` rule is a
+matcher, not a bypass — it authorizes a private range explicitly rather than
+switching the check off.
 
 | Target | Scope Rule | Result |
 |--------|-----------|--------|
-| `10.0.0.5` (direct IP) | No CIDR rules | **Blocked** - private IP |
-| `10.0.0.5` (direct IP) | `cidr: 10.0.0.0/8` | Allowed - CIDR rule matches |
-| `10.0.0.5` (hostname resolving to 10.0.0.5) | No CIDR rules | **Blocked** - DNS resolves to private IP |
-| `10.0.0.5` (hostname resolving to 10.0.0.5) | `cidr: 10.0.0.0/8` | Allowed - CIDR rule matches |
-| `webserver.lab.local` (resolves to 10.0.0.5) | No CIDR rules | **Blocked** - DNS resolves to private IP |
-| `webserver.lab.local` (resolves to 10.0.0.5) | `pattern: *.lab.local` (no CIDR) | **Blocked** - private IP with no CIDR rules |
+| `127.0.0.1` (loopback) | any | Allowed — loopback is exempt |
+| `10.0.0.5` (direct IP) | No rules, `require_explicit_scope = false` | **Blocked** — non-public |
+| `10.0.0.5` (direct IP) | `cidr: 10.0.0.0/8` | Allowed — CIDR rule matches |
+| `10.0.0.5` (direct IP) | `pattern: *.example.com` only | **Blocked** — matches no rule, and non-public |
+| `10.0.0.5` (direct IP) | No rules, `require_explicit_scope = true` | **Blocked** — empty allowlist denies all |
+| `webserver.lab.local` (resolves to 10.0.0.5) | `cidr: 10.0.0.0/8` | Allowed — one resolved address matches |
 | `webserver.lab.local` (resolves to 203.0.113.50) | `pattern: *.lab.local` | Allowed |
+| `webserver.lab.local` (resolves to both public and private) | `pattern: *.lab.local` | **Blocked** — per-address evaluation rejects the private address |
 
-To test internal systems, use CIDR rules in your scope file (e.g., `cidr = "10.0.0.0/8"`), or use a VPN/tunnel that presents a public-facing address.
+To authorize internal systems, use CIDR rules in your scope file (e.g.
+`cidr = "10.0.0.0/8"`), or present a public-facing address through a VPN/tunnel.
 
 ## See Also
 
+- [ENFORCEMENT_MODES.md](ENFORCEMENT_MODES.md) — how scope combines with profiles and overrides
 - [SAFETY.md](SAFETY.md) - Operation risk tiers and authorization requirements
 - [AGENT.md](AGENT.md) - Agent configuration and operation
+- `architecture/config.md` — enforcement/scope deep dive
+- `examples/configs/scope.toml` — fully annotated example

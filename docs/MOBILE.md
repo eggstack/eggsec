@@ -99,7 +99,7 @@ See `docs/USAGE.md` (Report Management section) and `docs/FINDINGS_SCHEMA.md` fo
 
 ## Integration with Reporting Pipeline
 
-`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use. An optional `to_scan_report_data()` bridge (in `mobile/mod.rs`) converts to the canonical `ScanReportData` (owned by `eggsec-report-model`, re-exported by output) used by `eggsec-output` converters (SARIF, JUnit, HTML, Markdown, CSV, JSON roundtrip, trend, etc.).
+`eggsec mobile` is intentionally a **standalone defense-lab CLI** (not a `ScanProfile` pipeline stage). It emits local `MobileScanReport` / `MobileFinding` types directly for human and `--json` use. An optional `to_scan_report_data()` bridge (re-exported by the engine facade `crates/eggsec/src/mobile/mod.rs`, implemented in `crates/eggsec-mobile-lab/src/`) converts to the canonical `ScanReportData` (owned by `eggsec-report-model`, re-exported by output) used by `eggsec-output` converters (SARIF, JUnit, HTML, Markdown, CSV, JSON roundtrip, trend, etc.).
 
 - Use the native types for lab-specific flows, regression on `Mobile*` shapes, or when you do not need unified consumers.
 - Use `--json` + `eggsec report convert` (or call `to_scan_report_data` in your own tooling) when you want SARIF/JUnit/etc. or to feed into `report trend` / other unified consumers.
@@ -244,8 +244,9 @@ See "Policy Note" (Intrusive for real Frida). Phase 2 closed; Phase 3a executed.
 
 The `scripts/test-mobile-dynamic.sh` script (added during Phase 1 polish) automates the dry-run happy path and provides an optional `--real` leg for local AVD runs. It is self-documenting and intended for both developer workstations and CI (dry-run leg is hardware-free). See the script header.
 
-Example manifest (examples/lab-mobile.toml):
+Example manifest (pass to `--lab-manifest`; the file is yours to author — there is no checked-in example):
 ```toml
+# /path/to/lab-mobile.toml
 allowed_device_serials = ["emulator-5554", "ABCD1234"]
 allowed_packages = ["com.example.vuln.test"]
 ```
@@ -301,7 +302,7 @@ allowed_packages = ["com.example.vuln.test"]
 - `cargo clean -p eggsec && cargo check --features mobile-dynamic && cargo test --lib -p eggsec --features mobile-dynamic` clean (no new deps, no serde/JSON/bridge changes).
 - 1 new unit test: `format_dynamic_report_surfaces_phase4b_regression_and_correlation_hints` (in dynamic.rs ~2179).
 - Human (native text) output now surfaces regression/timeline hints: `format_dynamic_report` (~1088) includes `regression_notes={}` count in the frida line under "Runtime extensions" + new "Correlation / Regression:" section (~1122, when regression_notes or static_correlation present) that counts them and calls out `correlate_reports` / `CorrelationEngine` / `build_timeline`; `build_dynamic_recommendations` (~1063) appends "N regression note(s) from baseline comparison..." + one "  regression: ..." bullet per note when `frida_instrumentation.regression_notes` non-empty.
-- Phase 4b TUI deferred per standalone defense-lab policy (confirmed absent from TUI crate; 30 Tab variants, no Mobile tab or wiring; wireless/auth are wired precedents).
+- Phase 4b TUI deferred per standalone defense-lab policy (confirmed absent from TUI crate; 33 `Tab` variants in `crates/eggsec-tui/src/tabs/mod.rs:154`, no Mobile tab or wiring; wireless/auth/intercept are wired precedents).
 - No regressions in prior mobile-dynamic functionality or ~85+ tests; dry-run safe/hardware-free; presentation-only polish (no public API changes).
 - Standalone defense-lab (MCP/agent/TUI/pipeline absent).
 - See the dynamic-mobile plan plus `crates/eggsec-mobile-lab/src/dynamic.rs` for recommendations and report formatting.

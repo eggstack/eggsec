@@ -30,9 +30,10 @@ Packet capture, crafting, and parsing module workflows and patterns.
 ### Packet Capture (`packet/capture.rs`)
 - `PacketCapture` - live packet capture using `pnet` library
 - `CaptureConfig` - interface, filter, promiscuous, snapshot_len, timeout
-- `CaptureBuilder` - builder pattern for capture configuration
+- `CaptureBuilder` (`capture.rs:490`) - builder pattern for capture configuration
 - BPF-style filtering via `packet_matches_filter()`
 - pcap file writing via `PcapWriter`
+- `PacketInfo` is defined in `packet/mod.rs:28`
 
 ### Packet Crafting (`packet/craft.rs`)
 - `PacketBuilder` - fluent builder for custom packets
@@ -43,8 +44,9 @@ Packet capture, crafting, and parsing module workflows and patterns.
 
 ### Traceroute (`packet/traceroute.rs`)
 - `Traceroute` / `TracerouteConfig` - multi-protocol traceroute
-- UDP mode (default) and ICMP mode (disabled due to TTL control issues)
-- Parallel probes support
+- UDP mode (default) and ICMP mode, selected by `TracerouteConfig.use_icmp`
+  (default `false`); both are implemented (`probe_icmp`, `probe_hop_icmp_parallel`)
+- Parallel probes support (`TracerouteConfig.parallel_probes`, default `true`)
 - Reverse DNS resolution via `hickory_resolver`
 
 ### Hexdump (`packet/hexdump.rs`)

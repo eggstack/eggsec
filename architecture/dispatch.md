@@ -306,7 +306,7 @@ Boundary tests live in three mandatory-path suites:
 
 - **`canonical_execution` unit tests** — canonical IDs (no aliases), packet-family sharing, `from_task_kind` exhaustiveness, executor routes, sink coalescing/drop-counting, binding rejections, envelope kind stability.
 - **`crates/eggsec/tests/canonical_dispatch_ownership.rs`** (26 tests) — per-family CLI/runtime/tool normalization equivalence, identity/binding/route agreement, feature-gate consistency, error/outcome classification, `CommandRoute` ownership, daemon-bundle cancel race.
-- **`crates/eggsec/tests/runtime_contract_closure.rs`** (17 tests, Phase 3) — surface round-trips, wire-identity agreement across all 30 `TaskKind` variants, wire JSON stability, no-target family failures, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression.
+- **`crates/eggsec/tests/runtime_contract_closure.rs`** (18 tests, Phase 3) — surface round-trips, wire-identity agreement across all 30 `TaskKind` variants, wire JSON stability, no-target family failures, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression. Test count 17→18 on 2026-10-06: `TaskKind::Resume` was added to `all_task_kinds()` (the helper covered only 29 of 30 variants while the pin also read 29), and `enumerated_task_kind_wire_tags_match_the_enum` was added to stop the variant-name list drifting from the enum.
 - **`dispatch/mod.rs` tests** — channel plumbing, legacy shim behavior, executor-registry coverage (retained adapter registry).
 - **`runtime_bridge/bundle.rs` tests** — anti-tamper checks (operation/target mismatch).
 - **TUI `task_runtime`/`task_dispatcher` tests** — embedded cancel contract (shared primitive).

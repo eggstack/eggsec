@@ -141,7 +141,7 @@ sudo update-ca-certificates
 
 - **Certificate pinning**: Applications that use certificate pinning (HPKP, custom trust stores, network security config) will reject intercepted connections. This is expected behavior — the proxy cannot bypass pinning without additional instrumentation.
 - **Client certificate authentication**: Mutual TLS (mTLS) endpoints will fail unless the client is configured to present certificates to the proxy.
-- **Transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
+- **Transparent proxy**: The proxy normally requires explicit client configuration (manual or PAC file). iptables/nftables `REDIRECT` mode is available behind the separate `transparent-proxy` marker feature (`crates/eggsec-web-proxy/src/intercept/transparent.rs`, Linux only); it is not part of `web-proxy` itself.
 - **Streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
 
 ## What It Captures
@@ -168,11 +168,12 @@ Each captured flow (`ProxyFlow`) records:
 | `response_body_size` | Original response body size (before truncation) |
 | `started_at` | Timestamp when the flow started (RFC 3339) |
 | `completed_at` | Timestamp when the flow completed (RFC 3339) |
+| `protocol` | Detected protocol (`http1`, `websocket`, `http2`, `grpc` — `ProxyProtocol` at `crates/eggsec-web-proxy/src/intercept/protocols.rs:10`) |
 | `redaction_applied` | Redaction type applied (if any) |
 
 ### Redaction
 
-Request and response bodies are truncated to `--max-bytes-per-flow` (default 64 KiB). Bodies exceeding this limit are truncated with a `[TRUNCATED]` marker. `RedactionPattern` types (name/pattern/replacement) exist for PII, token, and secret scrubbing of headers and bodies, and `WebProxySessionReport.add_flow()` counts every flow whose `redaction_applied` marker is set — wire the configured patterns through the interception path before relying on scrubbed output, and verify with a sentinel body that the marker survives to the report. Python-side proxy credentials (`ProxyEntry.password`, `ProxyRoutePy.password`) are never emitted: getters, `to_dict()`, `to_json()`, `__repr__`, and Rust `Debug` all render `[REDACTED]`, mirroring `DbProbeRequest`.
+Request and response bodies are stored under the `--max-bytes-per-flow` budget (default 64 KiB). `ProxyFlow` carries the pre-truncation sizes in `request_body_size` / `response_body_size` and documents the body fields as "truncated/redacted"; note that no literal `[TRUNCATED]` sentinel is appended — truncation is enforced by the caller's budget, so compare `*_body_size` against the stored body when auditing. `RedactionPattern` types (name/pattern/replacement) exist for PII, token, and secret scrubbing of headers and bodies, and `WebProxySessionReport.add_flow()` counts every flow whose `redaction_applied` marker is set (`crates/eggsec-web-proxy/src/intercept/types.rs:186`) — no production capture path sets that marker yet, so `redacted` stays 0 unless the configured patterns are wired through the interception path, and scrubbed output should be verified with a sentinel body. Python-side proxy credentials (`ProxyEntry.password`, `ProxyRoutePy.password`) are never emitted: getters, `to_dict()`, `to_json()`, `__repr__`, and Rust `Debug` all render `[REDACTED]`, mirroring `DbProbeRequest`.
 
 ### Budget Limits
 
@@ -245,7 +246,7 @@ Bridged findings use these categories:
 | `proxy-intercept-flow` | One finding per captured flow (method, host, path, status, redaction) |
 | `web-traffic-summary` | Session metadata (total flows, HTTPS count, redacted count, budget usage) |
 
-The bridge is produced by `to_scan_report_data_proxy()` in `proxy/intercept/bridge.rs` and auto-wired in `commands/handlers/report.rs` when the feature is present.
+The bridge is produced by `to_scan_report_data_proxy()` in `crates/eggsec-web-proxy/src/intercept/bridge.rs:10` and auto-wired in `commands/handlers/report.rs` when the feature is present.
 
 ## MCP Proxy Tools
 
@@ -348,7 +349,7 @@ Built-in correlation hooks: `jwt_to_db_query_hook()`, `proxy_auth_hook()`, `prox
 ## Limitations
 
 - **No request/response modification via CLI**: The CLI handler supports dry-run; real interception with request/response modification is available through the TUI tab.
-- **No transparent proxy**: The proxy requires explicit client configuration (manual or PAC file). Transparent proxy mode (iptables redirect) is not supported.
+- **No transparent proxy by default**: The proxy requires explicit client configuration (manual or PAC file). iptables/nftables `REDIRECT` mode ships behind the optional `transparent-proxy` marker feature (Linux only) and is not enabled by `web-proxy` alone.
 - **No streaming body capture**: Only complete request/response bodies are captured; streaming uploads/downloads are not progressively logged.
 - **Binary protobuf editing**: gRPC binary protobuf encoding/decoding uses prost with simplified wire format parsing. Complex or unknown schemas may not round-trip correctly. Full JSON<->Protobuf translation is deferred to future phases.
 
@@ -362,7 +363,7 @@ Phase 3 extends the interactive web proxy with modern protocol support and a pow
 
 WebSocket traffic is detected via the `Upgrade: websocket` header and tracked separately from HTTP flows.
 
-- **Detection**: Automatic via `detect_protocol()` in `proxy/intercept/protocols.rs`
+- Detection: Automatic via `detect_protocol()` in `crates/eggsec-web-proxy/src/intercept/protocols.rs`
 - **Types**: `WebSocketSession`, `WebSocketMessage`, `WebSocketOpcode`
 - **Features**: Message list with direction, opcode, payload, masking info; manipulation audit trail; close frame handling; ping/pong tracking
 - **TUI**: Protocol selector in detail pane; WebSocket-specific message stream view
@@ -626,8 +627,8 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 **Phase 4 (Pipeline, MCP, Evidence, Performance, complete)**:
 - Pipeline profile: `ScanProfile::WebProxy` / `Stage::WebProxy` for automated proxy assessments
 - MCP proxy surface: 12 tools via `web-proxy-mcp` marker feature (start, stop, status, list flows, inspect, forward, drop, replay, add/list/remove rules, export session)
-- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` in `proxy/intercept/bundle.rs` with gzip compression, multi-loadout correlation, and HMAC-SHA256 signing
-- Performance: `FlowBuffer` (capacity-capped) and `ProxyMetrics` (telemetry snapshot) in `proxy/intercept/types.rs`
+- Evidence bundle v2: `EvidenceBundle` / `BundleManifest` in `crates/eggsec-web-proxy/src/intercept/bundle.rs` with gzip compression, multi-loadout correlation, and HMAC-SHA256 signing
+- Performance: `FlowBuffer` (capacity-capped) and `ProxyMetrics` (telemetry snapshot) in `crates/eggsec-web-proxy/src/intercept/types.rs`
 - Real WebSocket backend via `tokio-tungstenite`
 - Real HTTP/2 backend via `h2` with window size tuning (`tune_windows()`, `optimal_window_sizes()`)
 - gRPC protobuf: prost-based encoding/decoding for binary protobuf messages
@@ -654,7 +655,7 @@ Exported HAR files (`intercept_session_YYYYMMDD_HHMMSS.har`) follow the HAR 1.2 
 - MCP/agent exposure via `ProxyTool` in `tool/implementations/proxy.rs` (gated by `web-proxy-mcp` feature).
 - Always produces policy decision + actions audit even in dry-run.
 
-See `config/policy_decision.rs`, `commands/handlers/web_proxy.rs`, and `proxy/intercept/mod.rs`.
+See `config/policy_decision.rs`, `commands/handlers/web_proxy.rs`, and `crates/eggsec-web-proxy/src/intercept/mod.rs`.
 
 ## Migration Guidance
 
@@ -690,7 +691,7 @@ eggsec report convert report.json -f sarif  # works as before
 
 ## References
 
-- Source: `crates/eggsec/src/proxy/intercept/` (types, cert, rules, interceptor, bridge, mod, bundle, correlation, narrative)
+- Source: `crates/eggsec-web-proxy/src/intercept/` (types, cert, rules, interceptor, bridge, mod, bundle, correlation, narrative) — the domain crate owns this data/logic; the engine facade at `crates/eggsec/src/proxy/mod.rs` re-exports it
 - CLI: `crates/eggsec/src/cli/web_proxy.rs`
 - Handler/policy: `crates/eggsec/src/commands/handlers/web_proxy.rs`
 - Output conversion: `crates/eggsec/src/commands/handlers/report.rs` (auto-bridge)

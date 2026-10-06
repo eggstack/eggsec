@@ -9,9 +9,10 @@ Tools in Eggsec are registered and filtered through multiple independent sources
 | Source | Location | Type | Purpose |
 |--------|----------|------|---------|
 | `ToolRegistry` | `tool/registry.rs:23` | `FxHashMap<String, Arc<dyn SecurityTool>>` | Runtime tool storage |
-| `create_default_registry()` | `tool/mod.rs:99` | Imperative builder | Populates `ToolRegistry` with 11 base + 3 feature-gated tools |
-| `ALL_OPERATION_METADATA` | `config/policy_catalog.rs:317` | Static slice (34 entries + 43 aliases) | Risk, capabilities, exposure flags per operation |
-| `metadata_for_tool_id()` | `config/policy_catalog.rs:948` | Lookup function | Resolves tool ID → `OperationMetadata` (alias-aware) |
+| `create_default_registry()` | `tool/mod.rs:105` | Imperative builder | Populates `ToolRegistry` with 11 base + 3 feature-gated tools |
+| `ALL_OPERATION_METADATA` | `crates/eggsec-policy/src/catalog.rs:291` | Static slice (34 entries) | Risk, capabilities, exposure flags per operation |
+| `ALL_OPERATION_METADATA_ALIASES` | `crates/eggsec-policy/src/catalog.rs:903` | Static slice (42 aliases) | Alias → canonical operation ID |
+| `metadata_for_tool_id()` | `crates/eggsec-policy/src/catalog.rs:954` | Lookup function | Resolves tool ID → `OperationMetadata` (alias-aware) |
 | `all_domain_descriptors()` | `domain/mod.rs:276` | Static slice (3 domains) | Domain-level tool integration metadata |
 | `ToolMetadataRegistry` | `tool/metadata.rs:82` | Per-tool risk/policy metadata | Supplementary risk metadata (separate from `OperationMetadata`) |
 | `McpProfilePolicy` | `tool/protocol/mcp/policy.rs:64` | Per-profile filtering | MCP tool visibility by profile |
@@ -21,14 +22,14 @@ Tools in Eggsec are registered and filtered through multiple independent sources
 All protocol surfaces share this enforcement chain:
 
 1. **Parse request** — extract tool ID and parameters
-2. **Resolve metadata** — `metadata_for_tool_id(tool_id)` → `OperationMetadata` (`config/policy_catalog.rs:948`)
+2. **Resolve metadata** — `metadata_for_tool_id(tool_id)` → `OperationMetadata` (`crates/eggsec-policy/src/catalog.rs:954`)
 3. **Validate params** — `eggsec::operation_request::validate_tool_request_params()` validates `ToolRequest.params` JSON through operation-owned canonical code (single owner for defaults/validation). Alias resolution via `metadata_for_tool_id`.
 4. **Build descriptor** — `metadata.descriptor_for_target(target)` → `OperationDescriptor`
 5. **Evaluate policy** — `EnforcementContext::evaluate(descriptor)` → outcome
 6. **Require token** — `approve()` produces `ApprovedOperation` (private fields)
-7. **Dispatch** — `EnforcedDispatcher::dispatch_checked(request, approved)` (`tool/dispatcher.rs:114`)
+7. **Dispatch** — `EnforcedDispatcher::dispatch_checked(request, approved)` (`tool/dispatcher.rs:336`)
 
-Raw `ToolDispatcher::dispatch()` (`tool/dispatcher.rs:36`) is `pub(crate)` and `#[doc(hidden)]`. Strict surfaces must never use it.
+Raw `ToolDispatcher::dispatch()` (`tool/dispatcher.rs:228`) is `pub(crate)` and `#[doc(hidden)]`. Strict surfaces must never use it.
 
 ## 4. Protocol Listing Behavior
 
@@ -77,9 +78,9 @@ The project uses **Model A** (profile-expanded metadata-exposable listing):
 | OpsAgent MCP listing | `mcp_tool_registrations("ops-agent")` | **Profile-expanded** — every `mcp_metadata_exposable` tool | `ToolSelector::All` (`policy.rs:100`) + `mcp_tool_registrations("ops-agent")` (filter on `mcp_metadata_exposable`) |
 | CodingAgent MCP listing | `mcp_tool_registrations("coding-agent")` | Hardcoded narrow allowlist | `ToolSelector::Exact(vec![...])` (`policy.rs:124`) + hardcoded allowlist filter |
 | Conservative default | `mcp_tool_registrations_default_visible()` | Conservative subset (passive/safe-active, no feature gate) | Filter on `mcp_default_visible` |
-| `db-pentest` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:504`), requires `db-pentest-mcp` feature |
-| `mobile-static` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:569`), not in default registry |
-| `mobile-dynamic` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:632`), not in default registry |
+| `db-pentest` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:505`), requires `db-pentest-mcp` feature |
+| `mobile-static` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:568`), not in default registry |
+| `mobile-dynamic` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:631`), not in default registry |
 
 **Important**: OpsAgent is **not** the conservative default listing. It is an
 expanded operator profile that lists every `mcp_metadata_exposable` tool,
@@ -92,7 +93,7 @@ conservative subset for callers that want only default-visible tools.
 
 ## 7. Raw Dispatch Exceptions
 
-- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`tool/dispatcher.rs:34-36`)
+- `ToolDispatcher::dispatch()` is `pub(crate)` with `#[doc(hidden)]` (`tool/dispatcher.rs:226-228`)
 - Agent test-only path (`new_for_test()`) sets `enforced_dispatcher = None` and uses raw dispatch exclusively
 - `enforced_dispatch_regression.rs` tests scan for raw dispatch calls in strict surfaces
 - If `enforced_dispatcher` is `Some` but `ApprovedOperation` is `None` at dispatch time, the agent returns a hard invariant error — no raw dispatch fallback
@@ -117,9 +118,9 @@ respective exposure flags are enforced at execute time via
 
 1. **No bypass**: Strict surfaces (REST, MCP, Agent, gRPC) must obtain `ApprovedOperation` before dispatch
 2. **No raw dispatch**: `ToolDispatcher::dispatch()` is `pub(crate)` + `#[doc(hidden)]`; regression tests enforce this
-3. **Metadata coverage**: Every registered tool must have a matching `OperationMetadata` entry (validated in `config/policy_catalog.rs` tests)
+3. **Metadata coverage**: Every registered tool must have a matching `OperationMetadata` entry (validated in `crates/eggsec-policy/src/catalog.rs` tests)
 4. **Domain descriptors always present**: Domain descriptors exist regardless of feature state; check `required_feature` before use
-5. **Alias resolution**: `metadata_for_tool_id()` resolves aliases before falling back to exact match (`config/policy_catalog.rs:956`)
+5. **Alias resolution**: `metadata_for_tool_id()` resolves aliases before falling back to exact match (`crates/eggsec-policy/src/catalog.rs:954`)
 
 ## 10. Phase 7 Changes
 
@@ -127,7 +128,7 @@ respective exposure flags are enforced at execute time via
 
 - `ToolRegistration` type and builder functions added in `tool::registration` (`all_tool_registrations()`, `mcp_tool_registrations()`, `mcp_tool_registrations_default_visible()`, `rest_tool_registrations()`, `grpc_tool_registrations()`, `agent_tool_registrations()`)
 - MCP, REST, gRPC, and Agent listing now filter through registration metadata instead of raw `registry.list()` calls
-- 10 new tool registration consistency tests (`crates/eggsec/tests/tool_registration.rs`) validate registration coverage, exposure flag alignment, source correctness, and protocol filtering
+- 16 tool registration consistency tests (`crates/eggsec/tests/tool_registration.rs`) validate registration coverage, exposure flag alignment, source correctness, and protocol filtering
 - Enforcement paths verified unchanged — `EnforcementContext::evaluate()` remains the sole authorization gate
 - Registration-to-execution bridge demonstrated for the `search` tool: registration metadata resolves to `OperationDescriptor` via `metadata_for_tool_id()` → `descriptor_for_target()` → `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`
 
@@ -138,7 +139,7 @@ respective exposure flags are enforced at execute time via
 
 **Resolved (Phase D):**
 
-- `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap: The two registries serve different purposes and are intentionally separate. `ALL_OPERATION_METADATA` is the canonical catalog for the 34 engine operations (kebab-case IDs, used by MCP/REST/gRPC/agent surfaces). `ToolMetadataRegistry` in `tool/metadata.rs` provides policy-level metadata for 7 specialized tools (`plan`, `fuzz`, `stress`, `raw_packet_send`, `credential_test`, `remote_exec`) that are used by the tool abstraction layer for policy checks (`is_allowed_by()`) and MCP profile filtering (`is_available_for_profile()`). These tools use shorthand names that don't map 1:1 to canonical operation IDs. The overlap is documented and the two registries are cross-validated by construction tests in `metadata_consistency.rs`.
+- `ToolMetadataRegistry` vs `ALL_OPERATION_METADATA` overlap: The two registries serve different purposes and are intentionally separate. `ALL_OPERATION_METADATA` is the canonical catalog for the 34 engine operations (kebab-case IDs, used by MCP/REST/gRPC/agent surfaces). `ToolMetadataRegistry` in `tool/metadata.rs` provides policy-level metadata for 7 specialized tools (`plan`, `scan_ports`, `fuzz`, `stress`, `raw_packet_send`, `credential_test`, `remote_exec`) that are used by the tool abstraction layer for policy checks (`is_allowed_by()`) and MCP profile filtering (`is_available_for_profile()`). These tools use shorthand names that don't map 1:1 to canonical operation IDs. The overlap is documented and the two registries are cross-validated by construction tests in `metadata_consistency.rs`.
 
 - Python operation metadata now bridges to canonical engine IDs via `StableOperation::to_engine_id()` and `StableOperation::metadata()`. Risk, mode, and features are derived from `OperationMetadata` when available.
 

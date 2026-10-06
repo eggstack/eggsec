@@ -21,7 +21,7 @@ Pipeline module workflows and patterns for orchestrating security assessments.
 
 ## Core Concepts
 
-### Stage Enum (`stage.rs:6-20`)
+### Stage Enum (`stage.rs:8-20`)
 
 ```rust
 pub enum Stage {
@@ -45,15 +45,14 @@ pub enum Stage {
 `Stage::from_profile(ScanProfile)` maps CLI profiles to stage sequences. There are 18 `ScanProfile` variants:
 - `Quick`: PortScan + Fingerprint
 - `Endpoint`: PortScan + Fingerprint + EndpointScan
-- `Web`: PortScan + Fingerprint + EndpointScan + Fuzz
+- `Web`, `Api`, `Stealth`, `Deep`, `Auth`: PortScan + Fingerprint + EndpointScan + Fuzz (all five are the same stage list)
 - `Waf`: PortScan + Fingerprint + EndpointScan + Waf
-- `Full`: PortScan + Fingerprint + EndpointScan + Fuzz + LoadTest + Vuln
-- `Api`: PortScan + Fingerprint + EndpointScan + Fuzz
+- `Full`: PortScan + Fingerprint + EndpointScan + Fuzz + LoadTest (**no** Vuln stage — use `Vuln` for that)
 - `Recon`: PortScan + Fingerprint + EndpointScan + Recon + Fuzz
-- `Stealth`, `Deep`, `Vuln`, `Auth`: Web-like subsets with variations
-- `DefenseLab`, `SynvoidLocal`, `WafRegression`, `ProtocolEdge`, `NseSafe`: defense-lab profiles
-- `DbRegression`: DbPentest (when `db-pentest` feature enabled)
-- `WebProxy`: WebProxy stage (when `web-proxy` feature enabled)
+- `Vuln`: PortScan + Fingerprint + EndpointScan + Recon + Vuln + Fuzz
+- Defense-lab family: `DefenseLab` (+Waf, +Fuzz), `SynvoidLocal` (+Waf), `WafRegression` (PortScan + Fingerprint + Waf), `ProtocolEdge` (PortScan + Fingerprint), `NseSafe` (PortScan + Fingerprint + EndpointScan)
+- `DbRegression`: DbPentest when `db-pentest` is enabled, else the Web-like set
+- `WebProxy`: WebProxy stage when `web-proxy` is enabled, else the Web-like set
 
 ### Stage Aliases
 
@@ -65,21 +64,25 @@ Supported aliases in `Stage::from_string()`:
 - `load`, `loadtest`, `load-test` → LoadTest
 - `waf` → Waf
 - `recon` → Recon
-- `vuln` → Vuln
-- `db-pentest`, `dbpentest` → DbPentest (feature-gated)
-- `web-proxy`, `webproxy` → WebProxy (feature-gated)
+- `vuln`, `vulnerability`, `vuln-assess` → Vuln
+- `db`, `dbpentest`, `db-pentest` → DbPentest (feature-gated; `None` without it)
+- `proxy`, `webproxy`, `web-proxy`, `intercept` → WebProxy (feature-gated; `None` without it)
 
 ### PipelineContext (`context.rs`)
 
-Persists inter-stage state:
+Persists inter-stage state (`context.rs:12-26`):
 ```rust
 pub struct PipelineContext {
     pub target: String,
     pub open_ports: Vec<u16>,
-    pub services: FxHashMap<u16, ServiceFingerprint>,  // Line 12
+    pub services: FxHashMap<u16, ServiceFingerprint>,  // context.rs:15
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
+    pub vuln_assessment: Option<VulnAssessment>,        // skipped when None
+    pub load_test_results: Option<LoadTestResults>,      // skipped when None
+    #[cfg(feature = "web-proxy")]
+    pub web_proxy_report: Option<WebProxySessionReport>, // skipped when None
 }
 ```
 
@@ -136,7 +139,7 @@ so removing the `cli` feature no longer hides any pipeline stage.
    LoadTestRunConfig, ReconRequest) — CLI args convert via `From` impls; non-CLI
    consumers construct the plain type directly
 5. **Hash Collections**: Always use `FxHashMap` from `rustc_hash` instead of `std::collections::HashMap`
-6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:67` to avoid code duplication
+6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:77` to avoid code duplication
 
 ## Bug Fixes (2026-05-27)
 

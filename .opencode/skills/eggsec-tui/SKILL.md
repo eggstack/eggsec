@@ -27,13 +27,18 @@ crates/eggsec-tui/src/
 │   ├── key_handler.rs   # Key handling methods
 │   ├── navigation.rs    # Tab navigation, scrolling
 │   ├── notifications.rs # Notification and NotificationSeverity types
-│   ├── operation.rs     # Operation metadata integration
+│   ├── operation.rs     # Operation metadata integration (cli_argv)
 │   ├── options.rs       # Options management
 │   ├── overlay.rs       # Overlay management
+│   ├── palette.rs       # parse_palette_action / global_action_for
+│   ├── enforcement.rs   # TuiEnforcementState, TuiPreflightResult
+│   ├── enforcement_facade.rs # EnforcementFacade + toggle_posture
+│   ├── surface_wiring.rs # Tab ↔ CLI/wire surface wiring
+│   ├── tab_error.rs     # TabError enum
 │   ├── runner.rs        # Event loop, input handling
 │   ├── state.rs         # OverlayState, SearchState, QuickSwitchState, TaskState, ThemeLoadState
 │   ├── state_update.rs  # Background task handling, result dispatch
-│   ├── tab_store.rs     # TabStore - owns all 33 tab instances
+│   ├── tab_store.rs     # TabStore - owns the 32 stateful tab instances
 │   ├── task_management.rs # Task lifecycle management
 │   ├── task_runtime.rs  # Task runtime helpers
 │   ├── task_dispatcher.rs # TuiTaskDispatcher (TaskDispatcher impl)
@@ -53,9 +58,14 @@ crates/eggsec-tui/src/
 │   ├── selector.rs      # Selector dropdown
 │   ├── popup.rs         # Popup overlays
 │   └── empty_state.rs   # empty_state_paragraph() for consistent empty states
-├── theme/        # Theme system (50+ packaged themes via LZMA)
+├── theme/        # Theme system (50 packaged themes via LZMA)
 │   ├── palette.rs      # ThemeMode, Theme, ThemeColors
 │   ├── builtin.rs      # dark_theme(), light_theme()
+│   ├── packaged.rs     # PACKAGED_THEMES_FILE_COUNT + LZMA payload
+│   ├── archive.rs      # LZMA archive decode/encode
+│   ├── loader.rs       # Packaged theme loading
+│   ├── install.rs      # Theme install + manifest verification
+│   ├── contrast.rs     # Contrast helpers
 │   ├── manager.rs      # ThemeManager, ThemeInfo
 │   ├── style.rs        # Theme style methods
 │   └── legacy.rs       # Thread-local macro (tc!)
@@ -65,6 +75,10 @@ crates/eggsec-tui/src/
 │   ├── popups.rs       # Overlay rendering
 │   └── tests.rs        # UI rendering tests
 ├── search.rs     # Global search
+├── parity.rs     # TUI ↔ wire-surface parity tests
+├── session.rs    # TUI session persistence
+├── state/        # Shared UI state types
+├── utils/        # TUI helpers
 └── help.rs       # HelpManager
 ```
 
@@ -108,6 +122,11 @@ Key differences in daemon mode:
 - `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding
 
 ### Tab System
+- `Tab` has 33 variants (discriminants 0..=32, `tabs/mod.rs:154`), including
+  `Tab::History`
+- `TabStore` holds 32 stateful tab instances — `Tab::History` is **not** one of
+  them; `draw_content()` special-cases it and renders `app.history` directly
+  (`ui/shell.rs`)
 - `Tab::all()` - Returns available tabs for current feature set
 - `Tab::visible_index(&self)` - Position in `Tab::all()`
 - `App::set_current_tab_if_available(tab) -> bool` - Safe tab switching
@@ -189,7 +208,7 @@ Priority order for hint resolution:
 
 ## TabSpec Capabilities
 
-`TabSpec` in `tabs/spec.rs` is the single source of truth for tab metadata. Key fields: `tab`, `stable_id`, `title`, `category`, `risk_group`, `feature`, `direct_launch`, `supports_run`, `supports_export`.
+`TabSpec` in `tabs/spec.rs` is the single source of truth for tab metadata. Fields: `tab`, `stable_id`, `title`, `cli_command`, `description`, `help_text`, `category`, `risk_group`, `feature`, `breadcrumb_label`, `operation`, `direct_launch`, `supports_run`, `supports_export`, `supports_help`, `has_settings` (the last four are `#[allow(dead_code)]` test/reserved metadata).
 
 `direct_launch` tabs start work inside their own `handle_enter`. `handle_enter()` now evaluates policy BEFORE calling the dispatcher, so Deny/RequireConfirmation blocks before any side effect starts. The old post-dispatch retroactive policy gate has been removed.
 
@@ -239,12 +258,12 @@ Two separate flows:
 ## TabError System
 ```rust
 pub enum TabError {
-    Network(String), Auth(String), Config(String),
-    Resource(String), Target(String), Internal(String), Unknown(String),
+    Network(String), Config(String), Resource(String),
+    Target(String), Unknown(String),
 }
 ```
 
-`TabError::is_recoverable()` checks for Network/Auth/Resource errors.
+`TabError::is_recoverable()` returns true only for `Network` and `Resource`.
 
 ## Settings Tab
 

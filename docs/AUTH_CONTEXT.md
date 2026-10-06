@@ -11,16 +11,26 @@ contexts:
     description: "Normal user"
     headers:
       Authorization: "Bearer ${USER_TOKEN}"
+    cookies:
+      session: "${SESSION_COOKIE:-none}"
   admin:
     description: "Admin user"
     headers:
       Authorization: "Bearer ${ADMIN_TOKEN}"
 ```
 
+The file is parsed as YAML into `AuthContextFile` with
+`deny_unknown_fields`, so unknown keys are a hard error rather than being
+silently dropped (`crates/eggsec/src/auth_context/mod.rs`). Each entry
+supports `description`, `headers`, and `cookies`.
+
 ## Environment Variable Interpolation
 
 - `${VAR}` - Required variable, fails if not set
 - `${VAR:-default}` - Variable with default value
+
+Interpolated values are resolved when the context is loaded, so prefer
+`${VAR}` for secrets and avoid committing files with literal tokens.
 
 ## Usage
 

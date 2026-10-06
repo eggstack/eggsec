@@ -14,8 +14,18 @@ Fuzzing engine module workflows and patterns for security testing.
 - `FuzzResult` - Fuzzing result in `fuzzer/engine/types.rs` with `response_body: Option<String>` for regex matching
 - `PayloadType` - Enum of 40 payload categories
 
+### Payload corpus ownership (leaf crate)
+`PayloadType` and **all 40** payload data modules live in
+`crates/eggsec-payloads/` (`PayloadType` enum at `crates/eggsec-payloads/src/lib.rs:95`),
+reached through the `eggsec::fuzzer::payloads` facade
+(`crates/eggsec/src/fuzzer/payloads/mod.rs`). What stays engine-side in
+`crates/eggsec/src/fuzzer/payloads/` is only the **six live probers** —
+`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti` — which hold a `reqwest::Client`
+and make live requests. The seam is *execution*, not payload data: each prober
+re-exports the same-named static payload builder from `eggsec-payloads`.
+
 ### payload_vec! Macro
-`fuzzer/payloads/macros.rs` defines `payload_vec!` for building payload vectors from inline data, reducing repetitive `for` loops.
+`crates/eggsec-payloads/src/macros.rs` defines `payload_vec!` for building payload vectors from inline data, reducing repetitive `for` loops.
 
 ### Filters
 `fuzzer/filters.rs` provides response filtering with compiled `Regex` support, using `FuzzResult.response_body`.
@@ -34,14 +44,19 @@ Fuzzing engine module workflows and patterns for security testing.
 - Required parameter omission testing
 - Oversized payload generation (1KB, 10KB, 100KB, 1MB)
 
-### Advanced Fuzzers (`fuzzer/advanced.rs`)
-- `GraphQLFuzzer` - Introspection, depth bypass, alias overload, batch queries
-- `JwtFuzzer` - None algorithm attack, key injection, token validation
-- `OAuthFuzzer` - Redirect URI, scope escalation, state parameter, grant mixing
-- `IdorFuzzer` - Horizontal/vertical escalation testing
-- `SstiFuzzer` - Template engine detection (Jinja2, ERB, etc.)
-- `WebSocketFuzzer` - Message injection (ensure `PayloadType::Websocket` is used, not `PayloadType::Grpc`)
-- `GrpcFuzzer` - Method injection
+### Advanced Fuzzers (`fuzzer/advanced.rs` is the re-export + trait owner)
+`fuzzer/advanced.rs` owns the `AdvancedFuzzer` / `FuzzerResultConverter` traits
+and re-exports the probers, which live in `fuzzer/payloads/`:
+- `GraphQLFuzzer` (`payloads/graphql.rs`) - Introspection, depth bypass, alias overload, batch queries
+- `JwtFuzzer` (`payloads/jwt.rs`) - None algorithm attack, key injection, token validation
+- `OAuthFuzzer` (`payloads/oauth.rs`) - Redirect URI, scope escalation, state parameter, grant mixing
+- `IdorFuzzer` (`payloads/idor.rs`) - Horizontal/vertical escalation testing
+- `SstiFuzzer` (`payloads/ssti.rs`) - Template engine detection (Jinja2, ERB, etc.)
+- `WebSocketFuzzer` (`crates/eggsec-payloads/src/websocket.rs`) - message injection.
+  Unlike the six above it is **not** an engine-side prober; it is corpus-owned
+  and reached through the `eggsec-payloads` glob. Ensure `PayloadType::Websocket`
+  is used, not `PayloadType::Grpc`
+- `GrpcFuzzer` (`payloads/grpc.rs`) - Method injection
 
 ### ReDoS Detection (`fuzzer/redos_detect.rs`)
 - `RegexExecutor` - Timeout-based detection (default 1000ms, max 100k iterations)
@@ -101,7 +116,7 @@ s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
 ### Notable Bug Fixes
 
 #### 2026-05-28
-- **detection/analyzer.rs:188-190** - IQR calculation could divide by zero if `iqr_samples` vec is empty after slice. Added `if iqr_samples.is_empty() { return; }` check.
+- **detection/analyzer.rs:190-192** - IQR calculation could divide by zero if `iqr_samples` vec is empty after slice. Added `if iqr_samples.is_empty() { return; }` check.
 
 ## Testing
 
@@ -116,10 +131,12 @@ Follow existing test patterns in `fuzzer/` modules, using `FuzzEngine` and `Fuzz
 ## Common Tasks
 
 ### Adding a New Payload Category
-1. Add variant to `PayloadType` enum
-2. Implement payload generation in `payloads/`
-3. Use `payload_vec!` macro for inline payload data
-4. Add tests for new payload type
+1. Add the variant to the `PayloadType` enum in `crates/eggsec-payloads/src/lib.rs`
+2. Add the payload data module under `crates/eggsec-payloads/src/` and use the
+   `payload_vec!` macro from `crates/eggsec-payloads/src/macros.rs` for inline data
+3. Only add `crates/eggsec/src/fuzzer/payloads/<name>.rs` when the payload needs
+   live HTTP — that module is a prober and must stay engine-side
+4. Add tests for the new payload type
 
 ### Adding Response Filters
 1. Implement filter logic in `filters.rs`

@@ -6,8 +6,10 @@ report output, and features to the Eggsec workspace.
 ## Core Invariants
 
 1. **Metadata-first**: Every security action starts with `OperationMetadata` in
-   `crates/eggsec/src/config/policy_catalog.rs`. No command, tool, or domain integration
-   may be added without a canonical metadata entry.
+   `crates/eggsec-policy/src/catalog.rs` (`ALL_OPERATION_METADATA`), the canonical
+   owner. The engine module `crates/eggsec/src/config/policy_catalog.rs` is a
+   re-export facade — add entries in the kernel, never there. No command, tool, or
+   domain integration may be added without a canonical metadata entry.
 
 2. **Domains don't authorize**: `DomainDescriptor` in
    `crates/eggsec/src/domain/mod.rs` groups operations under a domain umbrella
@@ -47,7 +49,7 @@ Do you need a new manual CLI command?
 
 | Extension Type | Primary Files | Metadata | Tests |
 |---------------|--------------|----------|-------|
-| Operation | `crates/eggsec/src/config/policy_catalog.rs` | `OperationMetadata` | `metadata_consistency`, `feature_matrix` |
+| Operation | `crates/eggsec-policy/src/catalog.rs` (kernel; engine facade `crates/eggsec/src/config/policy_catalog.rs`) | `OperationMetadata` | `metadata_consistency`, `feature_matrix` |
 | Domain | `crates/eggsec/src/domain/mod.rs`, domain crate | `DomainDescriptor` | `metadata_consistency`, `tool_registration`, `feature_matrix` |
 | Command | `crates/eggsec/src/commands/registry.rs`, handler | `CommandRegistration` | `command_registry`, `enforcement_matrix` |
 | Tool exposure | `crates/eggsec/src/tool/registration.rs` | `ToolRegistration` | `tool_registration`, `enforced_dispatch_regression` |
@@ -90,8 +92,8 @@ command registry, tool registration, feature matrix, enforcement matrix,
 enforced dispatch regression, report envelope, and static drift guards.
 
 For the expanded command list and per-extension test mapping, see
-[`docs/extending/testing.md`](docs/extending/testing.md) and
-[`docs/CI_ARCHITECTURE_GUARDS.md`](docs/CI_ARCHITECTURE_GUARDS.md).
+[`docs/extending/testing.md`](extending/testing.md) and
+[`docs/CI_ARCHITECTURE_GUARDS.md`](CI_ARCHITECTURE_GUARDS.md).
 
 ## Detailed Guides
 
@@ -99,18 +101,18 @@ Each extension type has a dedicated guide in `docs/extending/`:
 
 | Topic | Guide |
 |-------|-------|
-| Adding an operation | [`docs/extending/operations.md`](docs/extending/operations.md) |
-| Adding a domain | [`docs/extending/domains.md`](docs/extending/domains.md) |
-| Adding a CLI command | [`docs/extending/commands.md`](docs/extending/commands.md) |
-| Adding a protocol-exposed tool | [`docs/extending/tool-exposure.md`](docs/extending/tool-exposure.md) |
-| Adding a TUI action | [`docs/extending/tui-actions.md`](docs/extending/tui-actions.md) |
-| Adding report output | [`docs/extending/report-evidence.md`](docs/extending/report-evidence.md) |
-| Adding a feature flag | [`docs/extending/features.md`](docs/extending/features.md) |
-| Testing and pre-handoff checks | [`docs/extending/testing.md`](docs/extending/testing.md) |
-| Copyable templates | [`docs/extending/templates.md`](docs/extending/templates.md) |
-| Enforcement and dispatch | [`docs/ENFORCEMENT_MODES.md`](docs/ENFORCEMENT_MODES.md) |
-| Metadata ownership | [`docs/METADATA_OWNERSHIP.md`](docs/METADATA_OWNERSHIP.md) |
-| Capability matrix | [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md) |
-| Tool registration | [`docs/TOOL_REGISTRATION.md`](docs/TOOL_REGISTRATION.md) |
-| Command registry | [`docs/COMMAND_REGISTRY.md`](docs/COMMAND_REGISTRY.md) |
-| Report/evidence model | [`docs/REPORT_EVIDENCE_MODEL.md`](docs/REPORT_EVIDENCE_MODEL.md) |
+| Adding an operation | [`docs/extending/operations.md`](extending/operations.md) |
+| Adding a domain | [`docs/extending/domains.md`](extending/domains.md) |
+| Adding a CLI command | [`docs/extending/commands.md`](extending/commands.md) |
+| Adding a protocol-exposed tool | [`docs/extending/tool-exposure.md`](extending/tool-exposure.md) |
+| Adding a TUI action | [`docs/extending/tui-actions.md`](extending/tui-actions.md) |
+| Adding report output | [`docs/extending/report-evidence.md`](extending/report-evidence.md) |
+| Adding a feature flag | [`docs/extending/features.md`](extending/features.md) |
+| Testing and pre-handoff checks | [`docs/extending/testing.md`](extending/testing.md) |
+| Copyable templates | [`docs/extending/templates.md`](extending/templates.md) |
+| Enforcement and dispatch | [`docs/ENFORCEMENT_MODES.md`](ENFORCEMENT_MODES.md) |
+| Metadata ownership | [`docs/METADATA_OWNERSHIP.md`](METADATA_OWNERSHIP.md) |
+| Capability matrix | [`docs/CAPABILITY_MATRIX.md`](CAPABILITY_MATRIX.md) |
+| Tool registration | [`docs/TOOL_REGISTRATION.md`](TOOL_REGISTRATION.md) |
+| Command registry | [`docs/COMMAND_REGISTRY.md`](COMMAND_REGISTRY.md) |
+| Report/evidence model | [`docs/REPORT_EVIDENCE_MODEL.md`](REPORT_EVIDENCE_MODEL.md) |

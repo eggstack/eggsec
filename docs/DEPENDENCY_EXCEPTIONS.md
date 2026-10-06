@@ -79,20 +79,24 @@ Every retained advisory ignore must include:
 | Review-by | 2026-12-12 |
 | Blocker | notify v8+ or upstream must drop instant; no alternative available |
 
-### RUSTSEC-2025-0119 — number_prefix unmaintained
+### RUSTSEC-2025-0119 — number_prefix unmaintained — **RESOLVED 2026-10-06**
 
 | Field | Value |
 |-------|-------|
 | Advisory | RUSTSEC-2025-0119 |
-| Path | `number_prefix` 0.4.0 -> `indicatif` v0.17.11 |
+| Path | *(was)* `number_prefix` 0.4.0 -> `indicatif` v0.17.11 |
 | Feature | Progress bars (indicatif used in eggsec pipeline/scanner/loadtest) |
 | API used | No — number_prefix is an internal formatting crate, not exposed |
 | Exploitability | Low — unmaintained, not a vulnerability |
 | Compensating control | None needed; no known security impact |
 | Owner | eggsec-cli / eggsec-tui |
 | Created | 2025-07-01 |
-| Review-by | 2026-12-12 |
-| Blocker | indicatif v0.18+ must drop number_prefix; no alternative available |
+| Resolution | The documented blocker was "`indicatif` v0.18+ must drop `number_prefix`". `indicatif` has since advanced to **0.18.6**, which dropped the dependency: `number_prefix` no longer appears anywhere in `Cargo.lock`, so the advisory is no longer reachable. |
+| Review-by | — (closed) |
+
+> **Closed 2026-10-06:** the `deny.toml` ignore for `RUSTSEC-2025-0119` has now been
+> removed, following the `paste` precedent below rather than being left as a dead
+> entry. Verified: `cargo deny --workspace --all-features check advisories` → `advisories ok`.
 
 ### RUSTSEC-2024-0436 — paste unmaintained — **RESOLVED 2026-10-06**
 
@@ -190,11 +194,14 @@ Every retained advisory ignore must include:
 
 ## Yanked crate notice (warning, not exception)
 
-`libssh2-sys` 0.3.2 is reported yanked (via `ssh2` 0.9.6, `nse-ssh2` feature).
-Deny treats yanked as `warn` (does not fail the gate); `cargo audit` reports it
-as an allowed warning. No ignore is recorded because yanked status calls for an
-upgrade (`cargo update -p libssh2-sys`), not a suppression. Re-evaluate at each
-review: if upstream never un-yanks, consider pinning or replacing the ssh2 path.
+`libssh2-sys` is currently at **0.3.3** (via `ssh2` 0.9.6, `nse-ssh2` feature).
+An earlier revision pinned 0.3.2, which was reported yanked; the lockfile has
+since advanced past it. Deny treats yanked as `warn` (does not fail the gate) by
+default, and `[advisories]` in `deny.toml` sets no stricter `yanked` value. No
+ignore is recorded because yanked status calls for an upgrade
+(`cargo update -p libssh2-sys`), not a suppression. Re-evaluate at each review:
+if the current version is ever yanked, consider pinning or replacing the ssh2
+path.
 
 ## Resolved in Corrective Closure Pass (2026-08-11)
 
@@ -264,6 +271,7 @@ active at review time must be re-evaluated for:
 
 `https://github.com/eggstack/eggsec-nse` was the sole allowed Git source while
 Milestone 003 qualified the standalone runtime. Milestone 004 switched Eggsec
-to the published `eggsec-nse 0.1.0` crates.io release and removed the
-allow-list entry from `deny.toml`; `unknown-git = "deny"` remains fail-closed
-with no allowed Git source. This section is retained as history only.
+to the published `eggsec-nse` crates.io release and removed the allow-list entry
+from `deny.toml`; `unknown-git = "deny"` remains fail-closed with no allowed
+Git source. The consumed version has since advanced to **0.2.0**. This section
+is retained as history only.

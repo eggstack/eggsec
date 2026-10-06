@@ -12,13 +12,20 @@ Some features require specific Cargo build flags:
 | `--features rest-api` | `serve`, `mcp-serve`, `codegg-mcp`, `agent` |
 | `--features stress-testing` | `stress`, `proxy`, `icmp`, `traceroute` |
 | `--features packet-inspection` | `packet capture`, `packet send` (live) |
-| `--features nse` | NSE script execution |
-| `--features full` | All features |
+| `--features nse` | `nse` script execution |
+| `--features mobile` / `wireless` | `mobile`, `wireless` (defense-lab) |
+| `--features mobile-dynamic` | Dynamic mobile analysis (`mobile-dynamic`, Frida/traffic) |
+| `--features web-proxy` / `db-pentest` | `proxy-intercept`, `db` (defense-lab) |
+| `--features full` | Curated superset, including `evasion`/`postex`/`c2` which have no standalone `eggsec-cli` feature flag |
+
+The workspace root is a virtual manifest, so builds must name the package:
 
 ```bash
 # Full build (recommended for pentesting)
-cargo build --release --features full
+cargo build --release -p eggsec-cli --features full
 ```
+
+See [`BUILD.md`](BUILD.md) for the full feature/system-dependency list.
 
 ## Local Lab Targets
 
@@ -138,7 +145,7 @@ eggsec fuzz "https://example.com/login" -t sqli -c 20 --method POST
 eggsec fuzz "https://example.com/search?q=test" -t xss
 
 # Test all inputs with mutation
-eggsec fuzz https://example.com -t xss --mutate -m 10
+eggsec fuzz https://example.com -t xss --mutate --mutation-count 10
 
 # Test for stored XSS (requires session handling)
 eggsec fuzz https://example.com/comment -t xss --http-session
@@ -224,10 +231,10 @@ eggsec fuzz https://example.com -t ssrf --chaining --chain-file examples/chain.y
 Generate inputs based on grammar:
 
 ```bash
-# JSON fuzzing
-eggsec fuzz https://example.com/api -t json --grammar-fuzz --grammar-type json
+# JSON grammar fuzzing (-t must be a real payload type; -t json is not one)
+eggsec fuzz https://example.com/api -t sqli --grammar-fuzz --grammar-type json
 
-# GraphQL fuzzing
+# GraphQL grammar fuzzing
 eggsec fuzz https://example.com/graphql -t graphql --grammar-fuzz --grammar-type graphql
 ```
 
@@ -251,13 +258,13 @@ eggsec fuzz https://example.com -t xss --target nginx
 ### SARIF Output (GitHub Advanced Security)
 
 ```bash
-eggsec fuzz https://example.com -t sqli,xss --sarif -o results.sarif
+eggsec fuzz https://example.com -t sqli,xss --format sarif -o results.sarif
 ```
 
 ### JUnit XML (CI Test Reports)
 
 ```bash
-eggsec fuzz https://example.com -t all --junit -o results.xml
+eggsec fuzz https://example.com -t all --format junit -o results.xml
 ```
 
 ### GitHub Actions Example
@@ -266,11 +273,11 @@ eggsec fuzz https://example.com -t all --junit -o results.xml
 - name: Security Scan
   run: |
     eggsec fuzz ${{ secrets.TARGET_URL }} -t sqli,xss,ssrf \
-      --sarif -o results.sarif \
+      --format sarif -o results.sarif \
       --rate-limit 10
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v2
+  uses: github/codeql-action/upload-sarif@v3
   with:
     sarif_file: results.sarif
 ```
@@ -280,7 +287,7 @@ eggsec fuzz https://example.com -t all --junit -o results.xml
 ```yaml
 security_scan:
   script:
-    - eggsec fuzz $TARGET_URL -t sqli,xss --junit -o gl-sast-report.xml
+    - eggsec fuzz $TARGET_URL -t sqli,xss --format junit -o gl-sast-report.xml
   artifacts:
     reports:
       sast: gl-sast-report.xml
@@ -390,7 +397,7 @@ eggsec scan example.com --format csv -o results.csv
 > 
 > **Note**: Requires building with `--features stress-testing`:
 > ```bash
-> cargo build --release --features stress-testing
+> cargo build --release -p eggsec-cli --features stress-testing
 > ```
 
 ### HTTP Stress Test
@@ -424,7 +431,7 @@ eggsec stress example.com --type http -r 1000 -d 60 --use-proxies --proxy-file p
 ### Add Proxies
 
 ```bash
-eggsec proxy add --file proxies.txt
+eggsec proxy add proxies.txt
 ```
 
 Proxy file format (one per line):
@@ -533,7 +540,7 @@ notify_on_findings = true
 
 > **Note**: Requires building with `--features packet-inspection` for live capture.
 > ```bash
-> cargo build --release --features packet-inspection
+> cargo build --release -p eggsec-cli --features packet-inspection
 > ```
 
 ### Capture Packets
@@ -565,8 +572,8 @@ eggsec packet send 192.168.1.1 --dst-port 80 --flags SYN
 # Send ICMP ping
 eggsec packet send 8.8.8.8 --icmp
 
-# Custom payload
-eggsec packet send example.com:8080 --payload "GET / HTTP/1.1\r\n\r\n"
+# Custom payload (hex-encoded)
+eggsec packet send example.com:8080 --payload "474554202f20485454502f312e310d0a0d0a"
 ```
 
 ## ICMP Probes
@@ -590,22 +597,20 @@ eggsec traceroute 8.8.8.8
 eggsec traceroute example.com --icmp
 
 # Traceroute with custom settings
-eggsec traceroute 192.168.1.1 --max-hops 30 --probes 5
+eggsec traceroute 192.168.1.1 --max-hops 30 --timeout 5
 ```
 
 ## Report Management
 
 ### Convert Reports
 
-Convert scan results between formats. The converter accepts canonical `ScanReportData` JSON. It also accepts native JSON output from standalone defense-lab commands (`eggsec wireless` and `eggsec mobile`, when the corresponding feature is enabled) via an automatic bridge to `ScanReportData` — so you can directly pipe their `--json` outputs without manual conversion.
+Convert scan results between formats. The converter accepts canonical `ScanReportData` JSON. It also accepts native JSON output from standalone defense-lab commands (when the corresponding feature is enabled) via an automatic bridge to `ScanReportData` — so you can pipe their `--json` output without manual conversion.
 
-**Output Models (standalone defense-lab surfaces vs. pipeline)**
+**Output models (standalone defense-lab surfaces vs. pipeline)**
 
-- **Pipeline scans** (`eggsec scan <target> --profile <p>` and most other assessment commands): always produce a full `ScanReportData` (unified findings + metadata). This is loadable via `load_scan_report`, diffable, and exportable to every format (JSON, SARIF, JUnit, HTML, Markdown, CSV, etc.) through the `eggsec-output` converters.
-- **Wireless / Mobile / db-pentest / web-proxy** (standalone defense-lab CLIs under their feature flags): emit their native local types directly (`WirelessScanResult`, `MobileScanReport`, `DbPentestReport`, or `WebProxySessionReport`) for human-readable output, `--json`, and file writes. They also provide an *optional* `to_scan_report_data()` bridge (plus an auto-bridge inside `report convert`) so native `--json` can flow into the unified SARIF/JUnit/HTML/etc. consumers when desired. Use native shapes for lab-specific workflows and repeated-scan summaries; use the bridge (or `report convert` on native JSON) for reporting unification. Categories in bridged output are `wireless-*`, `mobile-{android,ios}-*`, `db-postgres-*` / `db-mysql-*` / `db-mssql-*` / `db-mongodb-*` / `db-redis-*`, or `proxy-intercept-flow` / `web-traffic-summary`. See docs/WIRELESS.md and docs/MOBILE.md ("Integration with Reporting Pipeline" sections) and the per-module architecture docs. MCP/agent tool exposure is intentionally absent for wireless (design decision; not a SecurityTool; see architecture/wireless.md MCP/Agentic section). Active wireless (Phase 1, complete 2026-06-12, under `wireless-advanced`) emits native results and extends the optional bridge with `wireless-active-*` categories while preserving the standalone defense-lab model and MCP-absent design. See docs/WIRELESS.md Integration section. Dynamic mobile (Phase 1 + Phase 2a, complete 2026-06-12, under `mobile-dynamic`; implementation, final polish, and close-out all completed) emits native `DynamicMobileReport` and extends the optional bridge with `mobile-dynamic-android-*` categories (including `mobile-dynamic-android-traffic-summary` + `mobile-dynamic-android-permission-state` extra info findings when the corresponding report fields are populated) while preserving the standalone defense-lab model and MCP-absent design. See docs/MOBILE.md Integration section.
-- **`auth-test`** (standalone defense-lab CLI): intentionally produces and emits only local `AuthTestReport` / `AuthFinding` types (direct text or `--json` from the handler). There is **no** `to_scan_report_data` bridge, no `FindingData` / `ScanReportData` conversion, and no SARIF/JUnit/etc. path. It is deliberately kept outside the unified reporting system to preserve its narrow "credential control validation in authorized labs" purpose. Distinct from the pipeline `ScanProfile::Auth` (which does produce `ScanReportData`). See docs/AUTH_LAB.md ("Output Model (Local Findings Only)" section) and architecture/auth.md.
-
-The three models (now with db-pentest and web-proxy added to the wireless/mobile category) are summarized here for discoverability; the detailed rationale and examples live in the linked per-module docs.
+- **Pipeline scans** (`eggsec scan <target> --profile <p>` and most other assessment commands): produce a full `ScanReportData` (unified findings + metadata). This is loadable via `load_scan_report`, diffable, and exportable to every format (JSON, SARIF, JUnit, HTML, Markdown, CSV) through the `eggsec-output` converters.
+- **Standalone defense-lab CLIs** — `wireless`, `mobile`, `db`, `proxy-intercept`, `evasion`, `c2` — emit their own local report types for human-readable output, `--json`, and file writes. Each ships an *optional* `to_scan_report_data()` bridge (plus an auto-bridge inside `report convert`) so native `--json` can flow into the unified SARIF/JUnit/HTML consumers. Use the native shapes for lab-specific workflows; use the bridge (or `report convert` on native JSON) for reporting unification. Bridged findings carry domain-prefixed categories such as `wireless-*`, `mobile-android-*` / `mobile-ios-*`, `db-postgres-*`, `proxy-intercept-flow`, `evasion-*`, and `c2-*`. See the per-module docs for exact category names and bridge caveats.
+- **`auth-test`** intentionally emits only local `AuthTestReport` / `AuthFinding` types. There is **no** `to_scan_report_data` bridge and no SARIF/JUnit/etc. path. It is deliberately kept outside the unified reporting system. Distinct from the pipeline `ScanProfile::Auth`, which does produce `ScanReportData`. See [`AUTH_LAB.md`](AUTH_LAB.md) and `architecture/auth.md`.
 
 ```bash
 # Convert canonical or bridged JSON to HTML
@@ -624,7 +629,7 @@ eggsec report convert scan.json -f junit -o results.xml
 eggsec report convert scan.json -f markdown -o report.md
 
 # Wireless (native --json from defense-lab command; auto-bridged)
-eggsec wireless wlan0 --json -o wireless.json
+eggsec wireless wlan0 scan --json -o wireless.json
 eggsec report convert wireless.json -f sarif -o wireless.sarif
 eggsec report convert wireless.json -f junit -o wireless.xml
 
@@ -634,7 +639,7 @@ eggsec report convert mobile.json -f html -o mobile.html
 eggsec report convert mobile.json -f markdown -o mobile.md
 ```
 
-See the "Output Models" block above, plus `docs/WIRELESS.md` (Integration with Reporting Pipeline) and `docs/MOBILE.md` (same) for when to use the native types vs. the optional bridge, and for notes on rogue-in-bridge and category naming. `auth-test` has no bridge (see its section above and docs/AUTH_LAB.md). See architecture/wireless.md (MCP/Agentic section) for why MCP/agent tool exposure is intentionally absent for wireless (and the handoff plan resolution). Active wireless (Phase 1) complete 2026-06-12. Dynamic mobile (Phase 1 + Phase 2 (closed 2026-06-12) + final polish + close-out) complete 2026-06-12 per `plans/dynamic-mobile-testing-loadout-design-plan.md` + `plans/mobile-dynamic-phase1-implementation-handoff-plan.md` + Phase 2 closeout/polish (completed); Phase 3/4a (Frida + CorrelationEngine + baseline/regression/evidence bundles + polish handoff) delivered 2026-06-12 under single mobile-dynamic per phase3/phase4 + phase4a-final-polish-handoff-plan.md (executed); future phases per the parent design plan.
+Per-module detail lives in [`WIRELESS.md`](WIRELESS.md), [`MOBILE.md`](MOBILE.md), [`DATABASE_PENTEST.md`](DATABASE_PENTEST.md), [`WEB_PROXY.md`](WEB_PROXY.md), and the matching `architecture/*.md` files.
 
 ### Trend Analysis
 
@@ -689,8 +694,8 @@ eggsec remote start
 # Start with custom port and PSK
 eggsec remote start --port 9000 --auth your-psk
 
-# Start with TLS
-eggsec remote start --port 9000 --tls-cert cert.p12 --tls-password password
+# Start with TLS (PEM cert + key)
+eggsec remote start --port 9000 --tls-cert cert.pem --tls-key key.pem
 ```
 
 ### Execute Remote Commands
@@ -703,12 +708,12 @@ eggsec exec --target 192.168.1.1:7890 --auth your-psk "scan-ports example.com -p
 eggsec exec --targets targets.txt --auth your-psk "recon example.com"
 
 # With TLS
-eggsec exec --target host:7890 --tls-cert cert.p12 "fuzz https://example.com -t xss"
+eggsec exec --target host:7890 --tls-cert cert.pem "fuzz https://example.com -t xss"
 ```
 
 ## TUI Appearance (Themes)
 
-The interactive TUI supports 50+ packaged Halloy-format themes plus three
+The interactive TUI supports 50 packaged Halloy-format themes plus three
 built-in fallback themes (`cyber-red`, `dark`, `light`).
 
 ### Changing Themes

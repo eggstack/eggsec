@@ -540,13 +540,23 @@ completeness) are policed anywhere else; I found only the engine integration tes
 `crates/eggsec/tests/fuzzer_payload_corpus_seam.rs` and no guard covering
 `dispatch/scanner.rs`'s projection.
 
-Test wiring: `Makefile:122-124` runs `cargo test -p eggsec-service-db/eggsec-secrets/eggsec-payloads --tests`.
-There is **no** `cargo test -p eggsec-udp-scan` line in `make check` — a gap the roadmap
-explicitly declines to adopt for its own crates
-(`plans/subsystems/security-knowledge-corpus-roadmap.md:428`), so its 23 tests
-(21 in `tests.rs`, 2 in the loopback module `lib.rs:408`) do not run under `make check`.
-Its `test-util` feature (`crates/eggsec-udp-scan/Cargo.toml:29`) is declared but has no
-`cfg(feature = "test-util")` site in the crate (verified by grep: none).
+Test wiring: `Makefile:122-125` runs `cargo test -p eggsec-service-db/eggsec-secrets/eggsec-payloads/eggsec-udp-scan --tests`, so all four corpus crates are covered by `make check`.
+
+> **Corrected 2026-10-06 (fixed, not just noted).** An earlier revision of this file
+> recorded two gaps here as open findings. Both are now closed:
+> 1. There was **no** `cargo test -p eggsec-udp-scan` line in `make check`, so its 23 tests
+>    (21 in `tests.rs`, 2 in the loopback module `lib.rs:408`) never ran. Added —
+>    `Makefile:125`; verified 23 passed / 0 failed.
+> 2. Its `test-util` feature was declared with **no** `cfg(feature = "test-util")` site
+>    anywhere in the crate and no consumer enabling it (grep-verified: the only reference in
+>    the workspace was its own declaration). It gated nothing, so it was **removed** rather
+>    than wired. This is distinct from `eggsec-transport`'s `test-util`, which is real —
+>    it gates `fake.rs` behind `cfg(any(test, feature = "test-util"))` and is enabled by
+>    `eggsec` and `eggsec-agent`.
+
+Verified corpus test counts (2026-10-06): payloads **252** (across 42 files; only 4 in
+`lib.rs`), service-db **21**, secrets **11**, udp-scan **23**. The registry's former
+"233/21/11" figure predates the 2026-10-06 move of the last 6 payload sets into the corpus.
 
 ---
 
@@ -556,10 +566,11 @@ Claims I checked and found **wrong or stale**, recorded so the next reader does 
 inherit them:
 
 1. **"34 pure-data modules in `eggsec-payloads`, the 6 live-probe modules stay
-   engine-side."** Stale. `crates/eggsec/Cargo.toml:111-112` still carries this comment.
-   The corpus has **40** payload modules (`lib.rs:47-88`, 41 `pub mod` including
-   `macros`) and owns all 40 variants; only the probers stayed engine-side. Corrected
-   2026-10-06 per `plans/registry.md:163`.
+   engine-side."** Stale. `crates/eggsec/Cargo.toml:110-112` carried this comment.
+   **Fixed 2026-10-06** — it now reads that the corpus owns all 40 `PayloadType` variants
+   and the cross-variant caches, with only the 6 live probers engine-side. The corpus has
+   **40** payload modules (`lib.rs:47-88`, 41 `pub mod` including `macros`) and owns all 40
+   variants; only the probers stayed engine-side. Corrected per `plans/registry.md:167`.
 2. **"`eggsec-service-db`: … Only dep is rustc-hash."** Correct — and stronger than it
    looks. Guard 148 asserts it must not even declare `eggsec-core` (`:4216-4220`), and
    the crate is 316 lines, not the 302 the pre-extraction measurement recorded

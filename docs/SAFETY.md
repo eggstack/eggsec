@@ -7,15 +7,19 @@ Eggsec is a security testing toolkit designed for **authorized testing only**.
 ## Scope Enforcement
 
 All target-bearing operations go through scope validation:
-- Direct IP addresses (e.g., `127.0.0.1`) are blocked by default
+- Direct IP addresses are evaluated against scope rules; non-public addresses (RFC1918, link-local, CGNAT, IPv6 ULA) are rejected unless a rule authorizes them
+- Loopback (`127.0.0.0/8`, `::1`) is exempt from the non-public checks — it is inherently local
 - Scope rules define allowed targets
 - Operations outside scope are rejected
 
-Exactly one implementation authorizes network targets: `eggsec::config::Scope`
-evaluated through `EnforcementContext` (or its `is_target_allowed` policy
-implementation). Protocol-neutral declarations (`eggsec-tool-core::ScopeSpec`,
-Python `ToolScopeSpec`, gRPC `Scope` message) are caller intent only — they
-have no authorization method and must be converted via
+See [scope.md](scope.md) for the resolution order and the CIDR/pattern matcher.
+
+Exactly one implementation authorizes network targets: `eggsec_policy::Scope`
+evaluated via `Scope::evaluate_facts(&TargetScope)`, reached from the engine
+through `EnforcementContext::evaluate()`. There is no `is_target_allowed` entry
+point — adapters never check scope directly. Protocol-neutral declarations
+(`eggsec-tool-core::ScopeSpec`, Python `ToolScopeSpec`, gRPC `Scope` message) are
+caller intent only — they have no authorization method and must be converted via
 `eggsec::config::scope_from_spec` before any policy check. A request carrying
 a declaration is authorized only when the engine scope **and** the converted
 declaration both allow (intersection; either may deny, conversion failures
@@ -23,13 +27,27 @@ deny).
 
 ## Type-Level Enforcement
 
-Strict programmatic surfaces (REST, MCP, security-agent, gRPC, CI) require an `ApprovedOperation` token before dispatch. The token is produced exclusively by `EnforcementContext::approve()` or `approve_manual()` and verified by `EnforcedDispatcher::dispatch_checked()`. Raw `ToolDispatcher::dispatch()` calls are prohibited in strict surfaces and enforced by source-scan regression tests.
+Strict programmatic surfaces (REST, MCP, security-agent, gRPC, CI) dispatch only
+through `EnforcedDispatcher` with a bundle produced by
+`EnforcementContext::approve_execution()` / `approve_manual_execution()`:
+`ApprovedExecution` couples the token to the scope snapshot from the same
+context, and `dispatch_execution()` verifies it. Scope-insensitive tools use
+`approve()` / `approve_manual()` and `dispatch_checked()` with an
+`ApprovedOperation`. Never construct a bundle directly — get it from the same
+context that evaluated the operation. Raw `ToolDispatcher::dispatch()` calls are
+prohibited in strict surfaces and enforced by source-scan regression tests
+(`crates/eggsec/tests/enforced_dispatch_regression.rs`).
 
 Manual surfaces (CLI, TUI) do not require a token but still evaluate policy through `EnforcementContext::evaluate()`. The TUI pre-dispatch gate blocks side effects when the outcome is `Deny` or unresolved `RequireConfirmation`.
 
 ## Operation Metadata
 
-`OperationMetadata` in `config::policy` is the single source of truth for all operation descriptors. Tool IDs are resolved to canonical metadata entries via `metadata_for_tool_id()`. Aliases (e.g., `scan` → `scan-ports`) are resolved at the metadata layer, not the dispatcher layer. `operation_matches_tool_id()` provides alias-aware comparison for dispatch verification.
+`OperationMetadata` in `crates/eggsec-policy/src/catalog.rs` is the single
+source of truth for all operation descriptors (34 canonical operations + 29
+aliases). Tool IDs are resolved to canonical metadata entries via
+`metadata_for_tool_id()`. Aliases (e.g., `scan` → `scan-ports`) are resolved at
+the metadata layer, not the dispatcher layer. `operation_matches_tool_id()`
+provides alias-aware comparison for dispatch verification.
 
 ## Operation Risk Tiers
 
@@ -46,16 +64,16 @@ Eggsec classifies operations by risk level:
 | RawPacket | Raw packet operations | Blocked |
 | CredentialTesting | Auth testing (auth-test CLI only; local `Auth*` types; see architecture/auth.md) | Blocked |
 | ExploitAdjacent | Exploit-adjacent testing (e.g. chained primitives) | Blocked |
-| (wireless passive) | Passive WiFi recon (iwlist scan, analysis only; no tx/injection/deauth/handshake). Detects security types (incl. WPS/hidden/transition), weak configs, and passive rogue/Evil-Twin heuristic. | Allowed under SafeActive (feature-gated `wireless`; requires root/CAP_NET_ADMIN + wireless-tools/iwlist; authorized lab/defense use only). Use --dry-run for unprivileged planning/CI. --known-good suppresses heuristic for baselines. See docs/WIRELESS.md. |
-| (wireless active, Phase 1) | Active WiFi attacks (deauth, disassoc). Phase 1 implemented: pure-Rust 802.11 frame crafting, Linux raw socket injection, targeted/broadcast deauth, dry-run, packet budgets, policy gate (`Intrusive` risk + `wireless-advanced` feature). See `docs/WIRELESS.md` (completed). | Blocked by default; requires `wireless-advanced` feature + `--allow-active-wireless` + lab context |
-| (mobile dynamic) | Dynamic/runtime mobile app testing (controlled ADB/logcat/proxy/perms under `mobile-dynamic`). Phase 1 (Android ADB core + logcat) and Phase 2 (proxy Level-1 + runtime permissions + traffic summary + correlation; closed 2026-06-12) complete. Phase 3/4a (Frida + CorrelationEngine + baseline/regression/evidence + polish handoff) delivered 2026-06-12 under single mobile-dynamic (completed). | Blocked by default; requires `mobile-dynamic` feature + lab context + overrides (like wireless-advanced) |
-| (mobile static) | Static analysis of user-supplied .apk/.ipa in lab (manifest, permissions, transport config, secrets, debug/backup flags, exported components). No execution, no device interaction. | Allowed under SafeActive (feature-gated `mobile`) |
-| (db pentest) | Direct Postgres/MySQL/MSSQL/MongoDB/Redis security assessment (lab-only, non-web). Phase 1-5: checks + manifest + bridge + real MSSQL tiberius + TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks behind `--allow-db-pentest-advanced` + correlation engine with scoring + native `Stage::DbPentest` + evidence bundle v2 + MongoDB/Redis engines + cross-DB correlation + compliance mapping (OWASP/PCI/HIPAA) + optional MCP via `db-pentest-mcp` marker. | Blocked by default; requires `db-pentest` feature + `--allow-db-pentest` for non-dry real runs; dry-run always safe; standalone defense-lab. |
-| (web proxy) | Interactive HTTP/HTTPS MITM proxy for authorized lab traffic inspection. Phase 1 (dry-run + synthetic flows + reporting bridge) complete; real MITM deferred to Phase 2. Feature-gated `web-proxy`; `TrafficInterception` risk + `--allow-web-proxy` for non-dry real runs; dry-run always safe; `OperationRisk::SafeActive` for dry-run (no network/listen). Standalone defense-lab (no MCP/agent). See `docs/WEB_PROXY.md`, `architecture/web_proxy.md`. |
+| (wireless passive) | Passive WiFi recon (iwlist scan; analysis only — no tx/injection/deauth/handshake). Detects security types (incl. WPS/hidden/transition), weak configs, and a passive rogue/Evil-Twin heuristic. | Allowed under SafeActive (feature-gated `wireless`; needs root/CAP_NET_ADMIN + wireless-tools; lab/defense use only). `--dry-run` for unprivileged planning/CI; `--known-good` suppresses the heuristic for baselines. See [WIRELESS.md](WIRELESS.md). |
+| (wireless active) | Active WiFi attacks (deauth, disassoc): pure-Rust 802.11 frame crafting, Linux raw socket injection, targeted/broadcast deauth, dry-run, packet budgets, policy gate (`Intrusive` risk + `wireless-advanced` feature). See [WIRELESS.md](WIRELESS.md). | Blocked by default; requires `wireless-advanced` feature + `--allow-active-wireless` + lab context |
+| (mobile dynamic) | Dynamic/runtime mobile app testing under `mobile-dynamic`: ADB + logcat, proxy Level-1, runtime permissions, traffic summary, correlation, and Frida instrumentation. | Blocked by default; requires `mobile-dynamic` feature + lab context + `--allow-dynamic-mobile` (Frida additionally needs `--allow-frida`). See [MOBILE.md](MOBILE.md). |
+| (mobile static) | Static analysis of user-supplied `.apk`/`.ipa` in lab (manifest, permissions, transport config, secrets, debug/backup flags, exported components). No execution, no device interaction. | Allowed under SafeActive (feature-gated `mobile`) |
+| (db pentest) | Direct Postgres/MySQL/MSSQL/MongoDB/Redis security assessment (lab-only, non-web): checks + manifest + bridge + TUI tab `Tab::DbPentest` + pipeline `ScanProfile::DbRegression` + advanced gated checks behind `--allow-db-pentest-advanced` + correlation scoring + `Stage::DbPentest` + evidence bundle + cross-DB correlation + compliance mapping + optional MCP via the `db-pentest-mcp` marker. | Blocked by default; requires `db-pentest` feature + `--allow-db-pentest` for non-dry real runs; dry-run always safe. See [DATABASE_PENTEST.md](DATABASE_PENTEST.md). |
+| (web proxy) | Interactive HTTP/HTTPS MITM proxy for authorized lab traffic inspection. Feature-gated `web-proxy`; `TrafficInterception` risk + `--allow-web-proxy` for non-dry real runs; dry-run is always safe (`SafeActive`, no network/listen). Standalone defense-lab. See [WEB_PROXY.md](WEB_PROXY.md). |
 | RemoteExecution | Remote command execution | Blocked |
 | AgentAutonomous | Agent-driven operations | Blocked |
 
-High-risk operations (e.g. intrusive fuzzing, stress testing, raw packets, credential testing) must be explicitly enabled in your config file. Mobile static analysis is gated behind the `mobile` feature but classified under SafeActive (no execution, lab binaries only); dynamic (Phase 1 + Phase 2 (closed 2026-06-12); Phase 3/4a delivered 2026-06-12) is gated behind `mobile-dynamic` and the additional `--allow-dynamic-mobile` runtime confirmation.
+High-risk operations (e.g. intrusive fuzzing, stress testing, raw packets, credential testing) must be explicitly enabled in your config file. Mobile static analysis is gated behind the `mobile` feature but classified under SafeActive (no execution, lab binaries only); dynamic testing is gated behind `mobile-dynamic` plus the additional `--allow-dynamic-mobile` runtime confirmation.
 
 ## Authorization Requirements
 
@@ -73,12 +91,31 @@ Operation policies are configured in your config file:
 [execution_policy]
 require_explicit_scope = true
 allow_intrusive_fuzzing = false
+allow_load_testing = false
 allow_stress_testing = false
+allow_raw_packets = false
+allow_credential_testing = false
+allow_db_pentesting = false
+allow_traffic_interception = false
+allow_remote_execution = false
+allow_evasion_testing = false
+allow_post_exploitation = false
+allow_exploit_adjacent = false
+allow_agent_autonomous = false
+max_risk_without_confirm = "safe_active"
 ```
 
-The `mobile` feature (static-only APK/IPA analysis for lab binaries) must be enabled at build time (`--features mobile` or `--features full`). Mobile static is intended for authorized lab/defense use on user-supplied .apk/.ipa files only; no execution or device interaction occurs. The `mobile-dynamic` feature (Android ADB + logcat + Phase 2 (proxy + permissions + correlation; closed 2026-06-12); Phase 3/4a delivered 2026-06-12) must be enabled at build time for `eggsec mobile dynamic ...`. See `architecture/feature_matrix.md` for feature flags and `docs/CAPABILITIES.md` (Mobile App Security section) for coverage.
+These are the complete `ExecutionPolicy` fields; every `allow_*` defaults to
+`false` and `max_risk_without_confirm` defaults to `OperationRisk::SafeActive`.
+Risk tiers serialize as `snake_case` (`passive`, `safe_active`, `intrusive`,
+`load_test`, `stress_test`, `raw_packet`, `credential_testing`,
+`db_pentest`, `traffic_interception`, `evasion_testing`,
+`post_exploitation`, `exploit_adjacent`, `c2_operation`,
+`remote_execution`, `agent_autonomous`). Per-surface capability allow-lists
+(`allowed_capabilities` / `denied_capabilities`) are separate — see
+[ENFORCEMENT_MODES.md](ENFORCEMENT_MODES.md).
 
-See `architecture/feature_matrix.md` for feature flags.
+The `mobile` feature (static-only APK/IPA analysis for lab binaries) must be enabled at build time (`--features mobile` or `--features full`). Mobile static is intended for authorized lab/defense use on user-supplied `.apk`/`.ipa` files only; no execution or device interaction occurs. The `mobile-dynamic` feature (Android ADB + logcat + proxy + permissions + correlation + Frida) must be enabled at build time for `eggsec mobile dynamic ...`. See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for feature flags and [CAPABILITIES.md](CAPABILITIES.md) (Mobile App Security section) for coverage.
 
 ## Operating Modes
 
@@ -158,11 +195,14 @@ Stress testing generates high volumes of traffic against a target. It can overwh
 
 ```bash
 eggsec stress "$TARGET" \
-  --rate-limit 100 \
+  --rate 100 \
   --concurrency 10 \
   --duration 60 \
   --scope scopes/lab.toml
 ```
+
+Note: `stress` uses `--rate` (packets/sec). `--rate-limit` is the HTTP-oriented
+flag on `scan`, `load`, and the shared `CommonHttpArgs`.
 
 ### Packet / Raw Socket Operations
 

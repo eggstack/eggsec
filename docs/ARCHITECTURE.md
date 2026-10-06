@@ -9,7 +9,7 @@ Eggsec is a Rust-native, scope-enforced security assessment and defense-validati
 - **Manual operator workflows** (CLI, TUI) where humans decide which tests to run
 - **Automated workflows** (REST, MCP, gRPC, Agent, CI) where policy must be enforced without operator discretion
 
-The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. Strict programmatic surfaces (REST, MCP, gRPC, Agent) always use `EnforcedDispatcher::dispatch_checked()` with an `ApprovedOperation` token. Internal helpers (e.g., the pipeline orchestrator) may use raw `ToolDispatcher::dispatch()` but only after caller-level enforcement has already been satisfied.
+The architecture enforces a critical invariant: **authorization is centralized; domain crates declare and execute but must not authorize**. `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate for **all** surfaces. Strict programmatic surfaces (REST, MCP, gRPC, Agent, CI) honor no overrides and fail closed — they dispatch only through `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (token plus the scope snapshot from the same context). Manual surfaces (CLI, TUI) use the permissive profile with operator overrides allowed. `dispatch_checked()` with `ApprovedOperation` alone remains for scope-insensitive tools. Adapters go through narrow service traits (`tool::service::EngineServices`, `agent::services::AgentExecutionService`, `mcp::bridge::McpEngineBridge`) and never call `Scope::is_target_allowed` or `tool.execute()` directly.
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -24,7 +24,7 @@ The architecture enforces a critical invariant: **authorization is centralized; 
                          │
          ┌───────────────▼───────────────┐
          │   EnforcementContext::evaluate │
-         │   → ApprovedOperation token   │
+         │   → ApprovedExecution bundle   │
          └───────────────┬───────────────┘
                          │
     ┌────────────────────▼────────────────────┐
@@ -40,9 +40,11 @@ The architecture enforces a critical invariant: **authorization is centralized; 
     └──────────────────────────────────────────┘
 ```
 
-The **command registry** (`commands/registry.rs`) provides static, inspectable metadata for CLI/TUI dispatch. Pilot commands (recon, scan-ports, scan-endpoints, fingerprint) use registry-based descriptor generation. Legacy commands remain on inline descriptor construction. The registry is metadata and routing, not authorization — `EnforcementContext::evaluate()` remains the mandatory pre-dispatch gate. See [COMMAND_REGISTRY.md](COMMAND_REGISTRY.md) for the full inventory.
+The **command registry** (`commands/registry.rs`) provides static, inspectable metadata for CLI/TUI dispatch: 49 entries. `commands/route.rs` is the single routing owner that classifies every Clap variant once. All operation-backed commands use `RegistryBacked` dispatch (`OperationMetadata` → descriptor → `EnforcementContext` → canonical dispatcher); there is no permanent `LegacyWrapped` mode. The registry is metadata and routing, not authorization — `EnforcementContext::evaluate()` remains the mandatory pre-dispatch gate. See [COMMAND_REGISTRY.md](COMMAND_REGISTRY.md) for the full inventory and [architecture/cli_commands.md](../architecture/cli_commands.md) for the routing contract.
 
 ## 2. Workspace Crate Ownership
+
+23 workspace crates (`eggsec-nse` is external and not a member).
 
 | Crate | Role | Policy Decisions | Execution | Frontend | Dependency-Light | Notes |
 |-------|------|:---:|:---:|:---:|:---:|-------|
@@ -54,47 +56,61 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
 | `eggsec-tui` | TUI frontend | No | No | **Yes** | No | 33 tabs, enforcement toggle, packaged themes. |
-| `eggsec-nse` (external) | NSE compatibility runtime | No | Domain execution | No | Yes | [Standalone repository](https://github.com/eggstack/eggsec-nse), consumed by Eggsec as the versioned `eggsec-nse 0.1.0` crates.io release. |
+| `eggsec-nse` (external) | NSE compatibility runtime | No | Domain execution | No | Yes | [Standalone repository](https://github.com/eggstack/eggsec-nse), consumed by Eggsec as the versioned `eggsec-nse 0.2.0` crates.io release behind the optional engine `nse` feature. |
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
 | `eggsec-mobile-lab` | Mobile analysis domain | No | Domain execution | No | Yes | APK/IPA static analysis + Android dynamic runtime testing (ADB, Frida, behavioral correlation). |
+| `eggsec-service-db` | Knowledge corpus leaf | No | No | No | Yes | Port-to-service tables + banner heuristics. Data only. |
+| `eggsec-secrets` | Knowledge corpus leaf | No | No | No | Yes | Credential patterns + the entropy gate. Data only. |
+| `eggsec-payloads` | Knowledge corpus leaf | No | No | No | Yes | Attack payload corpora. Data only; the 6 live probers stay engine-side. |
+| `eggsec-udp-scan` | Knowledge corpus leaf | No | No | No | Yes | UDP scanning + ICMP error correlation, behind the `udp-scan` feature. |
 | `eggsec-runtime` | Frontend-neutral runtime | No | No | No | Yes | Task lifecycle management (`Runtime`, `RuntimeConfig`, `RuntimeTaskExecutor`) for daemon architecture. |
-| `eggsec-daemon` | Persistent daemon host | No | No | **Yes** | Yes | Unix socket server, session lifecycle, RBAC, persistence. Depends only on `eggsec-runtime`. |
+| `eggsec-daemon` | Persistent daemon host | No | No | **Yes** | Yes | Unix socket server, session lifecycle, RBAC, persistence. Default deps are `eggsec-runtime` + `eggsec-daemon-protocol` only; engine behind `full-executor`, transport behind `http-api`, no TUI deps. |
+| `eggsec-daemon-protocol` | Daemon IPC types | No | No | No | Yes | Wire DTOs for the daemon protocol. |
+| `eggsec-policy` | Deterministic authorization semantics | **Yes** | No | No | Yes | Data + pure algorithms only: no Tokio, no network, no filesystem. Engine bridges DNS, features, and transport. |
 | `eggsec-ui-model` | Frontend view DTOs | No | No | No | Yes | View model types for TUI/daemon event rendering. |
 | `eggsec-transport` | Scope-aware outbound HTTP contract | No | No | No | Yes | Neutral DTOs, mandatory `NetworkAuthority`, recording fake. No concrete clients. |
 | `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` | No | No | No | Yes | Approved-IP pinning, manual authorized redirects. No production consumers yet. |
 | `eggsec-python` | Python bindings | No | No | No | Yes | PyO3/maturin. Depends on `eggsec` + `eggsec-core`. Engine/AsyncEngine entry points, scope enforcement, OperationRegistry, EnforcementContext, event protocol, callbacks/sinks, domain registry, 1.0 readiness. |
 
-**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-agent`) have no engine/runtime dependencies (`eggsec-report-model` depends only on `eggsec-core`; `eggsec-output` renders over the model, never the reverse). The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends.
+**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-agent`, `eggsec-policy`) have no engine/runtime dependencies (`eggsec-report-model` depends only on `eggsec-core`; `eggsec-output` renders over the model, never the reverse). The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends. The workspace root is a virtual manifest — install with `cargo install --path crates/eggsec-cli`.
+
+The knowledge-corpus leaves (`eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan`) are near-empty-dependency data crates reached only through engine `pub use` facades. The seam is one-directional: **the corpus owns data, the engine owns I/O** — the live probers stay engine-side even though their `get_payloads()` are pure data. See `architecture/knowledge_corpus.md`.
 
 ## 3. Enforcement Model
 
 ### 3.1 Core Types
 
-| Type | Location | Purpose |
-|------|----------|---------|
-| `ExecutionSurface` | `config/policy.rs` | Caller origin identity. 9 variants: `CliManual`, `TuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
-| `ExecutionProfile` | `config/policy.rs` | Trust boundary. 5 variants: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`. |
-| `OperationRisk` | `config/policy.rs` | Risk tier ordering. 15 variants from `Passive` to `AgentAutonomous`. |
-| `OperationMode` | `config/policy.rs` | Semantic mode: `StandardAssessment`, `DefenseLab`, `HazardousLab`. |
-| `Capability` | `eggsec-policy` (`config/policy.rs` facade) | Fine-grained capability declarations. 19 variants. |
-| `OperationDescriptor` | `eggsec-policy` (`config/policy.rs` facade) | The unit of policy evaluation. Bundles operation name, mode, risk, target, required features, capabilities, and scope requirements. |
-| `OperationMetadata` | `eggsec-policy` (`config/policy.rs` facade) | Static registry entry. 32 operations + 33 aliases. Single source of truth for all surfaces. |
-| `ExecutionPolicy` | `eggsec-policy` (`config/policy.rs` facade) | TOML-deserialized config controlling which risk tiers and capabilities are allowed. |
-| `LoadedScope` | `eggsec-policy` (`config/scope.rs` facade) | Scope with provenance. `is_explicit_manifest()` distinguishes "no scope" from "explicitly empty scope". |
-| `EnforcementContext` | `eggsec-policy` (`config/policy_decision.rs` facade) | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope` + explicit `EnabledFeatures`. Created once per execution path. |
-| `EnforcementOutcome` | `eggsec-policy` (`config/policy_decision.rs` facade) | Profile-aware result: `Allow`, `Warn`, `RequireConfirmation`, `Deny`. |
-| `ManualOverride` | `eggsec-policy` (`config/policy_decision.rs` facade) | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
-| `ApprovedOperation` | `eggsec-policy` (`config/policy_approval.rs` facade) | Proof-of-enforcement token. Private fields. Created exclusively by `EnforcementContext::approve()` or `approve_manual()`. |
-| `EnforcedDispatcher` | `tool/dispatcher.rs` | Wraps `ToolDispatcher` requiring `ApprovedOperation` before dispatch. Type-level enforcement gate. |
+| Type | Canonical Location | Purpose |
+|------|--------------------|---------|
+| `ExecutionSurface` | `eggsec-policy/src/policy.rs` | Caller origin identity. 9 variants: `CliManual`, `TuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
+| `ExecutionProfile` | `eggsec-policy/src/policy.rs` | Trust boundary. 5 variants: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`. |
+| `OperationRisk` | `eggsec-policy/src/policy.rs` | Risk tier ordering. 15 variants from `Passive` to `AgentAutonomous`. |
+| `OperationMode` | `eggsec-policy/src/policy.rs` | Semantic mode: `StandardAssessment`, `DefenseLab`, `HazardousLab`. |
+| `Capability` | `eggsec-policy/src/policy.rs` | Fine-grained capability declarations. 19 variants. |
+| `IntendedUse` | `eggsec-policy/src/policy.rs` | Declared purpose. 8 variants. |
+| `OperationDescriptor` | `eggsec-policy/src/policy.rs` | The unit of policy evaluation. Bundles operation name, mode, risk, target, required features, capabilities, and scope requirements. |
+| `OperationMetadata` | `eggsec-policy/src/catalog.rs` | Static registry entry. 34 operations + 42 aliases. Single source of truth for all surfaces. |
+| `ExecutionPolicy` | `eggsec-policy/src/policy.rs` | TOML-deserialized config controlling which risk tiers and capabilities are allowed. |
+| `LoadedScope` | `eggsec-policy/src/scope.rs` | Scope with provenance. `is_explicit_manifest()` distinguishes "no scope" from "explicitly empty scope". |
+| `DenialClass` / `ConfirmationClass` | `eggsec-policy/src/decision.rs` | Denial/confirmation taxonomy. 8 variants each. |
+| `EnforcementContext` | `eggsec-policy/src/decision.rs` | Bundles `ExecutionProfile` + `ExecutionPolicy` + `LoadedScope` + explicit `EnabledFeatures`. Created once per execution path. `evaluate()` is the mandatory pre-dispatch gate for all surfaces. |
+| `EnforcementOutcome` | `eggsec-policy/src/decision.rs` | Profile-aware result: `Allow`, `Warn`, `RequireConfirmation`, `Deny`. |
+| `ManualOverride` | `eggsec-policy/src/decision.rs` | CLI/TUI override flags. `--yes` is narrow (only `OutOfScope`/`TargetExpansion`). |
+| `ApprovedOperation` | `eggsec-policy/src/approval.rs` | Proof-of-enforcement token. Private fields. Created via `EnforcementContext::approve()` / `approve_manual()`. |
+| `ApprovedExecution` | `eggsec-policy/src/approval.rs` | Token **plus** the scope snapshot from the same enforcement context. Created via `approve_execution()` / `approve_manual_execution()`. Required for strict-surface dispatch. |
+| `EnforcedDispatcher` | `tool/dispatcher.rs` | Wraps `ToolDispatcher`. `dispatch_execution()` requires an `ApprovedExecution`; `dispatch_checked()` requires an `ApprovedOperation`. Type-level enforcement gate. |
 | `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |
 | `McpEngineBridge` | `tool/protocol/mcp/bridge.rs` | Narrow MCP bridge (wire/profile/session stay adapter-owned) |
 | `AgentExecutionService` | `agent/services.rs` | Checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injects |
-| `RuntimeBridgeError` | `runtime_bridge/surface.rs` | Bridge error type: `UnknownSurface`, `UnsupportedTaskKind`, `MissingTarget`, `UnknownOperationId`, `ManualOverrideRejected`, `EnforcementDenied`. |
+| `RuntimeBridgeError` | `runtime_bridge/surface.rs` | Bridge error type: `UnknownSurface`, `UnsupportedTaskKind`, `MissingTarget`, `UnknownOperationId`, `InvalidTarget`, `ManualOverrideRejected`, `EnforcementDenied`. |
+| `EggsecRuntimeExecutor` | `runtime_bridge/executor.rs` | Real daemon executor behind the `full-executor` feature. Receives `RuntimeExecutionContext`, resolves scope, obtains an `ApprovedRunRequest`, dispatches. |
 | `runtime_surface_to_execution_surface()` | `runtime_bridge/surface.rs` | Converts `RuntimeSurface` (daemon DTO) → `ExecutionSurface` (engine type). |
 | `descriptor_for_run_request()` | `runtime_bridge/descriptor.rs` | Converts `RunRequest` + `TaskKind` → `OperationDescriptor` via `operation_metadata()`. |
 | `preflight_run_request()` | `runtime_bridge/manual.rs` | Pre-dispatch policy preview for daemon operations. Returns `PreflightResult`. |
 | `approve_run_request()` | `runtime_bridge/manual.rs` | Pre-dispatch authorization for daemon operations. Returns `ApprovedOperation` or error. |
+| `approve_run_request_execution()` | `runtime_bridge/manual.rs` | Same, but returns `ApprovedExecution` (token + scope snapshot). Used by the bundle path. |
+| `approve_run_request_bundle()` | `runtime_bridge/bundle.rs` | Wraps `approve_run_request_execution()` into an `ApprovedRunRequest` bundle coupling token + request. |
 
 ### 3.2 Surface-to-Profile Mapping
 
@@ -138,13 +154,23 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 
 ### 3.4 Profile Behavior
 
-| Profile | Scope Missing | Scope Ambiguous | RequireConfirmation | Warn |
-|---------|:---:|:---:|:---:|:---:|
-| `ManualPermissive` | Downgrade to Warn (if safe) | Warn | Operator override | Proceed |
-| `ManualGuarded` | Deny | Allow | Deny | Allow |
+`ManualPermissive` downgrades only *safe* scope-selection denials to `Warn`;
+explicit allowlist misses, exclusions, high-risk operations, and non-baseline
+capabilities become `RequireConfirmation`. `ManualGuarded` and every strict
+profile treat `RequireConfirmation` as a hard `Deny` (no override path).
+Missing features, invalid targets, denied capabilities, and compile-time
+unavailability are hard `Deny` at every profile.
+
+| Profile | Safe Scope Miss | Explicit Allowlist Miss | RequireConfirmation | Warn |
+|---------|-----------------|-------------------------|---------------------|------|
+| `ManualPermissive` | Downgrade to Warn | RequireConfirmation | Operator override | Proceed |
+| `ManualGuarded` | Deny | Deny | Deny | Allow |
 | `McpStrict` | Deny | Deny | Deny | Deny |
 | `AgentStrict` | Deny | Deny | Deny | Deny |
 | `CiStrict` | Deny | Deny | Deny | Deny |
+
+Strict surfaces dispatch only on `Allow`; `Warn` and `RequireConfirmation` are
+denied.
 
 ### 3.5 ManualOverride Semantics
 
@@ -207,7 +233,7 @@ HTTP POST /api/v1/tools/{tool_id}/execute
 ```
 
 **Surface**: `RestApi` → `McpStrict`. Always strict. No overrides.
-**Scope**: `--scope-file` or inherited. Always sets `requires_explicit_scope = true`.
+**Scope**: `serve --scope-file` or the global `--scope`. Always sets `requires_explicit_scope = true`. Note `mcp-serve` has **no** `--scope-file`; use the global `--scope`.
 **Preflight**: `POST /api/v1/tools/{tool_id}/preflight` endpoint.
 
 ### 4.4 MCP Server
@@ -294,51 +320,65 @@ DaemonClient → Runtime::submit(RunRequest)
 
 ### 5.1 CLI Command Handlers
 
-| Operation Family | Handler File | Operation ID | Risk | Feature Gate | Descriptor | Enforcement | Extra Runtime Gate |
-|-----------------|-------------|-------------|------|-------------|:---:|:---:|-------------------|
-| Port scan | `scan.rs` | `scan-ports` | SafeActive | — | ✓ (registry) | ✓ | — |
-| Endpoint scan | `scan.rs` | `scan-endpoints` | SafeActive | — | ✓ (registry) | ✓ | — |
-| Fingerprint | `scan.rs` | `fingerprint` | SafeActive | — | ✓ (registry) | ✓ | — |
-| NSE script | `scan.rs` | `nse` | Intrusive | `nse` | ✓ | ✓ | — |
-| Pipeline scan | `scan.rs` | `scan` | SafeActive | — | ✓ | ✓ | — |
-| Resume scan | `scan.rs` | `scan-resume` | SafeActive | — | ✓ | ✓ | — |
-| Recon | `recon.rs` | `recon` | SafeActive | — | ✓ (registry) | ✓ | — |
-| Fuzz | `fuzz.rs` | `fuzz` | Intrusive | — | ✓ | ✓ | — |
-| WAF detect | `fuzz.rs` | `waf-detect` | Intrusive | — | ✓ | ✓ | — |
-| WAF stress | `fuzz.rs` | `waf-stress` | Intrusive | — | ✓ | ✓ | — |
-| GraphQL fuzz | `fuzz.rs` | `graphql` | Intrusive | — | ✓ | ✓ | — |
-| OAuth fuzz | `fuzz.rs` | `oauth` | Intrusive | — | ✓ | ✓ | — |
-| Load test | `load.rs` | `load` | LoadTest | — | ✓ | ✓ | — |
-| Auth test | `auth_test.rs` | `auth-test` | CredentialTesting | — | ✓ | ✓ | — |
-| Stress test | `stress.rs` | `stress` | StressTest | `stress-testing` | ✓ | ✓ | — |
-| Proxy add | `stress.rs` | `proxy-add` | ExploitAdjacent | `stress-testing` | ✓ | ✓ | — |
-| Proxy test | `stress.rs` | `proxy-test` | ExploitAdjacent | `stress-testing` | ✓ | ✓ | — |
-| Packet send | `network.rs` | `packet-send` | RawPacket | `packet-inspection` | ✓ | ✓ | — |
-| Packet traceroute | `network.rs` | `packet-traceroute` | RawPacket | `packet-inspection` | ✓ | ✓ | — |
-| ICMP | `network.rs` | `icmp` | SafeActive | `stress-testing` | ✓ | ✓ | — |
-| Traceroute | `network.rs` | `traceroute` | RawPacket | `stress-testing` | ✓ | ✓ | — |
-| DB pentest | `db_pentest.rs` | `db-pentest` | DbPentest | `db-pentest` | ✓ | ✓ | `--allow-db-pentest` |
-| Web proxy | `web_proxy.rs` | `proxy-intercept` | TrafficInterception | `web-proxy` | ✓ | ✓ | `--allow-web-proxy` |
-| Wireless scan | `wireless.rs` | `wireless` | SafeActive | `wireless` | ✓ | ✓ | — |
-| Wireless deauth | `wireless.rs` | `wireless-deauth` | Intrusive | `wireless-advanced` | ✓ | ✓ | `--allow-active-wireless` |
-| Mobile static | `mobile.rs` | `mobile-static` | SafeActive | `mobile` | ✓ | ✓ | — |
-| Mobile dynamic | `mobile.rs` | `mobile-dynamic` | SafeActive/Intrusive | `mobile-dynamic` | ✓ | ✓ | `--allow-dynamic-mobile` |
-| Evasion | `evasion.rs` | `evasion` | EvasionTesting | `evasion` | ✓ | ✓ | Always dry-run |
-| Postex | `postex.rs` | `postex` | SafeActive/ExploitAdjacent | `postex` | ✓ | ✓ | Always dry-run |
-| C2 | `c2.rs` | `c2` | SafeActive/C2Operation | `c2` | ✓ | ✓ | `--allow-c2` |
-| Browser | `browser.rs` | `browser` | SafeActive | `headless-browser` | ✓ | ✓ | — |
-| Hunt | `hunt.rs` | `hunt` | Intrusive | `advanced-hunting` | ✓ | ✓ | — |
+Operation IDs are the canonical `ALL_OPERATION_METADATA` IDs — not CLI
+subcommand names. Where a subcommand is an alias or a multiplexer branch, both
+spellings are shown. Risk comes from `OperationRisk`; the feature gate from
+`required_features`. See [COMMAND_REGISTRY.md](COMMAND_REGISTRY.md) for the
+`command_id` ↔ `operation_id` mapping and `architecture/knowledge_corpus.md`
+for the corpus/engine split.
+
+| CLI Subcommand | Handler File | Operation ID | Risk | Feature Gate | Extra Runtime Gate |
+|----------------|-------------|-------------|------|-------------|-------------------|
+| `scan-ports` | `scan.rs` | `scan-ports` | SafeActive | — | — |
+| `scan-endpoints` | `scan.rs` | `scan-endpoints` | SafeActive | — | — |
+| `fingerprint` | `scan.rs` | `fingerprint` | SafeActive | — | — |
+| `scan` / `resume` | `scan.rs` | `pipeline` | SafeActive | — | — |
+| `recon` | `recon.rs` | `recon` | SafeActive | — | — |
+| `fuzz` | `fuzz.rs` | `fuzz` | Intrusive | — | — |
+| `waf` | `fuzz.rs` | `waf-detect` | SafeActive | — | — |
+| `waf-stress` | `fuzz.rs` | `waf-stress` | StressTest | — | — |
+| `graphql` | `fuzz.rs` | `graphql` | Intrusive | — | — |
+| `oauth` | `fuzz.rs` | `oauth` | CredentialTesting | — | — |
+| `auth-test` | `auth_test.rs` | `auth-test` | CredentialTesting | — | — |
+| `load` | `load.rs` | `load-test` | LoadTest | — | — |
+| `stress` | `stress.rs` | `stress-test` | StressTest | `stress-testing` | — |
+| `packet` / `icmp` / `traceroute` | `network.rs` | `packet` | RawPacket | `packet-inspection` (CLI gates `icmp`/`traceroute` on `stress-testing`) | — |
+| `nse` | `scan.rs` | `nse` | SafeActive | `nse` | — |
+| `hunt` | `hunt.rs` | `hunt` | SafeActive | `advanced-hunting` | — |
+| `browser` | `browser.rs` | `browser` | SafeActive | `headless-browser` | — |
+| `db` | `db_pentest.rs` | `db-pentest` | DbPentest | `db-pentest` | `--allow-db-pentest` |
+| `proxy-intercept` | `web_proxy.rs` | `proxy-intercept` | TrafficInterception | `web-proxy` | `--allow-web-proxy` |
+| `wireless` | `wireless.rs` | `wireless` | SafeActive | `wireless` | — |
+| `wireless` (active branch) | `wireless.rs` | `wireless-deauth` | Intrusive | `wireless-advanced` | `--allow-active-wireless` |
+| `mobile` (static branch) | `mobile.rs` | `mobile-static` | SafeActive | `mobile` | — |
+| `mobile-dynamic` | `mobile.rs` | `mobile-dynamic` | Intrusive | `mobile-dynamic` | `--allow-dynamic-mobile` |
+| `evasion` | `evasion.rs` | `evasion` | EvasionTesting | `evasion` | — |
+| `postex` | `postex.rs` | `postex` | ExploitAdjacent | `postex` | — |
+| `c2` | `c2.rs` | `c2` | C2Operation | `c2` | `--allow-c2` |
+
+`packet`, `icmp`, `traceroute`, `wireless`, and `mobile` are **multiplexers**:
+`commands/route.rs` resolves the concrete operation per execution branch before
+approval. `proxy` (stress-testing proxy pool), `cluster`, `remote`,
+`notify`, and the server/daemon verbs are non-operation routes and dispatch no
+operation.
 
 ### 5.2 Programmatic Surfaces
 
-| Surface | Entry Point | Dispatch Method | Profile | Overrides |
-|---------|-----------|----------------|---------|-----------|
-| REST | `rest.rs::handle_tool_call()` | `EnforcedDispatcher::dispatch_checked()` | McpStrict | No |
-| gRPC | `grpc.rs::execute_tool()` | `EnforcedDispatcher::dispatch_checked()` | McpStrict | No |
-| MCP | `mcp/handlers/server.rs::handle_tools_call()` | `EnforcedDispatcher::dispatch_checked()` | McpStrict | No |
-| Agent | `agent/mod.rs::execute_scan()` | `EnforcedDispatcher::dispatch_checked()` | AgentStrict | No |
-| TUI | `app/mod.rs::evaluate_policy_and_dispatch()` | `EnforcedDispatcher::dispatch_checked()` | ManualPermissive/Guarded | Yes |
-| Orchestrator | `tool/orchestrator/mod.rs::execute_stage()` | `ToolDispatcher::dispatch()` (internal) | Caller must enforce before construction | N/A |
+| Surface | Entry Point | Profile | Overrides |
+|---------|-----------|---------|-----------|
+| REST | `tool/protocol/rest.rs` | McpStrict | No |
+| gRPC | `tool/protocol/grpc.rs` | McpStrict | No |
+| MCP | `tool/protocol/mcp/handlers/server.rs` | McpStrict | No |
+| Agent | `agent/mod.rs` (via `agent::services::AgentExecutionService`) | AgentStrict | No |
+| TUI | `eggsec-tui/src/app/` | ManualPermissive/Guarded | Yes |
+| CI | `commands/handlers/ci.rs` | CiStrict | No — no dispatch path at all |
+
+Strict surfaces reach `ToolDispatcher` only through `EnforcedDispatcher`.
+Scope-sensitive dispatch (load testing, transport per-hop checks) uses
+`dispatch_execution()` with an `ApprovedExecution` bundle; scope-insensitive
+tools use `dispatch_checked()` with `ApprovedOperation`. Adapters never call
+`tool.execute()` or `Scope::is_target_allowed` directly — they use the narrow
+service traits.
 
 ### 5.3 Passive/Analytical Commands (No Dispatch)
 
@@ -348,18 +388,20 @@ DaemonClient → Runtime::submit(RunRequest)
 | Vuln management | `vuln.rs` | CVSS scoring, triage, remediation. Pure computation. |
 | Proxy list/health | `stress.rs` | Read-only queries. |
 
-## 6. Internal Dispatch and Remaining Work
+## 6. Internal Dispatch Boundary
 
 | Item | Location | Status | Notes |
 |------|----------|--------|-------|
-| `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs` | `pub(crate)`, `#[doc(hidden)]`. Internal implementation detail. | Used by `EnforcedDispatcher` and pipeline orchestrator. Regression test guard prevents use in strict surfaces. |
-| Central command match growth | `commands/handlers/mod.rs` | Growing match arms in `handle_command()`. | Monitor; refactor if needed. |
-| Domain logic in main crate | Various modules in `eggsec/src/` | Some domain logic still embedded (e.g., scanner, fuzzer internals). | Domain extraction is a future concern. |
-| Command registry | `commands/registry.rs` | Active. Static metadata for CLI/TUI dispatch. | All operation-backed commands use `RegistryBacked` dispatch via `OperationMetadata` → `describe_from_registry()`. No permanent `LegacyWrapped` mode. |
+| `ToolDispatcher::dispatch()` (raw) | `tool/dispatcher.rs` | Internal implementation detail. | Used only beneath `EnforcedDispatcher`. The enforced-dispatch regression test guards against use in strict surfaces. |
+| `dispatch_mode` = `LegacyWrapped` | — | **Removed.** | All operation-backed commands use `RegistryBacked`. |
+| Command routing | `commands/route.rs` | Single owner. | `route_for_commands()` is exhaustive over `Commands`; adding a variant without updating it is a compile error. |
+| Corpus/engine seam | `architecture/knowledge_corpus.md` | One-directional. | Corpus owns data; the engine owns I/O. Guarded by architecture checks 114/147/148/149/150. |
 
 ## 7. Architecture Invariants
 
-See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete normative list. Key invariants:
+See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete normative list, and
+[architecture/overview.md](../architecture/overview.md) for the birds-eye view and the deep-dive
+index (every component links to its own `architecture/<topic>.md`). Key invariants:
 
 1. **Centralized authorization**: All side-effecting operations must have an `OperationDescriptor` evaluated by `EnforcementContext::evaluate()` before execution.
 2. **No automated overrides**: Automated surfaces must never honor `ManualOverride`.
@@ -369,7 +411,7 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 6. **Feature gates ≠ authorization**: Feature gates are not sufficient authorization; runtime policy must still apply.
 7. **Dry-run purity**: Dry-run must be side-effect free.
 8. **Token uniqueness**: Approval tokens must not be reusable for a different tool or target.
-9. **Type-level dispatch**: Strict surfaces must use `EnforcedDispatcher::dispatch_checked()` with `ApprovedOperation`.
+9. **Type-level dispatch**: Strict surfaces must dispatch through `EnforcedDispatcher` — `dispatch_execution()` with `ApprovedExecution` for scope-sensitive operations, `dispatch_checked()` with `ApprovedOperation` for scope-insensitive tools.
 10. **Regression test guard**: The enforced dispatch regression test must remain green.
 11. **Session-derived surface**: Daemon executor derives surface from `RuntimeSession`, not hardcoded defaults.
 12. **ApprovedRunRequest bundle**: Dispatch through runtime bridge uses coupled approval+request bundle.
@@ -385,9 +427,9 @@ See [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md) for the complete no
 | `LoadedScope`, `Scope` | `crates/eggsec-policy/src/scope.rs` (facade: `crates/eggsec/src/config/scope.rs`) |
 | `ScopeSpec` (declarative), `scope_from_spec`, intersection | `crates/eggsec-tool-core/src/request.rs`, `crates/eggsec/src/config/scope_spec.rs` |
 | `EnforcedDispatcher` | `crates/eggsec/src/tool/dispatcher.rs` |
-| `EngineServices` | `tool/service.rs` | Injected adapter boundary (`OperationCatalog`, `CheckedExecutor` = checked-only dispatch, `PreflightService`); composition roots build via `new`, adapters via `with_services` |
-| `McpEngineBridge` | `tool/protocol/mcp/bridge.rs` | Narrow MCP bridge (wire/profile/session stay adapter-owned) |
-| `AgentExecutionService` | `agent/services.rs` | Checked-only agent execution (`AgentStrict` by construction); `Agent::with_engine_services` injects |
+| `EngineServices` | `crates/eggsec/src/tool/service.rs` |
+| `McpEngineBridge` | `crates/eggsec/src/tool/protocol/mcp/bridge.rs` |
+| `AgentExecutionService` | `crates/eggsec/src/agent/services.rs` |
 | `runtime_bridge` (Runtime→Engine bridge) | `crates/eggsec/src/runtime_bridge/` |
 | `TuiEnforcementState` | `crates/eggsec-tui/src/app/enforcement.rs` |
 | CLI surface resolution | `crates/eggsec-cli/src/main.rs` |

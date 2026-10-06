@@ -11,8 +11,8 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 
 | Crate | Purpose |
 |-------|---------|
-| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs` (facade), `host_auth.rs` (RBAC), `host_persistence.rs` (fan-out), `client.rs`, `client_registry.rs` (daemon-local RBAC mirror — keep `command_permission()` in sync with the protocol crate), `http.rs`, SQLite store (`store/`). Wire types live only in `eggsec-daemon-protocol` (no `src/protocol.rs` duplicate). |
-| `crates/eggsec-daemon-protocol/` | Wire types + client registry shared by daemon and clients |
+| `crates/eggsec-daemon/` | Session host: `server.rs`, `host.rs` (facade), `host_auth.rs` (RBAC), `host_persistence.rs` (fan-out), `client.rs`, `config.rs`, `error.rs`, `http.rs`, SQLite store (`store/`). |
+| `crates/eggsec-daemon-protocol/` | Wire types (`protocol.rs`) + `client_registry.rs` — the shared `ClientKind` / `CommandPermission` RBAC types. **There is no daemon-local `client_registry.rs`**: `command_permission()` lives here, so daemon and clients cannot drift. |
 | `crates/eggsec-runtime/` | `Runtime`, `RuntimeTaskExecutor`, task lifecycle DTOs (`runtime.rs` facade; `runtime_config.rs`, `runtime_sink.rs`) |
 
 ## Dependency Rules (guard-enforced)

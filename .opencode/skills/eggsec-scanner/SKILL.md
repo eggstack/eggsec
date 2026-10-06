@@ -29,6 +29,9 @@ Port scanning and endpoint discovery module workflows and patterns.
 
 ### Fingerprinting (`scanner/fingerprint.rs`, `scanner/udp_fingerprint.rs`)
 - `ServiceFingerprint`, `fingerprint_services()`, `fingerprint_udp_services()`
+- `UDP_PROBES` (`udp_fingerprint.rs:66`) holds 42 probes across 39 distinct ports.
+  Transport/probing lives in `eggsec-udp-scan`; this table is the engine-side
+  request/response corpus.
 
 ### Templates (`scanner/templates/`)
 - `VulnerabilityTemplate`, `Matcher`, `HttpMatcher`, `DnsMatcher`, `TemplateInfo`
@@ -45,7 +48,7 @@ Port scanning and endpoint discovery module workflows and patterns.
 |---------|---------|----------|
 | `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--source-ip`, `--decoy`, `--udp` |
 | `scan-endpoints <url>` | `handle_scan_endpoints()` | `--wordlist`, `--source-ip`, `--concurrency` |
-| `fingerprint <host>` | `handle_fingerprint()` | `--ports`, `--timeout` |
+| `fingerprint <host>` | `handle_fingerprint()` | `--ports`, `--timeout`, `--udp` |
 
 `--udp` is a *sibling* of `--scan-type`, not one of its values: `scan_type` is a
 TCP technique with a strict parser. `--udp` needs the `udp-scan` feature and
@@ -94,7 +97,9 @@ cargo test --test scanner_tests -p eggsec
 
 ### New Port Scan Type
 1. Add to `scanner/ports/mod.rs` or `spoofed.rs`
-2. Gate raw socket features behind `#[cfg(feature = "stress-testing")]`
+2. Gate the CLI surface behind `#[cfg(feature = "cli")]` and any UDP transport
+   behind `#[cfg(feature = "udp-scan")]` — `scanner/ports/` is **not** gated
+   behind `stress-testing`
 3. Use `OnceLock<Mutex<File>>` for thread-safe packet tracing
 4. Return proper `Result<PortScanResults>` with error handling
 

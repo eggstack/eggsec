@@ -5,10 +5,14 @@ Eggsec supports running Nmap Scripting Engine (NSE) Lua scripts for security sca
 ## Building with NSE Support
 
 ```bash
-cargo build --release --features nse
+# The workspace root is a virtual manifest — build the CLI crate explicitly
+cargo build --release -p eggsec-cli --features nse
 # With sandboxing (restricts dangerous Lua operations):
-cargo build --release --features nse-sandbox
+cargo build --release -p eggsec-cli --features nse-sandbox
 ```
+
+The runtime itself is the published crates.io dependency `eggsec-nse`
+0.2.0 (optional engine feature `nse`), not a workspace crate.
 
 ## Script Structure
 
@@ -42,18 +46,27 @@ end
 
 ## Available Lua Libraries
 
-| Library | Description | Dangerous Functions |
-|---------|-------------|-------------------|
-| `stdnse` | Standard NSE utilities | None |
-| `nmap` | Nmap state and functions | None |
-| `http` | HTTP client | None |
-| `dns` | DNS resolution | None |
-| `socket` | TCP/UDP sockets | **NOT sandboxed** - allows network connections |
-| `sslcert` | SSL certificate handling | None |
-| `shortport` | Port rule helpers | None |
-| `lfs` | LuaFileSystem | Path restrictions when sandboxed |
-| `io` | File I/O | `io.popen` (command execution) |
-| `os` | OS operations | `os.setenv`, `os.remove`, `os.rename` |
+The runtime ships a large library set; the authoritative per-library
+enforcement status (Wrapped / PartiallyWrapped / Pure / Deferred, plus the
+side-effect fallback and capability gate for each) is
+[NSE_COMPATIBILITY.md](NSE_COMPATIBILITY.md). Commonly used ones:
+
+| Library | Description | Enforcement (see compatibility matrix) |
+|---------|-------------|---------------------------------------|
+| `stdnse` | Standard NSE utilities | PartiallyWrapped — output allowed; `stdnse.sleep()` blocked without cancellation |
+| `nmap` | Nmap state and functions | Wrapped — env access checked, network gated |
+| `http` | HTTP client | Wrapped — all HTTP methods gated via the provider broker |
+| `dns` | DNS resolution | Wrapped — `check_network_dns()` gate |
+| `socket` | TCP/UDP sockets | Wrapped — connect/send/receive and UDP gated by network policy |
+| `sslcert` | SSL certificate handling | Wrapped — network entries gated by `check_crypto` + `check_network_tcp` |
+| `lfs` | LuaFileSystem | Wrapped — filesystem ops routed through the capability context |
+| `io` | File I/O | Wrapped — reads scoped to sandbox root; write denied in AgentSafe/CiSafe |
+| `os` | OS operations | Wrapped — process exec and env access gated |
+| `creds` / `unpwdb` | Credential stores | Wrapped — pure in-memory / FS reads through the capability context |
+
+Capability gating is profile-driven and applies with or without the
+sandbox feature: `AgentSafe`/`CiSafe` deny or restrict every side effect
+regardless of `nse-sandbox`.
 
 ## Sandbox Mode
 
@@ -71,6 +84,8 @@ When sandbox is enabled, dangerous operations are restricted:
 - `os.chdir`: Restricted to sandbox directory.
 
 **Important**: The `socket` library has **conditional network restrictions**. By default, socket operations proceed normally (with a warning log when sandbox is enabled). However, when `allowed_networks` is configured in `SandboxConfig`, connections are validated against the CIDR blocklist and blocked if outside allowed ranges.
+
+There is no `--sandbox-dir` CLI flag: `SandboxConfig` is a library-level type constructed by the embedding crate (or via the `--profile` scan profile). Automated surfaces additionally gate every side effect through `NseCapabilityContext` regardless of sandbox settings.
 
 ### Sandbox Configuration
 
@@ -141,6 +156,6 @@ end
 ### Security Considerations
 
 - Scripts run with the same permissions as the Eggsec process
-- The `sandbox` feature restricts `io.popen` and filesystem access
+- The `nse-sandbox` feature restricts `io.popen` and filesystem access; `AgentSafe`/`CiSafe` profiles deny those operations even without it
 - Always validate user-provided script arguments
-- Use `--sandbox-dir` to limit filesystem access to a specific directory
+- Restrict filesystem access from the embedding side by constructing `SandboxConfig { allowed_dir: Some(...) }` — there is no CLI flag for it

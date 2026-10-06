@@ -22,9 +22,11 @@ the standalone extraction and provider-inversion milestones.)
 > broker-backed set are split into advisory-gated (entry denial, no
 > injection/accounting) and ungated residual (no capability
 > consultation — reachable even under deny-all policies); see the
-> standalone `docs/PROVIDERS.md` M005E section and
-> `scripts/nse-specialized-{advisory,ungated}.txt`. Engine
-> scoped-transport cutover for HTTP is staged, not active.
+> standalone `docs/PROVIDERS.md` M005E section and the
+> `scripts/nse-specialized-{advisory,ungated}.txt` lists, all of which
+> live in the standalone `eggsec-nse` repository (not in this tree).
+> Engine scoped-transport cutover for HTTP is staged, not active
+> (`NseHttpTransportProvider` is dormant; no production caller).
 
 ---
 
@@ -156,7 +158,7 @@ the standalone extraction and provider-inversion milestones.)
 
 ### ManualPermissive
 
-- **Libraries**: All 43 libraries available (wrapped + partially wrapped + deferred + pure)
+- **Libraries**: All 41 libraries available (wrapped + partially wrapped + deferred + pure)
 - **Side effects**: All permitted with warnings
 - **Network**: Full TCP/UDP/DNS access; no CIDR restrictions
 - **Filesystem**: Read/write allowed within sandbox
@@ -165,7 +167,7 @@ the standalone extraction and provider-inversion milestones.)
 
 ### ManualGuarded
 
-- **Libraries**: All 43 libraries available
+- **Libraries**: All 41 libraries available
 - **Side effects**: Same as ManualPermissive but scope enforcement stricter
 - **Network**: Scoped to target scope rules
 - **Filesystem**: Scoped to sandbox root
@@ -174,7 +176,7 @@ the standalone extraction and provider-inversion milestones.)
 
 ### AgentSafe
 
-- **Libraries**: Wrapped (14) + PartiallyWrapped (1) + Pure (17) = 32 available
+- **Libraries**: Wrapped (12) + PartiallyWrapped (3) + Pure (15) = 30 available
 - **Deferred libraries**: 11 unavailable (ssh, smb, smb2, mysql, postgres, redis, mongodb, ldap, snmp, brute, target)
 - **Side effects**: Restricted
 - **Network**: TCP/UDP/DNS gated by network policy; HTTP/HTTPS gated
@@ -186,7 +188,7 @@ the standalone extraction and provider-inversion milestones.)
 
 ### CiSafe
 
-- **Libraries**: Wrapped (14) + PartiallyWrapped (1) + Pure (17) = 32 available
+- **Libraries**: Wrapped (12) + PartiallyWrapped (3) + Pure (15) = 30 available
 - **Deferred libraries**: 11 unavailable (same as AgentSafe)
 - **Side effects**: Most restricted
 - **Network**: TCP/UDP/DNS denied; HTTP gated
@@ -361,7 +363,7 @@ The following are candidates for capability wrapper migration in Milestone 7:
 | `upstream-conditional-portrule` | Upstream | Conditional portrule | supported | Script args, table lookups |
 | `upstream-timestamp-extract` | Upstream | Timestamp extraction | supported | os.date() structured output |
 
-New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds`. Architecture guard Check 54 enforces upstream fixtures are local-only, clean-room, and public-network-free. Plan: `plans/nse-expansion-phase-04-upstream-style-corpus-growth.md`.
+New manifest metadata fields: `expected_profile_set`, `expected_evidence_kinds`, `expected_denial_kinds`. Architecture guard Check 54 enforces upstream fixtures are local-only, clean-room, and public-network-free. The corresponding plan (`nse-expansion-phase-04-upstream-style-corpus-growth.md`) moved to the standalone `eggsec-nse` repository with the rest of the runtime.
 
 ---
 

@@ -31,19 +31,27 @@ eggsec auth-test ... --all --wordlist ... --max-attempts 50 --allow-high-risk --
 ## Example Config Snippet
 
 ```toml
+# eggsec.toml — enables the credential-testing risk tier (does not authorize
+# a specific run; each run still needs --allow-high-risk or an operator
+# confirmation)
 [execution_policy]
-require_explicit_scope = true
 allow_credential_testing = true
 # allow_intrusive_fuzzing = false
 # ... other gates ...
+```
 
-# Scope must explicitly authorize the lab target + test accounts
+```toml
+# scope.toml — passed via --scope; must authorize the lab target and test
+# accounts. See examples/configs/scope.toml for the full commented template.
+require_explicit_scope = true
+max_requests_per_second = 10
+
 [[allowed_targets]]
-host = "lab-target.example.com"
+pattern = "lab-target.example.com"
 description = "Auth control validation lab target"
 ```
 
-See `examples/configs/eggsec.toml` for the commented template.
+See `examples/configs/eggsec.toml` and `examples/configs/scope.toml` for the commented templates.
 
 ## Safety Warnings
 
@@ -78,7 +86,7 @@ Normal pipeline scans (`eggsec scan <target> --profile <profile>`) execute one o
 
 **When to use `auth-test` vs. `ScanProfile::Auth`:**
 
-- Use `eggsec auth-test <target> ...` (with `--all` or specific flags like `--brute-force`/`--lockout`/`--test-mfa`, a wordlist of **synthetic lab credentials only**, conservative `--max-attempts`/`--concurrency`, and the required policy allowances such as `allow_credential_testing = true` + `--allow-high-risk` or equivalent) when your goal is to **validate the effectiveness of authentication controls themselves** in an explicitly authorized lab environment.
+- Use `eggsec auth-test <target> ...` (with `--all` or specific selectors like `--brute-force` / `--lockout-detection` / `--mfa-bypass`, a `--wordlist` or `--credential-file` of **synthetic lab credentials only**, conservative `--max-attempts`/`--concurrency`/`--timeout`, and the required policy allowances such as `allow_credential_testing = true` + `--allow-high-risk` or equivalent) when your goal is to **validate the effectiveness of authentication controls themselves** in an explicitly authorized lab environment.
 
   Examples: "Does the account lockout policy actually trigger and stay enforced after N consecutive failures?", "Is step-up MFA reliably enforced on risky login patterns?", "Are rate limits + timing protections sufficient to make brute-force impractical?", "Do session tokens behave correctly after failed attempts?"
 
@@ -98,7 +106,7 @@ See also the short "Distinct from..." bullet in Implementation Notes below.
 
 ## TUI Integration
 
-The TUI `AuthTab` (`Tab::Auth`) is fully integrated with `TabSpec` (Intrusive risk_group, direct_launch: true), the shared task system (`TaskConfig::Auth` / `TaskResult::Auth`), policy enforcement via central `EnforcementContext`, session save/restore, and copy-CLI equivalent. Local findings only — no `ScanReportData` bridge.
+The TUI `AuthTab` (`Tab::Auth`) is fully integrated with `TabSpec` (`TabRiskGroup::Intrusive`, `direct_launch: true`, `operation: "auth-test"`, `cli_command: "eggsec auth-test"` — `crates/eggsec-tui/src/tabs/spec.rs:651`), the shared task system (`run_auth_task()` → `TaskResult::Auth`), policy enforcement via central `EnforcementContext`, session save/restore, and copy-CLI equivalent. Local findings only — no `ScanReportData` bridge.
 
 ## See Also
 

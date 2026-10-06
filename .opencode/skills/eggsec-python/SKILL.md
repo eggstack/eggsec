@@ -82,7 +82,7 @@ crates/eggsec-python/
 │       ├── __init__.pyi     # Type stubs
 │       ├── py.typed         # PEP 561 marker
 │       └── *.pyi            # Per-module type stubs
-└── tests/
+└── tests/                   # ~74 test modules (sample below)
     ├── test_import.py
     ├── test_scope.py
     ├── test_scan_ports.py
@@ -94,6 +94,18 @@ crates/eggsec-python/
     ├── test_policy_equivalence.py
     └── test_golden_contract.py  # Phase B+C architecture guard tests
 ```
+
+The `src/` and `tests/` listings above are **representative subsets** — the
+crate has ~108 Rust modules and ~74 Python test modules. Easy-to-miss modules
+that the rest of this skill depends on: `engine.rs` / `async_engine.rs`
+(`Engine`, `AsyncEngine`), `operation_registry.rs` (`StableOperation`),
+`domains.rs` (`DomainRegistry`), `pipeline.rs`, `session_contract.rs`,
+`daemon.rs` / `daemon_parity.rs`, `event_protocol.rs` / `event_stream.rs`,
+`callbacks.rs`, `backpressure.rs`, `checkpoint.rs` / `checkpoint_store.rs`,
+`container.rs`, `db_pentest.rs`, `git_secrets.rs`, `sbom.rs`, `mobile.rs`,
+`nse.rs`, `loadtest.rs`, `stress.rs`, `proxy.rs`, `packet_inspection.rs`,
+`wireless.rs`, `evasion.rs`, `postex.rs`, `c2.rs`, `ergonomics.rs`,
+`deprecated.rs`, `generated_inventories.rs`.
 
 ## Build Commands
 
@@ -158,6 +170,7 @@ extras list; the others are build-time-only (`maturin develop --features ...`).
 | `advanced-hunting` | — | none | Advanced vulnerability hunting (attack chains, business logic, race conditions) |
 | `compliance` | — | none | Compliance mapping and reporting (OWASP, HIPAA, PCI, SOC2) |
 | `daemon-client` | — | none | Daemon session access |
+| `external-integrations` | — | none | External integration/publishing types |
 | `full-no-system` | yes (aggregate) | none | Aggregate: `websocket`, `git-secrets`, `sbom`, `container` |
 
 ## Test Commands
@@ -202,6 +215,8 @@ Negative tests: formerly in `tests/test_evidence_failclosed.py` (removed with ev
 | Class | Purpose |
 |-------|---------|
 | `Scope` | Target/port authorization (frozen). Use `Scope.allow_hosts()` or `Scope.allow_cidrs()`. |
+| `Engine` | Local synchronous engine; dispatches the 22 stable operations (`src/engine.rs`). |
+| `AsyncEngine` | Tokio-backed async engine returning `PyFuture`s (`src/async_engine.rs`). |
 | `Client` | Sync scan client. Releases GIL during I/O. |
 | `AsyncClient` | Async scan client (tokio-backed). Returns `PyFuture` objects. |
 | `PyFuture` | Awaitable wrapper for async Rust futures. |
@@ -1065,8 +1080,10 @@ Finalized package layout and deprecation policy.
 
 Machine-readable version and schema metadata.
 
-- `API_VERSION`, `SCHEMA_VERSION`, `ABI_VERSION` constants
-- `api_surface_version()`: returns current API version tuple
+- `SCHEMA_VERSION` (`version.rs:7`), `ABI_VERSION` (`version.rs:13`), and
+  `FINDING_SCHEMA_VERSION` (`lib.rs:282`) — there is no `API_VERSION` constant;
+  the API version is returned by the dict-returning `api_surface_version()`
+  (`version.rs:141`) alongside `schema_version` / `abi_version`.
 - Version metadata in events, results, findings, and daemon messages
 
 ### G10: Release Hardening

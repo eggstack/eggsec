@@ -10,35 +10,43 @@ Report generation module workflows and patterns for exporting scan results.
 ## Crate Location
 
 Report/evidence data contracts live in `crates/eggsec-report-model/` (canonical
-owner: `ScanReportData` family, `ReportEnvelope` family, `PolicySummary`,
-`DiffSummary`; data only, no rendering/I-O/runtime). Most renderers live in
-`crates/eggsec-output/`, which depends on the model and re-exports the moved
-DTOs for backward compatibility. The `eggsec` crate re-exports them via
-`pub use eggsec_output::*` in `crates/eggsec/src/output/mod.rs`.
-Engine-coupled modules (`report`, `report_summary`, `run_manifest`)
+owner: `ScanReportData` family in `report.rs`, `ReportEnvelope` family in
+`envelope.rs`, `PolicySummary`/`DiffSummary` in `summary.rs`; data only, no
+rendering/I-O/runtime). Most renderers live in `crates/eggsec-output/`, which
+depends on the model and re-exports the moved DTOs for backward compatibility.
+The `eggsec` crate re-exports them via `pub use eggsec_output::*` in
+`crates/eggsec/src/output/mod.rs`. Engine-coupled modules (`report`,
+`report_summary`, `run_manifest`, plus `attack_graph`, `lab_report`, `pdf`)
 remain in `crates/eggsec/src/output/`.
 
 ## Key Types and Patterns
 
 ### Normalized Report Envelope
-The `envelope` types (`eggsec_report_model`, re-exported via `eggsec_output::envelope` for compatibility) provide protocol-neutral report types for cross-domain report unification. Domain crates (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`, `eggsec-nse`) depend on `eggsec-report-model` directly — never on the renderer — and convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()` functions. This module is always available (no feature gate).
+The `envelope` types (`eggsec_report_model`, re-exported via `eggsec_output::envelope` for compatibility) provide protocol-neutral report types for cross-domain report unification. Domain crates depend on `eggsec-report-model` directly — never on the renderer — and convert their domain-specific types into `ReportEnvelope` via `to_report_envelope()`. Implemented in `eggsec-db-lab` (`bridge.rs`), `eggsec-mobile-lab` (`lib.rs`), and — because it moved out of the standalone `eggsec-nse` runtime — the engine at `crates/eggsec/src/nse_bridge.rs`. `eggsec-web-proxy` depends on the model but has no converter yet. This module is always available (no feature gate).
 
 New contract code goes in `crates/eggsec-report-model/src/` (data only: no `std::fs`, Tokio, renderers, or LRU). `From<&AgentFinding>`-style conversions that couple the contract to output-side types stay in `crates/eggsec-output/src/`.
 
 Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `BaselineSummary`, `ToolMetadata`, `EvidenceKind`, `EvidenceSource`, `RedactionState`, `RedactionPolicy`.
 
 ### Report Formats
-`output/` supports multiple output formats:
-- JSON (via `convert_to_json()`)
+`convert.rs` supports the format converters:
+- JSON (via `convert_to_json()`, pretty-printed with `serde_json::to_string_pretty`)
 - HTML (via `convert_to_html()`)
 - SARIF (via `convert_to_sarif()`)
 - JUnit XML (via `convert_to_junit()`)
 - Markdown (via `convert_to_markdown()`)
 - CSV (via `convert_to_csv()`)
-- Pretty (via `PrettyFormatter`)
+
+There is no separate `PrettyFormatter` type. `csv.rs:10` declares its own
+`OutputFormat` enum whose `Pretty` variant is the default; pretty JSON output is
+just `convert_to_json()` (which uses `serde_json::to_string_pretty`).
+Note the name collision: `crates/eggsec/src/types.rs:106` declares a *separate*
+`OutputFormat` with the same variants for CLI parsing, so distinguish them by
+crate path when reading either.
 
 ### Severity Re-export
-`output/agent::Severity` and `output::trend::Severity` re-export from `crate::types::Severity`.
+`output::agent::Severity` and `output::trend::Severity` both re-export
+`eggsec_core::types::Severity` (`agent.rs:4`, `trend.rs:53`).
 
 ### Hash Collections
 **Important**: Use `FxHashMap`/`FxHashSet` instead of `std::collections::HashMap` for performance:
@@ -64,7 +72,7 @@ let mut map: FxHashMap<String, usize> = FxHashMap::default();
 - `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
 - `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
 - `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
-- `TemplateRenderContext::render_with_styling()` uses explicit `map_err` instead of `unwrap_or_default()`
+- `convert_to_json()` / `convert_to_sarif()` / `convert_to_junit()` return `Result<String, String>`; `convert_to_html()` / `convert_to_csv()` return `String`
 
 When using `CsvExporter` methods, handle errors appropriately:
 ```rust

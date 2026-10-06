@@ -98,7 +98,7 @@ For HTTPS interception, install the generated CA certificate:
 
 - Certificate pinning bypass requires additional instrumentation
 - mTLS endpoints require client certificate configuration to the proxy
-- Transparent proxy mode (iptables redirect) is not supported
+- Transparent proxy requires explicit client configuration by default; iptables/nftables `REDIRECT` mode ships behind the separate `transparent-proxy` marker feature (Linux only) and is not part of `web-proxy`
 - Binary protobuf editing is best-effort for common schemas
 - Streaming body capture logs complete bodies only
 

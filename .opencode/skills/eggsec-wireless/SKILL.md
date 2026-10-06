@@ -9,7 +9,8 @@ Wireless security analysis: passive WiFi reconnaissance plus lab-only active att
 
 ## Module Location
 
-`crates/eggsec/src/wireless/` (single `mod.rs`, ~60KB; `active/` submodule for advanced primitives)
+`crates/eggsec/src/wireless/` (`mod.rs` ~60KB, plus `fixture.rs` for hermetic
+tests and the `active/` submodule for advanced primitives)
 
 ## Feature Gates
 

@@ -22,7 +22,7 @@ behavior, and reason for retention.
 ### Build System Notes
 
 - **libpcap**: `pnet` and `pnet_packet` require `libpcap-dev` at build time. Feature-gated behind `packet-inspection`.
-- **OpenSSL**: `native-tls` with OpenSSL backend required for NSE TLS scripts. Optional behind `nse` feature. The `openssl` crate with `vendored` feature is used, which bundles OpenSSL source — but still requires a C compiler and Perl at build time.
+- **OpenSSL**: required by the NSE runtime's TLS scripts, reached through the published `eggsec-nse` crates.io dependency (optional behind the engine `nse` feature). The engine manifest itself declares no `openssl`/`native-tls` dependency — the TLS binding and any vendoring live in the runtime crate, which is versioned and released independently.
 - **libssh2**: Required for `ssh2` crate. Optional behind `nse-ssh2` feature. System library required.
 - **protoc**: Only needed when `grpc-api` feature is enabled, and only for generating the tonic-reflection descriptor set (`tool_descriptor.bin`). The Rust proto code is checked in at `crates/eggsec/src/generated/eggsec.tool.v1.rs` and compiled via `include!()` — no protoc needed for ordinary builds.
 
@@ -74,36 +74,38 @@ sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protob
 | `websocket` | WebSocket security testing | Stable |
 | `headless-browser` | DOM XSS and SPA crawling | Stable |
 | `web-proxy` | MITM proxy for HTTP/HTTPS traffic interception in authorized lab environments | Stable |
-| `web-proxy-mcp` | MCP tool exposure for web proxy (12 tools). Requires `web-proxy`. | Stable |
+| `web-proxy-mcp` | MCP tool exposure for web proxy (registers the `proxy` tool). Requires `web-proxy`. | Stable |
 | `database` | SQLx-based PostgreSQL persistence | Stable |
 | `container` | Kubernetes/Docker security scanning | Stable |
 | `mobile` | Mobile app static analysis (APK/IPA) | Stable |
 | `mobile-dynamic` | Mobile dynamic testing (ADB + Frida). Requires `mobile`. | Stable |
-| `cloud` | AWS/GCP/Azure asset discovery | Marker (planned) |
-| `git-secrets` | Git secrets scanning | Marker (planned) |
+| `cloud` | AWS/GCP/Azure asset discovery | Marker-only |
+| `git-secrets` | Git secrets scanning | Marker-only |
 | `wireless` | WiFi passive recon and security analysis | Stable |
 | `wireless-advanced` | Wireless active attacks (deauth, disassoc). Requires `wireless`. | Stable |
 | `evasion` | Evasion technique detection (MITRE ATT&CK mapped) | Stable |
 | `postex` | Post-exploitation and LOTL simulation | Stable |
 | `c2` | C2 framework for purple teaming. Depends on postex + evasion. | Stable |
-| `c2-mcp` | MCP tool exposure for C2. Requires `c2`. | Marker (planned) |
+| `c2-mcp` | MCP tool exposure for C2. Requires `c2`. | Marker-only |
 | `db-pentest-mssql-tiberius` | MSSQL driver for db-pentest. Requires `db-pentest`. | Stable |
 | `db-pentest-mongodb` | MongoDB driver for db-pentest. Requires `db-pentest`. | Stable |
 | `db-pentest-redis` | Redis driver for db-pentest. Requires `db-pentest`. | Stable |
-| `db-pentest-mcp` | MCP tool exposure for db-pentest. Requires `db-pentest`. | Marker (planned) |
-| `transparent-proxy` | Transparent proxy mode for web-proxy | Marker (planned) |
-| `dynamic-plugins` | Dynamic plugin loading system | Marker (planned) |
-| `pdf` | PDF report generation | Marker (planned) |
-| `advanced-hunting` | Advanced threat hunting | Marker (planned) |
-| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Marker (planned) |
-| `external-integrations` | Jira, GitHub, GitLab connectors | Marker (planned) |
-| `finding-workflow` | Finding lifecycle management | Marker (planned) |
-| `vuln-management` | Vulnerability triage and CVSS scoring | Marker (planned) |
+| `db-pentest-mcp` | MCP tool exposure for db-pentest. Requires `db-pentest`. | Marker-only |
+| `transparent-proxy` | Transparent proxy mode for web-proxy | Stable |
+| `dynamic-plugins` | Dynamic plugin loading system | Stable |
+| `pdf` | PDF report generation | Report output |
+| `advanced-hunting` | Advanced threat hunting | Marker-only |
+| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Marker-only |
+| `external-integrations` | Jira, GitHub, GitLab connectors | Marker-only |
+| `finding-workflow` | Finding lifecycle management | Marker-only |
+| `vuln-management` | Vulnerability triage and CVSS scoring | Marker-only |
 | `full` | Curated developer/lab aggregate (28 pinned members; excludes test-only, security-risk, `*-mcp` exposure markers, backend drivers, platform modes, separate serving surfaces, and special output/plugin modes — see `FULL_EXCLUDED_WITH_REASON` in `crates/eggsec/src/config/feature_registry.rs`; exhaustive oracle is `make check-features-individual`) | — |
 
 ### CLI-Level Features
 
-These are on the `eggsec-cli` crate:
+These process-host features are declared on the `eggsec-cli` crate (in
+addition to its forwards of the engine features above — see
+[`eggsec-cli` feature forwarding](#eggsec-cli-feature-forwarding)):
 
 | Feature | Description | Default |
 |---------|-------------|---------|
@@ -135,18 +137,6 @@ cargo build --release -p eggsec-cli --features wireless
 # With wireless active attacks (requires wireless feature)
 cargo build --release -p eggsec-cli --features wireless-advanced
 
-# With evasion detection
-cargo build --release -p eggsec-cli --features evasion
-
-# With post-exploitation simulation
-cargo build --release -p eggsec-cli --features postex
-
-# With C2 framework (depends on postex + evasion)
-cargo build --release -p eggsec-cli --features c2
-
-# With web proxy MCP tools (requires web-proxy)
-cargo build --release -p eggsec-cli --features web-proxy-mcp
-
 # Curated lab build - 28 pinned members (not exhaustive; see docs/FEATURE_MATRIX.md §1.3)
 cargo build --release -p eggsec-cli --features full
 
@@ -174,3 +164,16 @@ eggsec --version
 ```
 
 Note: `cargo install` must use `--path crates/eggsec-cli` because the workspace root is a virtual manifest.
+
+## `eggsec-cli` feature forwarding
+
+The examples above only use flags `eggsec-cli` actually declares. The CLI
+crate's `[features]` table is the authority (`crates/eggsec-cli/Cargo.toml`):
+besides the process-host features below, each entry forwards to the same-named
+engine feature. Engine features that the CLI does **not** forward — `evasion`,
+`postex`, `c2`, `c2-mcp`, `db-pentest-mcp`, `web-proxy-mcp`,
+`transparent-proxy`, `dynamic-plugins`, `nse-ssh2`, `nse-sandbox`, and the
+`db-pentest-*` driver features — reach the binary through `full` (where
+applicable) or by adding an explicit forwarding entry. Passing a non-forwarded
+feature to `cargo build -p eggsec-cli --features ...` is a hard error, not a
+silent no-op.

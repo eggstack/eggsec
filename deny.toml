@@ -25,7 +25,6 @@ unsound = "transitive"
 ignore = [
     # --- Transitive: unmaintained crates with no upstream fix ---
     { id = "RUSTSEC-2025-0057", reason = "fxhash unmaintained; transitive via selectors->scraper (recon/js, nse/httpspider). Internal hash map, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
-    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif v0.17 (progress bars). Internal formatting, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify-types->notify v7 (file watching). Internal timing shim, not exposed. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile unmaintained; transitive via rustls-native-certs->tiberius (mssql marker only). Thin wrapper over rustls-pki-types, no vuln. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via owned_ttf_parser->printpdf (pdf feature, generation-only, builtin Helvetica, never parses untrusted fonts). See docs/DEPENDENCY_EXCEPTIONS.md." },

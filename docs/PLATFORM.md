@@ -1,13 +1,17 @@
-# Platform Integration Maturity (Phase F)
+# Platform Integration Maturity
 
 Deterministic fixtures, explicit prerequisites, and isolated live tests for
-platform-sensitive domains. No new hazardous capability is added by this phase.
+platform-sensitive domains. No new hazardous capability is added here.
 
 ## Capability / prerequisite matrix
 
-Source of truth: `crates/eggsec/src/platform/` (`PlatformReport::collect()`).
-`eggsec doctor` prints the same matrix; tests use `skip_reason_for()` so a
-skipped test always names the absent prerequisite.
+Source of truth: `crates/eggsec/src/platform/` — `PlatformReport::collect()`
+(`prereqs.rs`). `eggsec doctor` prints the same matrix; live tests call
+`skip_reason_for(domain)` so a skipped test always names the absent
+prerequisite. `report_for()` knows exactly six domains: `mobile-dynamic`,
+`packet-inspection`, `wireless`, `wireless-advanced`, `stress-testing`, `nse`.
+Any other name falls through to an "unknown domain" report with neither fixture
+nor live support — so adding a platform-sensitive domain requires a matrix here.
 
 | Domain | OS | Privilege | Devices / binaries | Feature | Fixture (always runs) | Live (isolated, may SKIP) |
 |--------|----|-----------|-------------------|---------|----------------------|---------------------------|
@@ -18,9 +22,9 @@ skipped test always names the absent prerequisite.
 | `stress-testing` | Linux for live; fixture anywhere | `CAP_NET_RAW`/root for live only | none beyond scope+budgets | `stress-testing` | auth/metrics/caps: `cargo test -p eggsec --lib stress::` (no traffic) | manual, scoped, rate/duration-capped lab runs only |
 | `nse` | all | none | `libssl-dev` at build | `nse` | `./scripts/test-nse.sh` (safe scripts) | local only |
 
-A skipped live test prints e.g. `SKIP packet-inspection: CAP_NET_RAW / root
-(running without capture privilege)`. Fixture tests never skip for privilege
-or hardware.
+A skipped live test prints e.g. `SKIP packet-inspection: CAP_NET_RAW (running
+without capture privilege) [root=false, caps=…] fix: …`. Fixture tests never skip
+for privilege or hardware.
 
 ## Fixture setup and teardown
 
@@ -61,26 +65,33 @@ sudo scripts/setup_packet_netns.sh --run
 ## Expected skips on unsupported environments
 
 - Non-Linux: packet-live, wireless-live, netns report `Unsupported`/`SKIP`.
-- Non-root: live capture/scan/flood report `PrivilegeRequired` + fix
-  (`sodo`/capabilities or the netns/emulator script); fixtures still pass.
+- Non-root: live capture/scan/flood report `PrivilegeRequired` + a `fix:` hint
+  (sudo/capabilities, or the netns/emulator script); fixtures still pass.
 - No `adb`/`iwlist`/`emulator`: live legs SKIP; pure-Rust probes and canned
   fixtures still run.
 - No Frida CLI: instrumentation planning/dry-run works; live attach reports
   `Missing (optional)` and stays simulation.
 
+A skip reason names the first blocking prerequisite and includes
+`capabilities_summary()`, e.g.
+`SKIP packet-inspection: CAP_NET_RAW (running without capture privilege) [root=false, caps=…]`.
+
 ## What is and is not release-gated
 
 - **Release-gated**: fixture suites above (hermetic, deterministic), `make
-  check`, `eggsec doctor` matrix presence, Python `wireless-fixture` and
-  `mobile-dynamic-fixture` profiles (fail if all skip).
-- **Not release-gated**: live netns/emulator/RF runs, `packet-live`,
-  `active-probes`, `stress-testing`, `mobile-emulator` (manual/scheduled;
-  see `.github/workflows/deep-checks.yml` `platform-integration`).
+  check`, `eggsec doctor` matrix presence, and the Python `wireless-fixture` /
+  `mobile-dynamic-fixture` / `packet-parser` validation profiles (which fail if
+  all their tests skip).
+- **Not release-gated**: live netns/emulator/RF runs and the `packet-live`,
+  `active-probes`, `stress-testing`, `mobile-emulator` Python profiles. The
+  `platform-integration` job in `.github/workflows/deep-checks.yml` is
+  scheduled/manual only — never PR CI — and its live legs use `|| true`, so a
+  missing prerequisite can never turn the job red.
 - **Never promoted by fixtures alone**: `wireless-advanced`, `stress-testing`,
   `postex`, `c2`, and other hazardous domains stay lab-only regardless of
   fixture coverage.
 
-## Maturity checklist satisfied (Phase F)
+## Maturity checklist
 
 - Centralized prerequisite detection (`platform::`) reused by doctor + tests.
 - Reproducible emulator integration profile (mock ADB lifecycle + documented
@@ -93,3 +104,9 @@ sudo scripts/setup_packet_netns.sh --run
 - Repeated lifecycle loops (ADB 10x, Frida 20x, packet 20x, wireless 9+20x)
   with FD-leak guards where observable.
 - Routine CI stays lightweight; deep/manual profiles carry integration evidence.
+
+## See Also
+
+- `architecture/overview.md` — module index and deep-dive links
+- [FEATURE_MATRIX.md](FEATURE_MATRIX.md) — feature flags and system dependencies
+- [docs/VERIFICATION.md](VERIFICATION.md) — the `make check` contract

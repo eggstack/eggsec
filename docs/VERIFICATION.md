@@ -26,6 +26,10 @@ cargo test -p eggsec --features rest-api,cli --tests --no-fail-fast
 cargo test -p eggsec-output --tests
 cargo test -p eggsec-report-model --tests
 cargo test -p eggsec-policy --tests
+cargo test -p eggsec-service-db --tests
+cargo test -p eggsec-secrets --tests
+cargo test -p eggsec-payloads --tests
+cargo test -p eggsec-udp-scan --tests
 cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
 cargo test -p eggsec-tui --lib --no-fail-fast
 bash scripts/check-architecture-guards.sh
@@ -40,9 +44,10 @@ The package-level test commands automatically include all integration tests. New
 | `cargo fmt --all --check` | Style inconsistency | Mechanical; blocks clean diffs |
 | `cargo check --workspace --no-default-features` | Missing feature gates, broken no-default build | Catches regressions in optional-feature boundaries |
 | `make check-deps` (`cargo deny --workspace --all-features check`: advisories + bans + licenses + sources) | Known advisories, disallowed licenses, banned/wildcard deps, unexpected sources | Supply-chain policy must fail PRs, not weekly jobs; all-features closure covers optional deps (pdf, db-pentest, mssql) |
-| `make clippy` (engine lib empty-default + `cli` + `eggsec-core`, `eggsec-tool-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
+| `make clippy` (engine lib empty-default + `cli` + `eggsec-core`, `eggsec-tool-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-runtime`, `eggsec-ui-model`, `eggsec-agent`, `eggsec-transport`, `eggsec-transport-eggfetch`, `eggsec-policy`, `-D warnings`) | Code quality, API misuse, common bugs | Low-cost static analysis on engine and leaf crates |
 | `cargo test -p eggsec --features rest-api,cli --tests` | Behavioral regressions across all integration tests | Exercises MCP, REST, enforcement, dispatch, scanner, fuzzer, agent, NSE, and more |
-| `cargo test -p eggsec-transport-eggfetch --tests` | Adapter parity/adversarial regressions (33 local-fixture tests) | Proves approved-IP pinning, authorized redirects, TLS/timeout mapping without production wiring |
+| `cargo test -p eggsec-{service-db,secrets,payloads,udp-scan} --tests` | Knowledge-corpus data regressions | Corpus leaves own data only; the engines' 6 live probers stay in `eggsec` (guards 148–150) |
+| `cargo test -p eggsec-transport-eggfetch --tests` | Adapter parity/adversarial regressions (67 tests: 52 parity + 6 mapping unit + 5 H2-local + 4 SOCKS5-local) | Proves approved-IP pinning, authorized redirects, TLS/timeout mapping without production wiring |
 | `cargo test -p eggsec-output --tests` | Report rendering/conversion regressions | Output crate is leaf; distinct defect class |
 | `cargo test -p eggsec-report-model --tests` | Report contract roundtrip | Model crate is leaf; JSON shape is the cross-domain contract |
 | `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
@@ -202,6 +207,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | Target | Purpose | When required |
 |--------|---------|---------------|
 | `make test` | Unit tests only | Default local check |
+| `make test-ci` | Full engine package tests (`-p eggsec --features rest-api,cli --tests --no-fail-fast`) | Standalone target; same suite `make check` runs |
 | `make check` | Full mandatory Rust CI contract (format, checks, `check-deps`, clippy, tests, guards) | Every PR/push |
 | `make check-deps` | Dependency advisory/license/ban/source policy (`cargo deny --workspace --all-features check`) | Every PR/push (part of `make check`, plus independent `dependency-policy` CI job) |
 | `make check-python` | Python CI check (one build, all checks) | Python changes |

@@ -1,6 +1,6 @@
 # Pipeline Profiles
 
-Eggsec includes 18 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
+Eggsec includes 18 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals. `ScanProfile` in `crates/eggsec/src/types.rs` is the canonical list; the CLI exposes it via `--profile`.
 
 ## Profile Reference
 

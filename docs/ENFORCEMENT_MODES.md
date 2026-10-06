@@ -11,7 +11,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 
 | Term | Definition |
 |------|------------|
-| **Execution surface** | Where the request originates: CLI, TUI, MCP server, security agent, CI pipeline, REST API. |
+| **Execution surface** | Where the request originates. `ExecutionSurface` has 9 variants: `CliManual`, `TuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
 | **Execution profile** | Enforcement behavior, represented by `ExecutionProfile` (`ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`). |
 | **Manual permissive** | Human-directed default mode (`ManualPermissive`). Warnings and confirmation prompts are available; operator may override low-risk classes. |
 | **Manual guarded** | Strict human mode (`ManualGuarded`). Equivalent to CLI `--strict-scope` and future TUI guarded toggle. No discretion path. |
@@ -41,7 +41,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 
 **REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. Only `EnforcementOutcome::Allow` permits dispatch. `Warn`, `RequireConfirmation`, and `Deny` all result in HTTP 403 Forbidden with a structured `RestPolicyErrorResponse` (code: `POLICY_DENIED`, includes serialized `PolicyDecision`). REST is noninteractive and programmatic — warning-class ambiguity must not dispatch. Metadata `rest_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
 
-**Daemon HTTP enforcement specifics**: Daemon HTTP transport (feature-gated `http-api`) uses `EnforcementContext` with `McpStrict` profile by default. HTTP routes map 1:1 to `ClientCommand` variants and go through `DaemonHost::handle_command()` with `DaemonRequestContext`. Since the HTTP surface is noninteractive and programmatic, it follows the same enforcement contract as REST: only `Allow` permits dispatch; `Warn`/`RequireConfirmation`/`Deny` result in error responses. Loopback-only bind is enforced by default; public bind requires explicit configuration and emits a warning.
+**Daemon HTTP enforcement specifics**: Daemon HTTP transport (feature-gated `http-api`) is noninteractive and adds no separate authorization gate of its own. HTTP routes map 1:1 to `ClientCommand` variants and go through `DaemonHost::handle_command()` with `DaemonRequestContext`; the shared runtime executor then runs `EnforcementContext` enforcement (`approve_run_request` → `ApprovedOperation`) before any I/O. The `ExecutionProfile` is derived from the `RuntimeSurface` carried in the submitted `RunRequest` (the HTTP body supplies `surface`), not hardcoded by the daemon. Because the surface is noninteractive, no manual override flags are accepted on this path. Loopback-only bind is enforced by default; public bind requires explicit configuration and emits a warning.
 
 **gRPC enforcement specifics**: gRPC API now constructs `GrpcService` with `EnforcementContext::for_surface(ExecutionSurface::GrpcApi, ...)` and dispatches every tool call through `EnforcementContext::approve()` → `EnforcedDispatcher::dispatch_checked()`. Only `EnforcementOutcome::Allow` produces an `ApprovedOperation` token; `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError` and return gRPC `Status::permission_denied`. Metadata `grpc_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. Audit events emitted for all enforcement outcomes including denials.
 
@@ -172,7 +172,7 @@ Missing metadata for an externally executable tool triggers a runtime warning (R
 Phase 4 added regression tests to protect manual CLI/TUI discretion from agent-grade strictness leaking into default operation. Tests cover:
 
 - **Policy-level outcomes** (`eggsec-policy` kernel tests + `config` facade suites): pure evaluation tests verifying `evaluate_enforcement` produces correct outcomes (Allow/Warn/RequireConfirmation/Deny) for each profile, risk level, and scope configuration, evaluated over explicit `EnabledFeatures` and supplied `TargetScope` facts (Phase C; legacy `config::policy_decision::tests` paths remain facades).
-- **CommandContext override wiring** (`commands::handlers::tests`): 48 tests verifying CLI flags map correctly to `ManualOverride`, error messages list exact flags needed, strict profiles ignore overrides, and audit fields are recorded.
+- **CommandContext override wiring** (`commands::handlers::tests`): 49 tests verifying CLI flags map correctly to `ManualOverride`, error messages list exact flags needed, strict profiles ignore overrides, and audit fields are recorded.
 
 Key invariants locked by tests:
 
@@ -195,9 +195,9 @@ Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/test
 1. Manual CLI/TUI becoming too strict to be useful.
 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 
-**169 tests** covering:
+**172 tests** covering:
 
-- **Surface mapping invariants**: All 8 `ExecutionSurface` variants map to correct `ExecutionProfile`.
+- **Surface mapping invariants**: All 9 `ExecutionSurface` variants map to correct `ExecutionProfile`.
 - **Manual permissive invariants**: Safe ops allow, scope misses require confirmation, `assume_yes` is narrow, denied capabilities hard-deny, missing features hard-deny.
 - **Manual guarded invariants**: Scope misses deny, overrides ignored, high-risk with policy allows.
 - **MCP invariants**: Missing scope denies, no confirmation path, baseline capabilities allowed, non-baseline requires explicit allow.
@@ -238,7 +238,7 @@ Phase 2 verified and hardened the enforcement invariants established in earlier 
 
 Phase 2 confirmed that all acceptance criteria from the Phase 2 plan are satisfied by existing test infrastructure:
 
-- **Enforcement matrix**: 169 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
+- **Enforcement matrix**: 172 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
 - **Override isolation**: Automated surfaces cannot use manual override flags to proceed.
 - **Scope provenance**: Automated operations requiring explicit scope fail without explicit manifest provenance.
 - **Approval token mismatch**: `dispatch_checked` rejects tool mismatch, target mismatch, and allows alias match.
@@ -305,7 +305,7 @@ Every meaningful enforcement decision produces a normalized `EnforcementAuditEve
 
 - `event_id`: UUID v4 per decision
 - `timestamp`: UTC timestamp
-- `surface`: `ExecutionSurface` (CliManual, TuiManual, McpServer, RestApi, SecurityAgent, Ci)
+- `surface`: `ExecutionSurface` (CliManual, TuiManual, CliManualStrict, TuiManualStrict, McpServer, SecurityAgent, Ci, RestApi, GrpcApi)
 - `profile`: `ExecutionProfile` (ManualPermissive, ManualGuarded, McpStrict, AgentStrict, CiStrict)
 - `operation_id`: canonical operation name
 - `target`: optional target string

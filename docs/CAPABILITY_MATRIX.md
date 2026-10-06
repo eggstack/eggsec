@@ -2,7 +2,8 @@
 
 > **Maintenance model**: This matrix is manually maintained to be consistent with `DomainDescriptor`
 > and `OperationMetadata` in the `eggsec` crate. Edit metadata in `crates/eggsec/src/domain/mod.rs`
-> and `crates/eggsec/src/config/policy_catalog.rs` first, then update this file to match. Metadata consistency
+> and `crates/eggsec-policy/src/catalog.rs` first, then update this file to match. (`crates/eggsec/src/config/policy_catalog.rs`
+> and `config/policy.rs` are facades over `eggsec-policy`, not the source of truth.) Metadata consistency
 > tests validate the underlying metadata structures; a future enhancement may add snapshot validation
 > of this file against generated output.
 >
@@ -46,7 +47,7 @@ listed under Domain Operations.)
 | `graphql` | GraphQL Fuzzing | Intrusive | HttpFuzzLowImpact | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `oauth` | OAuth Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `auth-test` | Authentication Testing | CredentialTesting | CredentialTesting | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `nse` | NSE Scripts | SafeActive | NseSafe | `nse` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `nse` | NSE Scripts | SafeActive | NseSafe | `nse` | Y | Y | N | N | N | always | — | — | explicit scope |
 | `c2` | C2 Simulation | C2Operation | C2Simulation | `c2` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `proxy-intercept` | Traffic Interception | TrafficInterception | TrafficInterception | `web-proxy` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `wireless` | Wireless Scanning | SafeActive | PassiveFingerprint | `wireless` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
@@ -56,16 +57,20 @@ listed under Domain Operations.)
 | `evasion` | Evasion Detection | EvasionTesting | EvasionTesting | `evasion` | Y | Y | N | N | N | always | — | — | optional target |
 | `postex` | Post-Exploitation | ExploitAdjacent | RemoteExecution | `postex` | Y | Y | N | N | N | always | — | — | optional target |
 | `compliance` | Compliance Scanning | SafeActive | ActiveProbe | `compliance` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `storage` | Database Storage | SafeActive | DatabaseAssessment | `database` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `integrations` | External Integrations | SafeActive | ActiveProbe | `external-integrations` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
-| `workflow` | Finding Workflow | SafeActive | ActiveProbe | `finding-workflow` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
+| `storage` | Database Storage | SafeActive | DatabaseAssessment | `database` | Y | Y | Y | Y | Y | always | — | — | optional target |
+| `integrations` | External Integrations | SafeActive | ActiveProbe | `external-integrations` | Y | Y | Y | Y | Y | always | — | — | optional target |
+| `workflow` | Finding Workflow | SafeActive | ActiveProbe | `finding-workflow` | Y | Y | Y | Y | Y | always | — | — | optional target |
 | `vuln` | Vulnerability Management | SafeActive | ActiveProbe | `vuln-management` | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `pipeline` | Security Pipeline | SafeActive | ActiveProbe | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `remote` | Remote Execution | RemoteExecution | RemoteExecution | — | Y | Y | Y | Y | Y | always | — | — | explicit scope |
 | `search` | Web Search | Passive | — | — | Y | Y | Y | Y | Y | — | — | — | no target |
 
-> `proxy-intercept` is also reachable via the `proxy` alias; aliases are not
-> separate metadata entries and are therefore not repeated here.
+> `ALL_OPERATION_METADATA_ALIASES` holds 42 user-facing aliases (e.g. `proxy`
+> → `proxy-intercept`, `scan` → `scan-ports`, `ssh` → `remote`). Aliases are
+> not separate metadata entries and are therefore not repeated here. Note that
+> the `proxy` **alias** (an operation alias resolving to `proxy-intercept`) is
+> unrelated to the `proxy` **CLI subcommand** (a `stress-testing` proxy-pool
+> manager with no operation metadata).
 
 ## Domain Operations
 
@@ -75,16 +80,16 @@ integrated CLI, TUI, tool, and report adapters.
 | Domain | Category | Operation | Risk | Feature | CLI | TUI | MCP/API | Dry-Run | Evidence | Baseline | Strict | Scope | Normalized Report | Docs |
 |--------|----------|-----------|------|---------|-----|-----|---------|---------|----------|----------|--------|-------|-------------------|------|
 | db-pentest | defense-lab | db-pentest | DbPentest | `db-pentest` | Y | Y | opt-in | always | always | always | Y | explicit scope | Y | DATABASE_PENTEST.md |
-| mobile-static | defense-lab | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | optional target | Y | MOBILE.md |
+| mobile-static | standard-assessment | mobile-static | SafeActive | `mobile` | Y | Y | N | always | N | N | Y | optional target | Y | MOBILE.md |
 | mobile-dynamic | defense-lab | mobile-dynamic | Intrusive | `mobile-dynamic` | Y | Y | N | always | always | always | N | optional target | N | MOBILE.md |
 
 ## Risk Tiers
 
 | Tier | Description | Examples |
 |------|-------------|----------|
-| Passive | Read-only, no network impact | Recon, Search |
+| Passive | Read-only, no network impact | Search |
 | SafeActive | Low-impact active probes | Port scan, Fingerprint, WAF detect |
-| Intrusive | May trigger security alerts | Fuzzing, WAF bypass |
+| Intrusive | May trigger security alerts | Fuzzing, WAF bypass, GraphQL, wireless-deauth, mobile-dynamic |
 | LoadTest | Sustained load generation | Load testing |
 | StressTest | High-volume stress testing | WAF stress, Stress test |
 | RawPacket | Raw packet crafting/injection | Packet inspection |
@@ -92,11 +97,11 @@ integrated CLI, TUI, tool, and report adapters.
 | DbPentest | Direct database security checks | Database pentesting |
 | TrafficInterception | MITM proxy operations | Web proxy intercept |
 | EvasionTesting | Defense evasion detection | Evasion testing |
-| PostExploitation | Post-exploitation simulation | Postex |
-| ExploitAdjacent | Near-exploit operations | — |
+| ExploitAdjacent | Near-exploit operations | Postex |
 | C2Operation | Command and control simulation | C2 framework |
-| RemoteExecution | Remote command execution | SSH/exec |
+| RemoteExecution | Remote command execution | Remote |
 | AgentAutonomous | Fully autonomous agent ops | — |
+| PostExploitation | Post-exploitation simulation | — (defined, unused) |
 
 ## Capability Definitions
 
@@ -124,32 +129,42 @@ integrated CLI, TUI, tool, and report adapters.
 
 ## Feature Gating Summary
 
-| Feature | Operations | Status |
-|---------|-----------|--------|
-| `nse` | nse | Experimental |
-| `db-pentest` | db-pentest | Stable |
-| `c2` | c2 | Stable |
-| `web-proxy` | proxy-intercept | Stable |
-| `wireless` | wireless | Stable |
-| `wireless-advanced` | wireless-deauth | Stable |
-| `mobile` | mobile-static | Stable |
-| `mobile-dynamic` | mobile-dynamic | Stable |
-| `advanced-hunting` | hunt | Stable |
-| `headless-browser` | browser | Stable |
-| `compliance` | compliance | Stable |
-| `database` | storage | Stable |
-| `external-integrations` | integrations | Stable |
-| `finding-workflow` | workflow | Stable |
-| `vuln-management` | vuln | Stable |
-| `evasion` | evasion | Stable |
-| `postex` | postex | Stable |
+Feature-to-operation mapping is derived from `required_features` in
+`ALL_OPERATION_METADATA`. The stability column is **not** a property of the
+operation catalog — the stable/provisional/experimental boundary is owned by
+`docs/python/domain-maturity.md` for the Python surface. Read maturity there
+rather than inferring it from gating.
+
+| Feature | Operations |
+|---------|-----------|
+| `nse` | nse |
+| `db-pentest` | db-pentest |
+| `c2` | c2 |
+| `web-proxy` | proxy-intercept |
+| `wireless` | wireless |
+| `wireless-advanced` | wireless-deauth |
+| `mobile` | mobile-static |
+| `mobile-dynamic` | mobile-dynamic |
+| `advanced-hunting` | hunt |
+| `headless-browser` | browser |
+| `compliance` | compliance |
+| `database` | storage |
+| `external-integrations` | integrations |
+| `finding-workflow` | workflow |
+| `vuln-management` | vuln |
+| `evasion` | evasion |
+| `postex` | postex |
+
+Not feature-gated: `recon`, `scan-ports`, `scan-endpoints`, `fingerprint`,
+`fuzz`, `waf-detect`, `waf-bypass`, `waf-stress`, `load-test`, `packet`,
+`graphql`, `oauth`, `auth-test`, `pipeline`, `remote`, `search`.
 
 ## Updating This Document
 
 This document is manually maintained and should be kept consistent with the canonical metadata in code.
 If you add or modify an operation:
 
-1. Update `ALL_OPERATION_METADATA` in `crates/eggsec/src/config/policy_catalog.rs`
+1. Update `ALL_OPERATION_METADATA` in `crates/eggsec-policy/src/catalog.rs`
 2. Update `DomainDescriptor` entries in `crates/eggsec/src/domain/mod.rs` (if domain-scoped)
 3. Run `cargo test -p eggsec --lib` to verify metadata consistency
 4. Update this file to reflect the new metadata (risk, capabilities, exposure flags, etc.)

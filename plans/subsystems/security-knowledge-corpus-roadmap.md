@@ -2,6 +2,17 @@
 
 Status: closed (milestones 1–5 all closed; publication **deferred** by `plans/adrs/ADR-0006-knowledge-corpus-publication.md`)
 
+> **Amended 2026-10-06 (post-M005).** The M004 premise that the 6 remaining payload
+> modules (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`) were "live-probe" generators
+> was **false** — their `get_payloads()` functions are pure data. Those 6 sets and the
+> cross-variant caches moved into `eggsec-payloads` as well, so the crate now owns **all
+> 40** `PayloadType` variants, no longer panics, and totals **252 tests** (not 233). The
+> "233 tests" and "6 live-probe modules remain engine-side" wording in the M004 scope and
+> outcome blocks below is accurate *as of 2026-10-05* and is retained as that milestone's
+> record; the live state is `architecture/knowledge_corpus.md` and
+> `architecture/capability_segregation.md` (Phase G). `eggsec-udp-scan` is the subsystem's
+> fourth leaf crate and, as of 2026-10-06, its 23 tests are wired into `make check`.
+
 Long-term references:
 
 - `plans/000-long-term-specification.md#5-crate-ownership`

@@ -300,15 +300,28 @@ The bridge module has extensive test coverage across all files:
 - **Application boundary** (`crates/eggsec/tests/canonical_dispatch_ownership.rs`, mandatory path): per-family normalization/identity/binding/route equivalence plus daemon-bundle cancel race.
 - **Runtime-contract closure** (`crates/eggsec/tests/runtime_contract_closure.rs`, guard 97): surface round-trips, wire-identity agreement across `TaskKind` variants, wire JSON stability, no-target family failures, stable envelope kinds, embedded/daemon seam equivalence, approval-binding regression.
 
-**Known coverage gap (unverified claim, flagged 2026-10-06):** `Resume`
-(`TaskKind::Resume`) is handled on the conversion path
-(`operation_request.rs:295` `resume_from_runtime`) but has **no** test
-coverage in `runtime_bridge`, and the closure test's
-`task_kind_variant_count_is_pinned` still pins **29** against a helper that
-omits `Resume` (`crates/eggsec/tests/runtime_contract_closure.rs:238–244`).
-So the previously claimed "all 29 `TaskKind` variants" wire-identity coverage
-is currently **29 of 30**. This is a source-side gap, not a doc error — the
-assertion passes only because its own helper is incomplete.
+> **Coverage gap closed 2026-10-06 (was flagged the same day as a finding).** `Resume`
+> (`TaskKind::Resume`) is handled on the conversion path
+> (`operation_request.rs:295` `resume_from_runtime`) but had **no** test
+> coverage in `runtime_bridge`, and the closure test's
+> `task_kind_variant_count_is_pinned` pinned **29** against a helper that
+> omitted `Resume` (`crates/eggsec/tests/runtime_contract_closure.rs:238–244`),
+> so the claimed "all 29 `TaskKind` variants" wire-identity coverage was really
+> **29 of 30** while the assertion still passed.
+>
+> Fixed in source: `TaskKind::Resume` is now in `all_task_kinds()`, the pin is
+> **30**, and two new assertions were added — a `TASK_KIND_VARIANT_NAMES` list
+> cross-checked against the same pin, and `enumerated_task_kind_wire_tags_match_the_enum`,
+> which zips that list against the helper's serde tags so the name list cannot
+> drift. `Resume` now flows through all five helper-iterating tests (adapters,
+> canonical conversion, metadata resolution, wire JSON, embedded/daemon seam).
+> Verified: `runtime_contract_closure` 18 passed / 0 failed.
+>
+> Note the real tripwire for a *new* variant is the compiler, not the count:
+> `capability_name`, `operation_id`, `canonical_target` and `route_for_command_id`
+> in `eggsec-runtime/src/request.rs`, plus the capability, session, TUI and
+> ui-model matches, are all exhaustive with no wildcard arm. The counts catch
+> accidental removals and a helper that stops covering the enum.
 
 ## See Also
 

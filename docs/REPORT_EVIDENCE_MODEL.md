@@ -39,7 +39,7 @@ Comprehensive inventory of report, finding, and evidence types across the Eggsec
 
 | Type | File | Line | Purpose |
 |------|------|------|---------|
-| `Severity` | `crates/eggsec-core/src/types.rs` | 13 | Canonical severity enum: Critical, High, Medium, Low, Info. Single source of truth; re-exported by `eggsec-output`. |
+| `Severity` | `crates/eggsec-core/src/types.rs` | 15 | Canonical severity enum: Critical, High, Medium, Low, Info. Single source of truth; re-exported by `eggsec-output`. |
 | `SensitiveString` | `crates/eggsec-core/src/types.rs` | 136 | Zeroized credential wrapper for safe handling of secrets. |
 
 ### Canonical Finding (eggsec main crate)
@@ -63,11 +63,11 @@ Comprehensive inventory of report, finding, and evidence types across the Eggsec
 |------|------|------|---------|
 | `MobileScanReport` | `crates/eggsec-mobile-lab/src/lib.rs` | 107 | Static analysis report. Fields: target, platform, findings (`Vec<MobileFinding>`), scan_timestamp, version. |
 | `MobileFinding` | `crates/eggsec-mobile-lab/src/lib.rs` | 96 | Static finding. Fields: id, severity, category, title, description, evidence (`Option<String>`), recommendation, cwe_ids. |
-| `DynamicMobileReport` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 520 | Dynamic analysis report. Fields: findings, traffic_summary, frida_results, permission_state, etc. |
-| `DynamicMobileFinding` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 337 | Dynamic finding. Fields: id, severity, category, title, description, evidence (`Option<String>`), recommendation, cwe_ids, static_correlation (`Option<String>`). |
-| `MobileBaseline` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 104 | Lightweight baseline. Fields: target, timestamp, findings_count, frida_script_count, frida_findings, actions_sample. |
+| `DynamicMobileReport` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 521 | Dynamic analysis report. Fields: findings, traffic_summary, frida_results, permission_state, etc. |
+| `DynamicMobileFinding` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 338 | Dynamic finding. Fields: id, severity, category, title, description, evidence (`Option<String>`), recommendation, cwe_ids, static_correlation (`Option<String>`). |
+| `MobileBaseline` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 105 | Lightweight baseline. Fields: target, timestamp, findings_count, frida_script_count, frida_findings, actions_sample. |
 | Bridge | `crates/eggsec-mobile-lab/src/lib.rs` | 296 | `to_scan_report_data(&MobileScanReport)` |
-| Bridge | `crates/eggsec-mobile-lab/src/dynamic.rs` | 1505 | `to_scan_report_data_dynamic(&DynamicMobileReport)` |
+| Bridge | `crates/eggsec-mobile-lab/src/dynamic.rs` | 1509 | `to_scan_report_data_dynamic(&DynamicMobileReport)` |
 | Evidence bundle | `crates/eggsec-mobile-lab/src/dynamic.rs` | 212 | `export_evidence_bundle()` — gzipped JSON with report, traffic_summary, exported_at, frida_structured, bundle_manifest. |
 
 #### db-pentest
@@ -75,20 +75,20 @@ Comprehensive inventory of report, finding, and evidence types across the Eggsec
 | Type | File | Line | Purpose |
 |------|------|------|---------|
 | `DbPentestReport` | `crates/eggsec-db-lab/src/types.rs` | 8 | DB assessment report. Fields: db_type, scan_type, target, findings (`Vec<DbFinding>`), queries_executed, dry_run, manifest_path, duration_ms, correlation, compliance, baseline_label, regression_summary. |
-| `DbFinding` | `crates/eggsec-db-lab/src/types.rs` | 59 | DB finding. Fields: id, category, severity (`String`), title, description, evidence (`Option<String>`), remediation, cwe_ids. |
-| `DbBaseline` | `crates/eggsec-db-lab/src/baseline.rs` | 13 | Baseline with regression detection. Fields: captured_at, db_type, checks, finding_categories, severity_counts, total_findings, report, label. |
-| `DbRegressionResult` | `crates/eggsec-db-lab/src/baseline.rs` | 34 | Regression comparison. Fields: new_findings, resolved_findings, severity_increases, severity_decreases, summary, is_regression, is_improvement. |
+| `DbFinding` | `crates/eggsec-db-lab/src/types.rs` | 60 | DB finding. Fields: id, category, severity (`String`), title, description, evidence (`Option<String>`), remediation, cwe_ids. |
+| `DbBaseline` | `crates/eggsec-db-lab/src/baseline.rs` | 14 | Baseline with regression detection. Fields: captured_at, db_type, checks, finding_categories, severity_counts, total_findings, report, label. |
+| `DbRegressionResult` | `crates/eggsec-db-lab/src/baseline.rs` | 35 | Regression comparison. Fields: new_findings, resolved_findings, severity_increases, severity_decreases, summary, is_regression, is_improvement. |
 | Bridge | `crates/eggsec-db-lab/src/bridge.rs` | 9 | `to_scan_report_data_db(&DbPentestReport)` |
-| Evidence bundle | `crates/eggsec-db-lab/src/lib.rs` | 645 | `export_db_evidence_bundle()` — gzipped JSON with report, manifest_path, manifest_data, exported_at, correlation, compliance, bundle_manifest. |
+| Evidence bundle | `crates/eggsec-db-lab/src/lib.rs` | 655 | `export_db_evidence_bundle()` — gzipped JSON with report, manifest_path, manifest_data, exported_at, correlation, compliance, bundle_manifest. |
 
 #### web-proxy
 
 | Type | File | Line | Purpose |
 |------|------|------|---------|
-| `WebProxySessionReport` | `crates/eggsec-web-proxy/src/intercept/types.rs` | 101 | Proxy session report. Fields: flows, manipulations, ws_sessions, http2_sessions, grpc_sessions, budget, correlation, correlation_refs. |
+| `WebProxySessionReport` | `crates/eggsec-web-proxy/src/intercept/types.rs` | 102 | Proxy session report. Fields: flows, manipulations, ws_sessions, http2_sessions, grpc_sessions, budget, correlation, correlation_refs. |
 | `EvidenceBundle` | `crates/eggsec-web-proxy/src/intercept/bundle.rs` | 19 | Signed bundle. Fields: version, manifest, flows, sessions, rules, manipulations, correlations. Supports HMAC-SHA256 signing. |
-| `BundleManifest` | `crates/eggsec-web-proxy/src/intercept/bundle.rs` | 41 | Bundle manifest. Fields: target, scope, started_at, ended_at, user, dry_run, flow/session/manipulation/correlation/rule counts, signature. |
-| `BundleDiff` | `crates/eggsec-web-proxy/src/intercept/bundle.rs` | 306 | Bundle comparison. Fields: added/removed/modified flows, count diffs. |
+| `BundleManifest` | `crates/eggsec-web-proxy/src/intercept/bundle.rs` | 42 | Bundle manifest. Fields: target, scope, started_at, ended_at, user, dry_run, flow/session/manipulation/correlation/rule counts, signature. |
+| `BundleDiff` | `crates/eggsec-web-proxy/src/intercept/bundle.rs` | 307 | Bundle comparison. Fields: added/removed/modified flows, count diffs. |
 | Bridge | `crates/eggsec-web-proxy/src/intercept/bridge.rs` | 10 | `to_scan_report_data_proxy(&WebProxySessionReport)` |
 
 ## Conversion Bridges
@@ -96,7 +96,7 @@ Comprehensive inventory of report, finding, and evidence types across the Eggsec
 | Domain | Bridge Function | File | Line | Input Type |
 |--------|----------------|------|------|------------|
 | mobile-static | `to_scan_report_data()` | `crates/eggsec-mobile-lab/src/lib.rs` | 296 | `&MobileScanReport` |
-| mobile-dynamic | `to_scan_report_data_dynamic()` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 1505 | `&DynamicMobileReport` |
+| mobile-dynamic | `to_scan_report_data_dynamic()` | `crates/eggsec-mobile-lab/src/dynamic.rs` | 1509 | `&DynamicMobileReport` |
 | db-pentest | `to_scan_report_data_db()` | `crates/eggsec-db-lab/src/bridge.rs` | 9 | `&DbPentestReport` |
 | web-proxy | `to_scan_report_data_proxy()` | `crates/eggsec-web-proxy/src/intercept/bridge.rs` | 10 | `&WebProxySessionReport` |
 
@@ -145,121 +145,41 @@ Domain descriptors declare report integration capabilities via `DomainDescriptor
 | # | Issue | Details |
 |---|-------|---------|
 | 1 | **Severity representation** | `FindingData` uses `String` for severity; `AgentFinding` uses the `Severity` enum; canonical `Finding` uses `Severity` enum. No consistent representation across serialization boundaries. |
-| 2 | **Evidence representation** | `Option<String>` in domain findings (`MobileFinding`, `DbFinding`, `DynamicMobileFinding`), `Evidence` struct in agent output (`crates/eggsec-output/src/agent.rs:303`), `EvidenceKind` + `data` (`serde_json::Value`) in canonical `Finding`. Three distinct models. |
+| 2 | **Evidence representation** | `Option<String>` in domain findings (`MobileFinding`, `DbFinding`, `DynamicMobileFinding`), `Evidence` struct in agent output (`crates/eggsec-output/src/agent.rs:304`), `EvidenceKind` + `data` (`serde_json::Value`) in canonical `Finding`. Three distinct models. |
 | 3 | **No shared evidence bundle manifest** | Each domain defines its own manifest schema. No common versioning, content listing, or integrity verification contract. |
 | 4 | **No shared baseline summary format** | `DbBaseline`, `MobileBaseline`, and `BundleDiff` are structurally different with no common fields for normalized comparison. |
 | 5 | **Bridge information loss** | All domain bridges target `ScanReportData`, which loses domain-specific information (e.g., Frida results, DB queries, proxy flow budgets, compliance data). |
 | 6 | **No normalized report envelope** | No report type preserves `report_id`, `operation_id`, and `domain_id` across the conversion chain. Traceability from output back to execution context is broken. |
-| 7 | **PolicySummary underutilized** | `PolicySummary` exists in `eggsec-output` but is not consistently populated by domain bridges, leaving enforcement metadata incomplete in cross-domain reports. |
+| 7 | **PolicySummary underutilized** | `PolicySummary` exists in `eggsec-report-model` but is not consistently populated by domain bridges, leaving enforcement metadata incomplete in cross-domain reports. |
 
 ## Target Normalized Model
 
-A protocol-neutral report/evidence contract that domain crates can convert into a shared `ReportEnvelope`. The model should be dependency-light and serializable, placed in `eggsec-output`.
+**Shipped.** The normalized contract lives in `eggsec-report-model`
+(`crates/eggsec-report-model/src/envelope.rs` and `summary.rs`), not in
+`eggsec-output` — `eggsec-output` renders over it and never the reverse
+(guards Checks 118–120). The types are `EvidenceItem`, `FindingRecord`,
+`ReportEnvelope`, `EvidenceManifest`, `BaselineSummary`, and
+`DiffSummary`, as inventoried in the tables above; read those files for
+the authoritative field lists rather than a duplicated sketch here.
 
-### Design Goals
+Design goals it satisfied:
 
-- Single serializable representation for all report output across CLI, TUI, REST, MCP, and agent surfaces.
-- Domain crates convert into the shared model via bridge functions; no domain type escapes into the output layer.
+- Single serializable representation for report output across CLI, TUI, REST, MCP, and agent surfaces.
+- Domain crates convert into the shared model; no domain type escapes into the output layer.
 - Evidence is structured and typed, not a string blob.
-- Report traceability via `report_id`, `operation_id`, and `domain_id`.
+- Report traceability via `report_id`, `operation_id`, and `domain_id` on `ReportEnvelope`.
 - Baseline and diff summaries share a common shape.
 
-### Implemented Types
-
-```rust
-/// Evidence item with typed kind and structured data.
-pub struct EvidenceItem {
-    pub kind: EvidenceKind,
-    pub summary: String,
-    pub data: serde_json::Value,
-    pub redacted: bool,
-    /// Domain-specific key for grouping (e.g., "http-request", "frida-call").
-    pub domain_key: Option<String>,
-}
-
-/// Normalized finding record.
-pub struct FindingRecord {
-    pub id: String,
-    pub title: String,
-    pub severity: Severity,
-    pub confidence: Confidence,
-    pub category: String,
-    pub description: String,
-    pub evidence: Vec<EvidenceItem>,
-    pub remediation: Option<String>,
-    pub cwe_ids: Vec<String>,
-    pub owasp: Option<String>,
-    pub cve: Option<String>,
-    pub target: String,
-    pub location: Option<String>,
-    pub source_tool: Option<String>,
-    pub source_module: Option<String>,
-    pub discovered_at: chrono::DateTime<chrono::Utc>,
-    pub tags: Vec<String>,
-    /// Opaque domain-specific payload for lossless round-trip.
-    pub domain_payload: Option<serde_json::Value>,
-}
-
-/// Normalized report envelope.
-pub struct ReportEnvelope {
-    pub report_id: String,
-    pub operation_id: String,
-    pub domain_id: Option<String>,
-    pub scan_type: String,
-    pub target: String,
-    pub started_at: chrono::DateTime<chrono::Utc>,
-    pub finished_at: chrono::DateTime<chrono::Utc>,
-    pub duration_ms: u64,
-    pub findings: Vec<FindingRecord>,
-    pub open_ports: Vec<u16>,
-    pub services: Vec<String>,
-    pub policy_summary: Option<PolicySummary>,
-    /// Domain-specific report payload (e.g., traffic_summary, db queries).
-    pub domain_payload: Option<serde_json::Value>,
-}
-
-/// Baseline summary for normalized cross-domain comparison.
-pub struct BaselineSummary {
-    pub baseline_id: String,
-    pub domain_id: String,
-    pub captured_at: chrono::DateTime<chrono::Utc>,
-    pub target: String,
-    pub finding_count: usize,
-    pub severity_counts: std::collections::HashMap<Severity, usize>,
-    pub finding_ids: Vec<String>,
-}
-
-/// Diff result between two baselines.
-pub struct BaselineDiff {
-    pub new_findings: Vec<FindingRecord>,
-    pub resolved_findings: Vec<FindingRecord>,
-    pub unchanged_findings: Vec<String>, // finding IDs
-    pub severity_increases: Vec<String>,
-    pub severity_decreases: Vec<String>,
-    pub is_regression: bool,
-    pub is_improvement: bool,
-    pub summary: String,
-}
-
-/// Evidence bundle manifest for serialized export.
-pub struct EvidenceManifest {
-    pub version: String,
-    pub bundle_id: String,
-    pub target: String,
-    pub domain_id: String,
-    pub exported_at: chrono::DateTime<chrono::Utc>,
-    pub finding_count: usize,
-    pub evidence_count: usize,
-    pub redaction_policy: RedactionPolicy, // manifest-level redaction strategy
-    pub signature: Option<String>,
-    pub contents: Vec<String>,
-}
-```
+Remaining work is consumer migration: CLI/TUI/REST/MCP renderers still
+consume `ScanReportData` directly, and legacy `ScanReportData` has not
+been removed.
 
 ### RedactionPolicy
 
 The `EvidenceManifest` includes a `redaction_policy` field that declares the manifest-level
-redaction strategy. This is distinct from per-item `RedactionState` on `EvidenceItem`:
+redaction strategy (`RedactionPolicy` at `crates/eggsec-report-model/src/envelope.rs:132`).
+This is distinct from per-item `RedactionState` on `EvidenceItem`
+(`envelope.rs:117`):
 
 | Policy | Meaning |
 |--------|---------|
@@ -268,11 +188,3 @@ redaction strategy. This is distinct from per-item `RedactionState` on `Evidence
 | `RedactSensitive` | Redact only items marked as sensitive |
 | `SummarizeAll` | Replace raw content with summaries |
 | `DomainSpecific` | Domain-specific logic; individual item states take precedence |
-
-### Migration Path
-
-1. Add these types to `eggsec-output` behind a feature flag (e.g., `normalized-report`).
-2. Update each domain bridge to produce `ReportEnvelope` alongside existing `ScanReportData`.
-3. Migrate CLI/TUI/REST/MCP output renderers to consume `ReportEnvelope`.
-4. Remove legacy `ScanReportData` once all consumers are migrated.
-5. Unify evidence bundle export under `EvidenceManifest` with domain-specific payloads.

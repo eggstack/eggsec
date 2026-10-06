@@ -66,8 +66,9 @@ eggsec scan-endpoints https://localhost:8443 --insecure
 eggsec fuzz https://dev-server.local/api -t sqli --insecure
 
 # Skip TLS verification in the TUI
-# Note: The TUI is a separate binary (eggsec-tui), not a subcommand
-# Configure insecure mode in eggsec.toml or use CLI flags
+# The TUI carries an `insecure` option in its operation options
+# (crates/eggsec-tui/src/app/options.rs). Note the TUI deliberately never
+# emits `--insecure` when replaying a saved session as CLI argv.
 ```
 
 ### CLI Help
@@ -169,9 +170,9 @@ Some Eggsec modules can generate significant load:
 
 | Module | Risk Level | Mitigation |
 |--------|-----------|------------|
-| Fuzzing | Medium | Use rate limiting (`--rate-limit`) |
+| Fuzzing | Medium | Scope-limited payload types; `--adaptive-rate` tunes throughput |
 | Load Testing | High | Only use on systems you own |
-| Stress Testing | Critical | Requires explicit authorization |
+| Stress Testing | Critical | Requires explicit authorization: `[execution_policy].allow_stress_testing = true` plus `allow_stress_test = true` in the scope file |
 | Grammar Fuzzing | Low-Medium | CPU-intensive but low network impact |
 
 ### Information Disclosure
@@ -187,24 +188,49 @@ Eggsec is designed to discover information about target systems. Be aware that:
 
 ### Scope Files
 
-Use scope files to define explicit authorization boundaries:
+Use a scope file (passed via `--scope`) to define explicit authorization
+boundaries. `load_scope()` (`crates/eggsec/src/config/loader.rs:59`) reads
+this shape, and it fails closed when an explicit `--scope` path does not
+exist:
 
 ```toml
 require_explicit_scope = true
+max_requests_per_second = 100
 
 [[allowed_targets]]
 pattern = "*.example.com"
+description = "Authorized lab web application"
 
 [[allowed_targets]]
 cidr = "10.0.0.0/8"
 
 [[excluded_targets]]
 pattern = "internal.example.com"
+
+excluded_ports = [22, 3389]
 ```
+
+A named-but-missing scope file is an error rather than an empty
+(allow-all) scope, so a typo in `--scope` cannot silently disable
+enforcement.
+
+Note the distinction: this is the **scope-file** format above. On the
+protocol surfaces (REST/MCP/gRPC/tool/Python) the transport DTO is
+`ScopeSpec` from `eggsec-tool-core`
+(`crates/eggsec-tool-core/src/request.rs:213`) — `allowed_patterns`,
+`excluded_patterns`, `allowed_ips`, `allow_subdomains` — which the engine
+converts to its authoritative `Scope` via `eggsec::config::scope_from_spec`
+(fail-closed). Effective authorization is the **intersection** of the
+configured engine scope and the request spec: both must allow, either may
+deny.
 
 ### Scope Enforcement
 
-When `require_explicit_scope = true`, Eggsec will refuse to scan targets not explicitly listed in the scope file.
+`EnforcementContext::evaluate()` is the mandatory pre-dispatch gate for
+all surfaces: targets outside the loaded scope are refused before any
+tool runs. CLI/TUI run a permissive profile where the operator may
+override with `--allow-*` flags and a reason; REST/MCP/agent/CI run
+strict profiles that fail closed.
 
 ### Verifying Scope
 
@@ -212,9 +238,13 @@ When `require_explicit_scope = true`, Eggsec will refuse to scan targets not exp
 # Dry-run to verify scope application
 eggsec scan example.com --scope scope.toml --dry-run
 
-# Test scope matching
-eggsec scope test scope.toml target.example.com
+# Explain how the loaded scope classifies a target
+eggsec scope-explain --scope scope.toml --target target.example.com
+eggsec scope-explain --scope scope.toml --target 10.0.0.5 --json
 ```
+
+There is no `eggsec scope test` subcommand — `scope-explain` is the
+diagnostic surface for checking scope matching.
 
 ## Credential Handling
 
@@ -254,18 +284,28 @@ Ensure these files have appropriate access controls (`chmod 600`).
 
 ### Default Output
 
-By default, results are written to:
-- `eggsec.log` (operational logs)
-- `eggsec-results.json` (scan results)
+By default, results go to stdout only. Persisted output is opt-in via the
+`[output]` section in `eggsec.toml`:
+
+```toml
+[output]
+save_results = true
+results_dir = "./reports"
+```
+
+Diagnostics are emitted through `tracing`. The `logging-subscriber`
+feature installs a subscriber (stderr by default, or a configured file
+sink); there is no implicit `eggsec.log` and no implicit
+`eggsec-results.json`.
 
 ### Securing Output Files
 
 ```bash
 # Set restrictive permissions
-chmod 600 eggsec-results.json
+chmod 600 ./reports/report.json
 
 # Encrypt sensitive reports
-gpg --encrypt eggsec-results.json
+gpg --encrypt ./reports/report.json
 ```
 
 ### SARIF Output for CI/CD

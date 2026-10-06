@@ -97,7 +97,7 @@ pub enum Commands {
     Vuln(VulnArgs),
     Storage(StorageArgs),
     // --- Web proxy ---
-    ProxyIntercept(ProxyInterceptArgs),      // feature-gated: web-proxy
+    ProxyIntercept(ProxyInterceptArgs),      // dispatch arm gated: web-proxy
     // --- Stress testing ---
     Stress(StressArgs),                      // feature-gated: stress-testing
     Proxy(ProxyArgs),                        // feature-gated: stress-testing
@@ -131,12 +131,17 @@ pub enum Commands {
 ```
 
 ### Common Arguments
-`CommonHttpArgs` provides shared HTTP arguments:
+`CommonHttpArgs` (`crates/eggsec/src/types.rs:148`) is the shared HTTP client
+config struct — a plain engine type (`Debug, Clone, Default`), **not** a clap
+`Args` struct. CLI argument structs flatten their own clap fields and convert
+into it. Fields map to these CLI flags:
 - `--insecure` - Skip TLS verification
 - `--proxy`, `--proxy-auth` - HTTP proxy
 - `--auth`, `--bearer`, `--cookie`, `--api-key` - Authentication
 - `--user-agent`, `--stealth` - Request customization
 - `--rate-limit`, `--jitter` - Rate limiting
+
+It also carries `auth_context` / `auth_role`, which have no CLI flag.
 
 ## Logging Surface (TUI Single-Writer Boundary)
 
@@ -241,6 +246,18 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 | `handle_plan` | `handlers/plan.rs` | - | Execution planning |
 | `handle_ci` | `handlers/ci.rs` | - | CI/CD checks |
 | `handle_report` | `handlers/report.rs` | - | Report generation |
+| `handle_doctor` | `handlers/doctor.rs` | - | Environment/prerequisite diagnostics |
+| `handle_policy_explain` | `handlers/explain.rs` | - | Policy decision explanation |
+| `handle_scope_explain` | `handlers/explain.rs` | - | Scope matching explanation |
+| `handle_wireless` | `handlers/wireless.rs` | `wireless` | Wireless scanning |
+| `handle_browser` | `handlers/browser.rs` | `headless-browser` | Headless browser assessment |
+| `handle_mobile` | `handlers/mobile.rs` | `mobile` | Mobile app analysis |
+| `handle_evasion` | `handlers/evasion.rs` | `evasion` | Evasion detection |
+| `handle_postex` | `handlers/postex.rs` | `postex` | Post-exploitation simulation |
+| `handle_hunt` | `handlers/hunt.rs` | `advanced-hunting` | Advanced vulnerability hunting |
+| `handle_c2` | `handlers/c2.rs` | `c2` | C2 simulation |
+| `handle_db_pentest` | `handlers/db_pentest.rs` | `db-pentest` | Database pentesting |
+| `handle_proxy_intercept` | `handlers/web_proxy.rs` | `web-proxy` | Web proxy interception |
 
 **Daemon commands** (feature-gated: `daemon-client`, dispatched in `crates/eggsec-cli/src/daemon_cli.rs` before general handler):
 

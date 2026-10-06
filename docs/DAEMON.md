@@ -30,7 +30,7 @@ The daemon supports pluggable transport layers for client connectivity:
 | Transport | Feature Flag | Default | Description |
 |-----------|-------------|---------|-------------|
 | Unix socket | Built-in | Yes (`/tmp/eggsec-daemon.sock`) | JSON-line protocol over Unix domain socket; primary IPC transport |
-| HTTP/SSE | `http-api` | No (`127.0.0.1:9876`) | HTTP REST + Server-Sent Events via `axum`; 12 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
+| HTTP/SSE | `http-api` | No (`127.0.0.1:9876`) | HTTP REST + Server-Sent Events via `axum`; 14 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
 
 WebSocket and gRPC transports were evaluated but deferred — they are not implemented in Phase 12.
 

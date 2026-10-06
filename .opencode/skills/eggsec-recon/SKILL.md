@@ -33,8 +33,14 @@ Sequential dependencies:
 | Security | `cve.rs`, `ssl.rs`, `threatintel.rs` | CVE, SSL, threat intel |
 | Cloud | `cloud/mod.rs`, `cloud/services.rs`, `cloud/iam.rs`, `cloud/metadata.rs` | AWS/GCP/Azure discovery |
 | Email | `email.rs`, `email_security.rs` | Discovery + SPF/DKIM/DMARC |
+| Orchestration | `runner.rs`, `spinner.rs` | `run_full_recon` pipeline, progress spinner |
 | Dependency | (removed) | Package scanning |
 | Other | `api_schema.rs`, `containers.rs`, `git_secrets.rs` | Feature-gated modules |
+
+`recon/mod.rs` declares **22** public modules. Seven further files are
+intentionally *detached* (declared nowhere, included via explicit paths):
+`asn.rs`, `cve_lookup.rs`, `dns_enhanced.rs`, `ftp_auth.rs`, `smtp_auth.rs`,
+`ssh_auth.rs`, `ssl_audit.rs`.
 
 Secret detection (`secrets.rs`) moved to the leaf crate `eggsec-secrets` in Phase G and is
 re-exported at `eggsec::recon::secrets`; `git_secrets.rs` stays here because it is
@@ -59,7 +65,10 @@ if let Ok(pem_data) = pem::parse(der_bytes) {
 }
 ```
 
-Note: TLS version and cipher suite detection is not yet implemented - `supported_versions` and `supported_cipher_suites` fields are populated by external tooling.
+Note: TLS version and cipher suite detection is **not** implemented. The
+`supported_versions` / `supported_cipher_suites` fields are declared but left
+empty in the analysis path (`ssl.rs:63-64`), so the SSLv3 / TLSv1.0 / TLSv1.1
+weakness checks that read them (`ssl.rs:196-212`) never fire.
 
 ### Performance
 
@@ -67,16 +76,16 @@ Note: TLS version and cipher suite detection is not yet implemented - `supported
 - `CveMapper.cache` uses `FxHashMap` (cve.rs)
 - `CveEngine.cve_cache` uses `FxHashMap` (cve_lookup.rs)
 - `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`
-- `WaybackClient.endpoints` uses `FxHashSet`
-- `TakeoverDetector.cname_map`/`ns_map` uses `FxHashMap` (takeover.rs:455-456)
-- `EmailDiscoveryClient` methods use `FxHashSet` (email.rs:132,155,174)
-- `JsAnalyzer` methods use `FxHashSet` (js.rs:229,287)
-- `SubdomainEnumerator` methods use `FxHashSet` (subdomain.rs:74,112,158)
-- `CorsAnalyzer.findings` uses `FxHashSet` (cors.rs:43)
-- `CloudScanner.generate_cloud_names` uses `FxHashSet` (cloud/mod.rs:342)
-- `ContainerScanner.check_container_config` uses `FxHashMap` (containers.rs:243)
-- `compare_dns_records` uses `FxHashSet` (dns_enhanced.rs:247,252)
-- `FullReconResult` callback metadata uses `FxHashMap` (mod.rs:221,253)
+- Wayback endpoint dedupe uses `FxHashSet` (local `endpoints` set in wayback.rs)
+- `TakeoverDetector` CNAME/NS maps use `FxHashMap` (takeover.rs)
+- Email discovery de-dupe sets use `FxHashSet` (email.rs)
+- `JsAnalyzer` endpoint/URL sets use `FxHashSet` (js.rs)
+- `SubdomainEnumerator` per-source subdomains use `FxHashSet` (subdomain.rs)
+- `CorsAnalyzer` findings use `FxHashSet` (cors.rs)
+- `CloudScanner.generate_cloud_names` uses `FxHashSet` (cloud/mod.rs)
+- Container config scans use `FxHashMap` (containers.rs)
+- `compare_dns_records` uses `FxHashSet` (dns_enhanced.rs)
+- `FullReconResult` callback metadata uses `FxHashMap` (mod.rs)
 
 ### Notable Bug Fixes
 

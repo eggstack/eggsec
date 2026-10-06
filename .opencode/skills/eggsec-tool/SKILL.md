@@ -13,16 +13,20 @@ Tool abstraction layer workflows and patterns for security tool integration.
 `tool/traits.rs:185` has `SecurityTool` trait for tool abstraction.
 
 ### ToolRegistry
-`tool/registry.rs:23` has `ToolRegistry` for managing tool instances. Feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`).
+`tool/registry.rs:23` has `ToolRegistry` for managing tool instances. Feature-gated behind `tool-api`, which is enabled by `rest-api`, `grpc-api`, `nse`, and `ai-integration`.
 
 ### Protocol Implementations
 `tool/protocol/`:
-- `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`)
+- `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`) plus
+  `bridge.rs`, `policy.rs`, `profile.rs`, `constraints.rs`, `streaming.rs`,
+  `types.rs`, `prompts.rs`, `auth.rs`, `routes.rs`
 - `mcp/policy.rs` - MCP profile policy enforcement, `extract_hostname()` IPv6-aware parsing, `classify_tool_risk()`, `operation_descriptor_for_mcp_call`, `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`).
 - `mcp/coding_agent_output.rs` - Typed `CodingAgentFindingReport` struct for coding-agent output
 - `openai/` - OpenAI-compatible chat completions (`router_with_services`; checked dispatch, no DTO scope check)
+- `openresponses/` - OpenAI Responses-API-compatible surface
 - `rest.rs` - REST API (`RestState::with_services`; approve/dispatch via `EngineServices`)
-- `grpc.rs` - gRPC service (`GrpcService::with_services`; approve/dispatch via `EngineServices`)
+- `grpc.rs` - gRPC service (`GrpcService::with_services`; approve/dispatch via `EngineServices`; schema in `grpc.proto`)
+- `ai_routes.rs` / `auth.rs` - AI analysis routes and protocol auth helpers
 
 ### MCP Enforcement Boundary
 
@@ -69,12 +73,12 @@ All `OperationDescriptor` instances should be generated from `OperationMetadata`
 
 For performance in hot paths, these modules use `rustc_hash::FxHashMap`/`FxHashSet`:
 
-| Module | Location | Purpose |
-|--------|----------|---------|
-| `orchestrator/mod.rs` | Lines 21, 50, 84, 89, 302 | Stage results, enabled stages |
-| `tool/session.rs` | Lines 288, 316, 461, 465, 1076 | Session cookies, variables |
-| `tool/state.rs` | Lines 124, 136 | Severity summary, sessions |
-| `recon/mod.rs` | Lines 221, 253 | Technology metadata, takeover metadata |
+| Module | Purpose |
+|--------|---------|
+| `orchestrator/mod.rs` | Stage results (`stage_results`), enabled-stage planning sets |
+| `tool/session.rs` | Session cookies, extracted values, response headers, variables |
+| `tool/state.rs` | Severity summary, session registry |
+| `recon/mod.rs` | Technology / takeover callback metadata |
 
 ## Recent Fixes (2026-06-01)
 
@@ -91,11 +95,13 @@ For performance in hot paths, these modules use `rustc_hash::FxHashMap`/`FxHashS
 ### FxHashMap Replaced
 
 - `orchestrator/mod.rs`: HashMap/HashSet → FxHashMap/FxHashSet
-- `tool/session.rs`: HashMap → FxHashMap (line 519 - response headers)
+- `tool/session.rs`: HashMap → FxHashMap (response headers)
 - `tool/state.rs`: HashMap → FxHashMap
 - `recon/mod.rs`: std HashMap → FxHashMap
-- `tool/agents/lifecycle.rs`: HashMap → FxHashMap (health_status)
-- `tool/agents/communication.rs`: HashMap → FxHashMap (subscriptions)
+- `tool/agents/lifecycle.rs`: HashMap → FxHashMap (health_status) — *historical
+  path; this code now lives in `crates/eggsec-agent/src/lifecycle.rs`*
+- `tool/agents/communication.rs`: HashMap → FxHashMap (subscriptions) —
+  *historical path; now `crates/eggsec-agent/src/communication.rs`*
 
 ### SystemTime unw() Panic Prevention (2026-06-01)
 
@@ -138,10 +144,10 @@ Added timeout wrappers to prevent indefinite hangs:
 
 Replaced `HashMap` with `FxHashMap` in performance-critical paths:
 
-| File | Lines | Fields |
-|------|-------|--------|
-| `finding.rs` | 2, 19, 39, 227, 284, 340, 400, 468, 524 | metadata, local vars |
-| `aggregator.rs` | 2, 52, 53, 61, 62, 91, 92, 103, 104 | results, in_progress, stage_results, tool_results |
+| File | Fields |
+|------|--------|
+| `finding.rs` | metadata, local vars |
+| `aggregator.rs` | results, in_progress, stage_results, tool_results |
 
 ## Testing
 

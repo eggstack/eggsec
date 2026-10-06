@@ -10,7 +10,7 @@
 > **Fail-closed contract**: Unknown feature names in policy checks return `false`.
 > The `feature_state()` function returns `FeatureState::Unknown` for unrecognized names.
 >
-> **Scope**: Covers the main `eggsec` crate (50 features) and domain crate features. Does not
+> **Scope**: Covers the main `eggsec` crate (51 features) and domain crate features. Does not
 > repeat domain crate internals (those are documented in their own Cargo.toml comments).
 
 ---
@@ -41,7 +41,7 @@ Categories:
 | `grpc-api` | Protocol/front-end adapter | `tool-api` | eggsec | No | Yes (gRPC surface) | all (gRPC-exposed) | all (gRPC-exposed) |
 | `stress-testing` | Domain capability | `pnet`, `pnet_packet`, `socket2`, `nix`, `libc`, `surge-ping`, `eggsec-nse?/stress-testing` | eggsec | No | No | `stress-test` | — |
 | `packet-inspection` | Domain capability | `pnet`, `pnet_packet`, `libc` | eggsec | No | No | `packet` | — |
-| `nse` | Domain capability | `tool-api`, pinned external `eggsec-nse` | eggsec | No | Yes (MCP-exposed) | `nse` | — |
+| `nse` | Domain capability | `tool-api`, pinned external `eggsec-nse` | eggsec | No | No (manual/TUI only) | `nse` | — |
 | `nse-ssh2` | Backend/driver dependency | `nse`, `ssh2`, `eggsec-nse/nse-ssh2` | eggsec | No | No | `nse` | — |
 | `nse-sandbox` | Domain capability | `nse`, `eggsec-nse/sandbox` | eggsec | No | No | `nse` | — |
 | `advanced-hunting` | Marker-only | — | eggsec | No | Yes (MCP-exposed) | `hunt` | — |
@@ -67,10 +67,10 @@ Categories:
 | `udp-scan` | Platform-sensitive/lab-only | `eggsec-udp-scan` (libc) | eggsec | No | No | — | — |
 | `wireless` | Marker-only | — | eggsec | No | Yes (MCP-exposed) | `wireless` | — |
 | `wireless-advanced` | Platform-sensitive/lab-only | `wireless` | eggsec | No | No | — | — |
-| `evasion` | Marker-only | — | eggsec | No | No | — | — |
-| `postex` | Marker-only | — | eggsec | No | No | — | — |
+| `evasion` | Marker-only | — | eggsec | No | No (manual/TUI only) | `evasion` | — |
+| `postex` | Marker-only | — | eggsec | No | No (manual/TUI only) | `postex` | — |
 | `c2` | Domain capability | `postex`, `evasion` | eggsec | No | Yes (MCP via marker) | `c2` | — |
-| `mobile` | Domain capability | `eggsec-mobile-lab`, `zip`, `plist` | eggsec | No | Yes (MCP-exposed) | `mobile-static` | `mobile-static` |
+| `mobile` | Domain capability | `eggsec-mobile-lab`, `zip`, `plist` | eggsec | No | No (manual/TUI only) | `mobile-static` | `mobile-static` |
 | `mobile-dynamic` | Domain capability | `mobile`, `eggsec-mobile-lab/mobile-dynamic` | eggsec | No | No | `mobile-dynamic` | `mobile-dynamic` |
 | `api-schema` | Marker-only | — | eggsec | No | No | — | — |
 | `web-proxy` | Domain capability | `eggsec-web-proxy`, `tokio-tungstenite`, `h2`, `http`, `prost`, `prost-types` | eggsec | No | Yes (MCP via marker) | `proxy-intercept` | — |
@@ -94,17 +94,35 @@ Categories:
 
 | Profile | Description | Hazardous Tasks |
 |---------|-------------|----------------|
-| `full()` | All 29 task kinds (requires `full-executor`) | Included |
+| `full()` | All 30 task kinds (requires `full-executor`) | Included |
 | `conservative()` | Safe subset only (default when `full-executor` is enabled but lab mode is not configured) | Excluded (stress, packet, wireless-deauth, postex, c2, evasion) |
 | `noop()` | No task kinds (no `full-executor` feature) | None |
 
 ### 1.1b CLI Crate Features
 
+`eggsec-cli` has 38 features. Three are local to the binary shell; the rest are
+thin pass-throughs that forward an engine feature (and, where a TUI feature
+exists, `eggsec-tui?<feature>`). `crates/eggsec-cli/Cargo.toml` is canonical.
+
 | Feature | Category | Implied Features | Declaring Crate | In Defaults | Notes |
 |---------|----------|-----------------|-----------------|-------------|-------|
 | `tui` | Protocol/front-end adapter | `dep:eggsec-tui` | eggsec-cli | Yes | Terminal UI adapter |
-| `daemon-client` | Protocol/front-end adapter | `dep:eggsec-daemon`, `dep:tokio-util`, `eggsec/daemon-client` | eggsec-cli | No | Daemon client CLI commands |
+| `daemon-client` | Protocol/front-end adapter | `dep:eggsec-daemon`, `dep:eggsec-daemon-protocol`, `dep:tokio-util`, `eggsec/daemon-client` | eggsec-cli | No | Daemon client CLI commands |
 | `headless` | Marker-only | — | eggsec-cli | No | Headless/CI builds (no TUI, no daemon client) |
+
+Pass-throughs to the engine (each also forwards to `eggsec-tui?` when a
+matching TUI feature exists): `nse`, `headless-browser`, `compliance`,
+`database`, `external-integrations`, `finding-workflow`, `vuln-management`,
+`wireless`, `wireless-advanced`, `mobile`, `mobile-dynamic`, `stress-testing`,
+`packet-inspection`, `udp-scan`, `advanced-hunting`, `tool-api`, `rest-api`,
+`ai-integration`, `websocket`, `grpc-api`, `ws-api`, `container`, `sbom`,
+`cloud`, `git-secrets`, `pdf`, `api-schema`, `insecure-tls`.
+
+`mobile`, `db-pentest`, `web-proxy`, `evasion`, `postex`, `c2`,
+`db-pentest-mcp`, `web-proxy-mcp`, `c2-mcp`, `nse-ssh2`, `nse-sandbox`,
+`compliance`-adjacent platform modes, `transparent-proxy`, and
+`dynamic-plugins` are **not** re-exported by `eggsec-cli`; enable them on the
+engine directly.
 
 ### 1.2 Domain Crate Features
 
@@ -124,6 +142,15 @@ Categories:
 | `eggsec-web-proxy` | `transparent-proxy` | Domain capability | — | iptables/nftables REDIRECT mode |
 | `eggsec-web-proxy` | `dynamic-plugins` | Domain capability | — | Dynamic plugin loading from .so/.dylib |
 | `eggsec-mobile-lab` | `mobile-dynamic` | Domain capability | — | ADB + logcat + Frida runtime testing |
+
+**Knowledge-corpus leaves** — near-empty-dependency data crates reached only
+through the engine's `pub use` facades (`scanner::service_data`,
+`recon::secrets`, `fuzzer::payloads`, plus the `udp-scan` feature gate). The
+seam is one-directional: the corpus owns **data**, the engine owns **I/O**.
+`eggsec-service-db`, `eggsec-secrets`, and `eggsec-payloads` are unconditional
+engine dependencies (not feature-gated); `eggsec-udp-scan` is behind the
+`udp-scan` feature. None of the four declares a `test-util` feature. Deep dive:
+`architecture/knowledge_corpus.md`.
 
 ### 1.3 Defaults
 
@@ -188,7 +215,8 @@ cargo test --lib -p eggsec --features rest-api
 cargo test --lib -p eggsec --features grpc-api
 ```
 
-Requires system deps: `grpc-api` needs protobuf compiler for gRPC reflection.
+Requires system deps: `grpc-api` needs the protobuf compiler. The generated
+Rust proto code is checked in, so only descriptor regeneration requires protoc.
 
 #### database-lab — Database domain and selected driver features
 
@@ -255,8 +283,8 @@ It deliberately excludes test-only markers (`test-helpers`), security-risk
 flags (`insecure-tls`), protocol exposure markers (`*-mcp`, which stay opt-in
 while their base domains are aggregated), backend drivers
 (`db-pentest-mongodb`, `db-pentest-mssql-tiberius`, `db-pentest-redis`),
-platform modes (`nse-ssh2`, `nse-sandbox`), separate serving surfaces
-(`grpc-api`, `ws-api`), special output/plugin modes (`pdf`,
+platform modes (`nse-ssh2`, `nse-sandbox`, `udp-scan`), separate serving
+surfaces (`grpc-api`, `ws-api`), special output/plugin modes (`pdf`,
 `transparent-proxy`, `dynamic-plugins`), deferred marker gates (`api-schema`,
 `cloud`, `git-secrets`, `daemon-client`), and the implicit base (`tool-api`,
 transitively enabled via `rest-api`/`nse`/`ai-integration`). The complete
@@ -305,6 +333,7 @@ cargo test -p eggsec-daemon --features full-executor
 |---------|-------------------|------------------------|
 | `packet-inspection` | libpcap-dev | `apt install libpcap-dev` |
 | `nse` | libssl-dev | `apt install libssl-dev` |
+| `nse-ssh2` | libssh2-dev | `apt install libssh2-dev` |
 | `wireless` / `wireless-advanced` | wireless-tools (iwlist) | `apt install wireless-tools` |
 | `grpc-api` | protobuf-compiler | `apt install protobuf-compiler` |
 | `mobile-dynamic` | ADB + Android device | Android SDK Platform Tools |
@@ -319,7 +348,7 @@ cargo test -p eggsec-daemon --features full-executor
 | `rest-api` | all REST-exposed ops | all REST-exposed domains | Yes (REST server) |
 | `grpc-api` | all gRPC-exposed ops | all gRPC-exposed domains | Yes (gRPC server) |
 | `ws-api` | all ops (WebSocket transport) | — | Yes (WebSocket server) |
-| `nse` | `nse` | — | Yes (via `tool-api`) |
+| `nse` | `nse` | — | No (manual/TUI only) |
 | `db-pentest` | `db-pentest` | `db-pentest` | Yes (via `db-pentest-mcp`) |
 | `db-pentest-mcp` | `db-pentest` | `db-pentest` | Yes (MCP surface) |
 | `c2` | `c2` | — | Yes (via `c2-mcp`) |
@@ -327,7 +356,8 @@ cargo test -p eggsec-daemon --features full-executor
 | `web-proxy` | `proxy-intercept` | — | Yes (via `web-proxy-mcp`) |
 | `web-proxy-mcp` | `proxy-intercept` | — | Yes (MCP surface) |
 | `wireless` | `wireless` | — | Yes (MCP-exposed) |
-| `mobile` | `mobile-static` | `mobile-static` | Yes (MCP-exposed) |
+| `wireless-advanced` | `wireless-deauth` | — | No (manual/TUI only) |
+| `mobile` | `mobile-static` | `mobile-static` | No (manual/TUI only) |
 | `mobile-dynamic` | `mobile-dynamic` | `mobile-dynamic` | No (lab-only) |
 | `advanced-hunting` | `hunt` | — | Yes (MCP-exposed) |
 | `headless-browser` | `browser` | — | Yes (MCP-exposed) |
@@ -338,8 +368,8 @@ cargo test -p eggsec-daemon --features full-executor
 | `vuln-management` | `vuln` | — | Yes (MCP-exposed) |
 | `stress-testing` | `stress-test` | — | No |
 | `packet-inspection` | `packet` | — | No |
-| `evasion` | — | — | No |
-| `postex` | — | — | No |
+| `evasion` | `evasion` | — | No (manual/TUI only) |
+| `postex` | `postex` | — | No (manual/TUI only) |
 | `container` | — | — | No |
 | `sbom` | — | — | No |
 | `pdf` | — | — | No |
@@ -426,6 +456,7 @@ as `cargo check -p eggsec --features web-proxy`.
 | `postex` | `postex` | experimental | Post-exploitation simulation |
 | `c2` | `c2` | experimental | C2 framework simulation |
 | `ai-integration` | `ai-integration` | experimental | AI-assisted finding analysis |
+| `external-integrations` | `external-integrations` | experimental | External issue-tracker integrations |
 
 Default wheel: core + scanner + endpoint discovery + service fingerprinting + recon + WAF + reporting + async API.
 `full` aggregate is the curated 28-member engine lab set (not conservative/production).
@@ -471,10 +502,17 @@ Default wheel: core + scanner + endpoint discovery + service fingerprinting + re
 This document is manually maintained. When adding or modifying a feature:
 
 1. Update `[features]` in `crates/eggsec/Cargo.toml`
-2. Update `OperationMetadata` in `crates/eggsec/src/config/policy.rs` (if operation-related)
-3. Update `DomainDescriptor` in `crates/eggsec/src/domain/mod.rs` (if domain-related)
-4. Run `cargo test --lib -p eggsec` to verify metadata consistency
-5. Update this file to reflect the new feature (category, dependencies, metadata IDs, etc.)
-6. Run `cargo test -p eggsec --test metadata_consistency` to validate cross-references
-7. If Python bindings are affected, update `[features]` in `crates/eggsec-python/Cargo.toml` and
-   Section 6 above
+2. Register the feature in `feature_registry!`
+   (`crates/eggsec/src/config/feature_registry.rs`) — unknown feature names
+   resolve to `FeatureState::Unknown` and policy checks fail closed
+3. Update `OperationMetadata` in `crates/eggsec-policy/src/catalog.rs`
+   (if operation-related). `crates/eggsec/src/config/policy_catalog.rs` and
+   `config/policy.rs` are facades over `eggsec-policy`, not the source of truth.
+4. Update `DomainDescriptor` in `crates/eggsec/src/domain/mod.rs` (if domain-related)
+5. Run `cargo test --lib -p eggsec` to verify metadata consistency
+6. Update this file to reflect the new feature (category, dependencies, metadata IDs, etc.)
+7. Run `cargo test -p eggsec --test metadata_consistency` to validate cross-references
+8. Run `make check-features-individual` — the exhaustive per-feature oracle
+9. If Python bindings are affected, update `[features]` in `crates/eggsec-python/Cargo.toml` and
+   Section 6 above. The extras source of truth is `[project.optional-dependencies]` in
+   `crates/eggsec-python/pyproject.toml`, not the Cargo table.

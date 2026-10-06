@@ -122,6 +122,7 @@ check:
 	cargo test -p eggsec-service-db --tests
 	cargo test -p eggsec-secrets --tests
 	cargo test -p eggsec-payloads --tests
+	cargo test -p eggsec-udp-scan --tests
 	cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
 	cargo test -p eggsec-tui --lib --no-fail-fast
 	bash scripts/check-architecture-guards.sh

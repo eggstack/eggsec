@@ -88,7 +88,7 @@ with TUI tabs use `tui_visible`.
 | Command ID | Operation ID | Category | Feature | CLI Interactive Only | TUI Visible |
 |-----------|-------------|----------|---------|:--------------------:|:-----------:|
 | `plan` | (none) | ConfigOutputHelper | — | Yes | No |
-| `preflight` | (uses metadata lookup) | ConfigOutputHelper | — | Yes | No |
+| `preflight` | (none) | ConfigOutputHelper | — | Yes | No |
 | `ci` | (none) | ConfigOutputHelper | — | Yes | No |
 | `config` | (none) | ConfigOutputHelper | — | Yes | No |
 | `doctor` | (none) | ConfigOutputHelper | — | Yes | No |
@@ -101,7 +101,7 @@ with TUI tabs use `tui_visible`.
 | `agent` | (none) | FrontendServer | `rest-api` | No | No |
 | `grpc` | (none) | FrontendServer | `grpc-api` | No | No |
 | `cluster` | (none) | FrontendServer | — | No | No |
-| `remote` | (none) | FrontendServer | — | No | No |
+| `remote-serve` | (none) | FrontendServer | — | No | No |
 | `exec` | (none) | FrontendServer | — | No | No |
 | `report` | (none) | LocalFileDomain | — | Yes | No |
 | `vuln` | (none) | ConfigOutputHelper | — | Yes | No |
@@ -110,9 +110,47 @@ with TUI tabs use `tui_visible`.
 | `notify` | (none) | ConfigOutputHelper | — | Yes | No |
 
 The full server-lifecycle group (`serve`, `mcp-serve`, `agent`, `grpc`,
-`cluster`, `remote`, `exec`) is `cli_interactive_only: false` because the CLI
-operator uses these to launch the daemon, not to interactively invoke them in
-the helper sense.
+`cluster`, `remote-serve`, `exec`) is `cli_interactive_only: false` because
+the CLI operator uses these to launch the daemon, not to interactively invoke
+them in the helper sense.
+
+Two ID details that agents routinely get wrong:
+
+- The Clap subcommand is `remote`, but its registry `command_id()` is
+  `remote-serve` (`commands/route.rs`). The registry table documents
+  `command_id()`, not the Clap spelling.
+- `codegg-mcp` is a **separate subcommand** with alias `mcp-codegg`, not an
+  alias of `mcp-serve` and not a separate registry entry. `mcp-serve` has no
+  `--scope-file`; scope comes from the global `--scope`.
+
+## Registry Coverage vs. the Clap Tree
+
+`REGISTERED_COMMANDS` has **49 entries**; `Commands::command_id()` covers
+**52 ids**. The gaps are deliberate and go in both directions:
+
+Clap variants with **no registry entry** — routed explicitly by
+`route_for_commands()` as non-operation routes, but carrying no
+`CommandRegistration`:
+
+| Clap Subcommand | Route | Feature Gate |
+|-----------------|-------|--------------|
+| `codegg-mcp` | Lifecycle | `rest-api` |
+| `proxy` (proxy-pool/rotation manager) | Helper | `stress-testing` |
+| `daemon` | Lifecycle | `daemon-client` |
+| `session` | Lifecycle | `daemon-client` |
+| `task` | Lifecycle | `daemon-client` |
+
+`codegg-mcp` is registry-less by design — it reuses the `mcp-serve` entry and
+the same `handle_mcp_serve` handler.
+
+Registry entries with **no dedicated Clap subcommand** — these are multiplexer
+branches selected at execution time, not separate CLI verbs:
+
+| Registry `command_id` | Reached via |
+|----------------------|-------------|
+| `mobile-dynamic` | `mobile` multiplexer (static/dynamic branch) |
+| `wireless-deauth` | `wireless` multiplexer (base/active branch) |
+| `remote-serve` | the `remote` Clap subcommand |
 
 ## Visibility & Surface Fields
 
@@ -131,10 +169,18 @@ through `EnforcementContext::evaluate()` before execution.
 
 Invariants enforced by `crates/eggsec/tests/command_registry.rs`:
 - `cli_interactive_only → !programmatic_visible`
-- `cli_interactive_only → !tui_visible`
 - `HelperOnly → cli_interactive_only`
 - `ServerLifecycle → !tui_visible && !cli_interactive_only`
+- `FrontendServer → !tui_visible`
 - `RegistryBacked → operation_id.is_some()`
+- `operation_id.is_some() → RegistryBacked` (the converse — no permanent
+  `LegacyWrapped` mode remains)
+- Side-effecting, non-`cli_interactive_only` entries are `tui_visible`
+
+Note: `preflight` has `operation_id: None` here because the operation is a
+runtime argument (`--operation`), not a fixed binding. The handler resolves it
+via `metadata_for_tool_id(&args.operation)` and previews the decision without
+executing.
 
 ## CommandDispatchMode
 
@@ -152,7 +198,9 @@ Each `CommandRegistration` carries a `dispatch_mode: CommandDispatchMode` field 
 | File | Purpose |
 |------|---------|
 | `crates/eggsec/src/commands/registry.rs` | Registry types and static entries |
+| `crates/eggsec/src/commands/route.rs` | `Commands → CommandRoute` classification (single routing owner) |
 | `crates/eggsec/src/commands/mod.rs` | Re-exports |
-| `crates/eggsec/src/commands/handlers/mod.rs` | Dispatch bridge integration |
+| `crates/eggsec/src/commands/handlers/mod.rs` | Dispatch bridge integration (`describe_from_registry`, `evaluate_and_enforce_operation`) |
 | `crates/eggsec/tests/command_registry.rs` | Registry consistency tests |
-| `crates/eggsec/src/config/policy_catalog.rs` | `OperationMetadata` (canonical source) |
+| `crates/eggsec-policy/src/catalog.rs` | `OperationMetadata` (canonical source: `ALL_OPERATION_METADATA` + aliases) |
+| `crates/eggsec/src/config/policy_catalog.rs` | Engine-side facade re-exporting `eggsec_policy::catalog` |
