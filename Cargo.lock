@@ -2089,7 +2089,7 @@ dependencies = [
  "prost-build",
  "prost-types",
  "quick-xml 0.41.0",
- "rand 0.8.7",
+ "rand 0.10.2",
  "rcgen",
  "redis",
  "regex",
@@ -2296,7 +2296,7 @@ dependencies = [
  "native-tls",
  "openssl",
  "parking_lot",
- "rand 0.8.7",
+ "rand 0.8.8",
  "regex",
  "reqwest",
  "rustc-hash",
@@ -2550,7 +2550,7 @@ dependencies = [
  "parking_lot",
  "prost",
  "prost-types",
- "rand 0.8.7",
+ "rand 0.10.2",
  "rcgen",
  "reqwest",
  "rustc-hash",
@@ -4874,7 +4874,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.7",
+ "rand 0.8.8",
  "smallvec",
  "zeroize",
 ]
@@ -5363,7 +5363,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c80231409c20246a13fddb31776fb942c38553c51e871f8cbd687a4cfb5843d"
 dependencies = [
  "phf_shared 0.11.3",
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -5950,9 +5950,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -7199,7 +7199,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rand 0.8.7",
+ "rand 0.8.8",
  "rsa",
  "serde",
  "sha1 0.10.7",
@@ -7238,7 +7238,7 @@ dependencies = [
  "md-5 0.10.6",
  "memchr",
  "once_cell",
- "rand 0.8.7",
+ "rand 0.8.8",
  "serde",
  "serde_json",
  "sha2 0.10.9",
