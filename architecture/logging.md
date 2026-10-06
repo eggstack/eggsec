@@ -15,6 +15,8 @@ The process host chooses the logging destination by execution surface: rich TUI 
 
 Every number in this document was verified against source on 2026-08-25; console-policy behavior verified against source on 2026-09-20 (Phase A).
 
+> **Corrections (verified against source 2026-10-06):** both Cargo.toml line cites were stale and are now fixed — engine feature gate `crates/eggsec/Cargo.toml:340` → `:350`, and CLI subscriber/appender deps `Cargo.toml:67-68` → `crates/eggsec-cli/Cargo.toml:35-36`. Re-verified unchanged: `LogFormat` (3 variants) and `ConsoleLogging` (2 variants), `resolve_console_logging` (`logging/init.rs:38`), `console_layer_enabled` (`:51`), `init_logging` (`:55`), `init_logging_with_console` (`:62`), `sanitize_for_logging` (`utils/logging.rs:59`), and the `rich_tui_launch_requested` / `console_policy_for_launch` helpers in `crates/eggsec-cli/src/main.rs:70,82`.
+
 ## Files
 
 | File | Feature Gate | Purpose |
@@ -28,7 +30,7 @@ Every number in this document was verified against source on 2026-08-25; console
 
 ## Feature Gate: `logging-subscriber`
 
-Declared in `crates/eggsec/Cargo.toml:340`:
+Declared in `crates/eggsec/Cargo.toml:350`:
 ```toml
 logging-subscriber = ["dep:tracing-subscriber", "dep:tracing-appender"]
 ```
@@ -130,7 +132,7 @@ Strips ANSI CSI escape sequences (`\x1B[...`), control chars (preserving tabs), 
 | Engine modules (scanner, fuzzer, etc.) | Use `tracing::{info!, warn!, error!}` facade only — never configure subscribers |
 | `utils/logging.rs` | `sanitize_for_logging()` used before logging user-controlled strings |
 
-**Dependency boundary**: `tracing-subscriber` and `tracing-appender` are optional engine dependencies behind `logging-subscriber`. The CLI crate owns these dependencies unconditionally since it is the process host. See `Cargo.toml:67-68`:
+**Dependency boundary**: `tracing-subscriber` and `tracing-appender` are optional engine dependencies behind `logging-subscriber`. The CLI crate owns these dependencies unconditionally since it is the process host. See `crates/eggsec-cli/Cargo.toml:35-36`:
 ```toml
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 tracing-appender = { version = "0.2", optional = true }
@@ -173,4 +175,4 @@ The `WorkerGuard` **must** be held for the process lifetime when `log_dir` is `S
 - [config.md](config.md) — Configuration system may set log-related options
 - [tui.md](tui.md) — Single-terminal-writer ownership contract and in-frame error routing
 
-*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review); Cargo.toml line cite fixed (`:67-68`) 2026-09-25 (systematic review)*
+*Last verified against source: 2026-08-25; console-policy section verified 2026-09-20; lifecycle closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review); Cargo.toml line cite fixed (`:67-68`) 2026-09-25 (systematic review); both Cargo.toml cites re-fixed to current lines 2026-10-06 (systematic review)*

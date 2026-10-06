@@ -7,6 +7,8 @@ concrete client. Authorization enforcement is part of dispatch: every
 execution takes a `&dyn NetworkAuthority`, so a caller cannot obtain an
 unrestricted dispatch by forgetting a scope helper.
 
+> **Corrections (verified against source 2026-10-06):** the dependency envelope and the crate's zero-workspace-dep claim were re-confirmed (`bytes`/`http`/`url`/`thiserror` only; no `tracing` in `crates/eggsec-transport/Cargo.toml`), and the "17th workspace crate in member order" claim is still accurate. Test counts re-verified: 18 unit tests, 13 closure tests, 12 invariant tests, 5 engine interop tests — all unchanged. Fixed: `parity.rs` test count **39 → 52**; Eggfetch dependency version **0.1.5 → 0.2.0** (now declared as `eggfetch-core = { version = "0.2.0", … }`). Added a note that the parity suite now also lives in two additional files (`h2_mux.rs`, `socks5_local.rs`). The `eggsec-nse/src/...` paths cited in Phase D are in the **external** `eggsec-nse` repo (published crate 0.2.0), not a workspace member, so they are **not verifiable from this repository**.
+
 **Non-responsibilities:**
 - The contract does not migrate concrete backends (Phase D). Reqwest
   call sites keep working through documented compatibility wrappers.
@@ -189,8 +191,9 @@ authorized literal) and a manual redirect loop (auto-follow doubly
 disabled; each hop authorized before dispatch). HTTP/3 is off, proxied
 execution fails closed for unsupported shapes; direct + supported proxied load-test traffic is wired to it (corrective pass)
 (guards Checks 102 + 135). Parity evidence:
-`crates/eggsec-transport-eggfetch/tests/parity.rs` (39 tests over local
-fixtures) + `crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
+`crates/eggsec-transport-eggfetch/tests/parity.rs` (52 tests over local
+fixtures, plus `h2_mux.rs` 5 and `socks5_local.rs` 4) +
+`crates/eggsec/tests/transport_eggfetch_parity.rs` (5 engine
 interop tests through `ScopeAuthority`).
 
 The production backend is stricter than the contract minimum: one
@@ -222,7 +225,9 @@ concrete-client leakage is possible:
   Remaining `pub` concrete surfaces (`fuzzer::advanced::fuzz`,
   `utils::client_pool::ClientPool`, crate-internal `send_with_retry`) are
   documented pending full backend migration; no new boundary allowed.
-- **NSE capability (WS3):** `eggsec-nse/src/http_capability.rs` is the narrow
+- **NSE capability (WS3):** `eggsec-nse/src/http_capability.rs` in the *external*
+  `eggsec-nse` crate (published 0.2.0, not a workspace member — cite not
+  verifiable from this repo) is the narrow
   script capability (pure 8-method DTO builder + profile-gated TLS, no I/O,
   no concrete clients). Lua dispatch still runs on `blocking` reqwest behind
   `check_network_tcp` preflight (async-Lua story + `ScopeAuthority` binding
@@ -256,4 +261,4 @@ concrete-client leakage is possible:
 
 See also: [network_dependency_baseline.md](network_dependency_baseline.md) (Phase A measurement + Phase D increment-1 addendum §7), [auth_context.md](auth_context.md) (canonical vs removed compat), [overview.md](overview.md), [config.md](config.md)
 
-*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green); cites re-verified 2026-09-22 (systematic review); test counts (18 unit + 13 closure) and dependency envelope re-verified 2026-09-25*
+*Last verified against source: 2026-09-17 (corrective pass: proxy-peer checkpoints, Eggfetch 0.1.5 direct + qualified proxy, MSRV 1.89; contract 12 + invariants 12 green); cites re-verified 2026-09-22 (systematic review); test counts (18 unit + 13 closure) and dependency envelope re-verified 2026-09-25; parity count 39→52 and Eggfetch 0.1.5→0.2.0 corrected 2026-10-06 (systematic review)*

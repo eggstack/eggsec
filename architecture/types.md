@@ -6,6 +6,8 @@ Shared types for the Eggsec workspace, split across two layers. The dependency-l
 
 Related: [constants.md](constants.md), [error.md](error.md), [overview.md](overview.md).
 
+> **Corrections (verified against source 2026-10-06):** integration-usage file counts refreshed (`eggsec-db-lab` 8→13, engine `scanner/` 5→7, engine `recon/` SensitiveString 7→4, engine `fuzzer/` 7→4, engine `compliance/` 4→6, `eggsec-tui` 10+→10); `eggsec-nse` row removed (it is an external published crate, not a workspace member — unverifiable from this repo); `cli/mod.rs` re-export cite `:578`→`:584`; `check_config_file_permissions` loader cite corrected to 3 call sites. All other counts, method lines, and 30 test-line cites verified unchanged.
+
 ---
 
 ## Location & Feature Gating
@@ -185,7 +187,7 @@ Utility function that warns if a config file has overly permissive permissions.
 
 Uses `std::os::unix::fs::PermissionsExt` to read mode. Recommended mode: `0o600`.
 
-**Used by**: `crates/eggsec/src/config/loader.rs:10` (imported; called at `:54` and `:93`) — called during config file loading.
+**Used by**: `crates/eggsec/src/config/loader.rs:10` (imported; called at `:54`, `:109`, and `:169`) — called during config file loading.
 
 ---
 
@@ -197,21 +199,20 @@ Uses `std::os::unix::fs::PermissionsExt` to read mode. Recommended mode: `0o600`
 |----------|-------------|---------|
 | `eggsec-output` (7 files) | `eggsec_core::types::Severity` | Finding envelope, SARIF/JUnit/CSV conversion, dedup, trends |
 | `eggsec-tool-core` | `eggsec_core::types::Severity` | `From<Severity> for ResponseSeverity` conversion (`finding.rs:167`) |
-| `eggsec-db-lab` (8 files) | `eggsec_core::types::Severity` | Finding severity in DB assessment results |
-| `eggsec-web-proxy` | `eggsec_core::types::SensitiveString` | Proxy auth credentials |
+| `eggsec-db-lab` (13 files) | `eggsec_core::types::Severity` | Finding severity in DB assessment results |
+| `eggsec-web-proxy` (3 files) | `eggsec_core::types::SensitiveString` | Proxy auth credentials |
 | `eggsec-mobile-lab` (6 files) | `eggsec_core::types::Severity` | APK/IPA finding severity |
-| `eggsec-nse` (3 files) | `eggsec_core::types::Severity` | NSE bridge finding severity |
 | `eggsec-python` | `eggsec_core::types::Severity` | Python-side `Severity` ↔ engine `Severity` mapping (`finding.rs:56`) |
-| Engine `fuzzer/` (7 files) | `crate::types::Severity` | Finding severity across fuzz engines |
-| Engine `scanner/` (5 files) | `crate::types::Severity` | Port/service finding severity |
+| Engine `fuzzer/` (4 files) | `crate::types::Severity` | Finding severity across fuzz engines |
+| Engine `scanner/` (7 files) | `crate::types::Severity` | Port/service finding severity |
 | Engine `waf/` | `crate::types::Severity` | Re-exported at `waf/types.rs:4` |
-| Engine `recon/` (7 files) | `crate::types::SensitiveString` | API keys for recon services |
+| Engine `recon/` (4 files) | `crate::types::SensitiveString` | API keys for recon services |
 | Engine `hunt/` (5 files) | `crate::types::Severity` | Authorization/business/race finding severity |
-| Engine `compliance/` (4 files) | `crate::types::Severity` | Compliance finding severity |
+| Engine `compliance/` (6 files) | `crate::types::Severity` | Compliance finding severity |
 | Engine `config/` | `crate::types::SensitiveString` | Config secrets (settings, HTTP, scan) |
 | Engine `pipeline/` | `crate::types::{CommonHttpArgs, ScanProfile}` | Pipeline stage configuration |
-| Engine `cli/mod.rs` | Re-exported at `:578` | `pub use crate::types::{CommonHttpArgs, OutputFormat, ScanProfile}` |
-| `eggsec-tui` (10+ files) | `eggsec::types::*` | Scan profile selection, output format, proxy credentials |
+| Engine `cli/mod.rs` | Re-exported at `:584` | `pub use crate::types::{CommonHttpArgs, OutputFormat, ScanProfile}` |
+| `eggsec-tui` (10 files) | `eggsec::types::*` | Scan profile selection, output format, proxy credentials |
 
 ### SensitiveString — workspace usage
 
@@ -286,4 +287,4 @@ Tests live in both `crates/eggsec-core/src/types.rs:282-477` and `crates/eggsec/
 
 ---
 
-*Last verified against source: 2026-08-25; cites re-verified and 2 line cites fixed (`cli/mod.rs:578`, `config/loader.rs:10`) 2026-09-25 (systematic review)*
+*Last verified against source: 2026-08-25; cites re-verified and 2 line cites fixed (`cli/mod.rs:578`, `config/loader.rs:10`) 2026-09-25 (systematic review); integration file counts + 2 cites re-verified 2026-10-06 (systematic review)*

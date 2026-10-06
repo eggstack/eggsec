@@ -22,7 +22,7 @@ Key capabilities:
 
 ## Location & Feature Gating
 
-- Source: `crates/eggsec/src/fuzzer/` — 73 `.rs` files across 5 subdirectories + root (`api_schema/`, `detection/`, `engine/`, `payloads/`, `targets/`)
+- Source: `crates/eggsec/src/fuzzer/` — **38** `.rs` files across 5 subdirectories + root (`api_schema/`, `detection/`, `engine/`, `payloads/`, `targets/`). The count fell from 73 when the payload corpus was extracted to `eggsec-payloads` in Phase G
 - Feature gate: **none** (always compiled)
 - Bidirectional type sharing with `waf`: fuzzer uses `waf::types::{OwaspCategory, Severity}` (`fuzzer/engine/types.rs:5`); WAF uses `fuzzer::config::WafConfig` (`waf/mod.rs:86`)
 
@@ -30,7 +30,7 @@ Key capabilities:
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `payloads/` | 6 | **Probers only** (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`): each holds a `reqwest::Client` and drives live requests, so these cannot move. All 40 payload modules, the `PayloadType` enum, the dispatch and the cross-variant caches moved to the `eggsec-payloads` crate in Phase G; each prober module re-exports its corpus builder of the same name. |
+| `payloads/` | 7 | **Probers only** (`mod` + `graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`): all six make live requests, so these cannot move. All 40 payload modules, the `PayloadType` enum, the dispatch and the cross-variant caches moved to the `eggsec-payloads` crate in Phase G; each prober module re-exports its corpus builder of the same name. Note only four (`idor`, `jwt`, `oauth`, `ssti`) store a `reqwest::Client` as a struct field — `graphql.rs` and `grpc.rs` take `&reqwest::Client` as a method parameter and hold none. |
 | `engine/` | 7 | Core `FuzzEngine`, execution modes, session building, advanced dispatch |
 | `detection/` | 4 | Aho-Corasick leak matcher, IQR timing analyzer, raw patterns |
 | `targets/` | 6 | Per-target profiles: api, apache, php, nginx, generic |

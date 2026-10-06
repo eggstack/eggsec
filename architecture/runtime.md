@@ -1,5 +1,14 @@
 # eggsec-runtime Architecture
 
+> **Corrections (2026-10-06)** — verified against source: `TaskKind` is **30**
+> variants, not 29; the previously undocumented 30th variant is **`Resume`**
+> (`ResumeParams`, capability `resume`, shares the `pipeline` operation family).
+> `RuntimeEvent` decl is `event.rs:114` (was `:115`); `RunRequest` is
+> `request.rs:99` (was `:98`); `request.rs` has 5 tests (was 2);
+> `full_lab()` registers 29 capabilities and omits `resume`;
+> `daemon_conservative()` also excludes `resume`. Removed a duplicated
+> `TaskCancelled` in the critical-event list. All citations re-checked.
+
 Frontend-neutral async runtime for task lifecycle management. Provides the bridge between user-facing frontends (TUI, CLI, REST, MCP) and the eggsec engine. Intentionally dependency-light to remain a shared contract without pulling in TUI, transport, or engine dependencies.
 
 ## Role & Responsibilities
@@ -23,7 +32,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `runtime_config` | `src/runtime_config.rs` | `RuntimeConfig`, `SessionOptions` (submission/lifecycle tuning) |
 | `runtime_sink` | `src/runtime_sink.rs` | `RuntimeEventReceiver`, `RuntimeEventSink`, broadcast helpers (events/backpressure) |
 | `session` | `src/session.rs` | `RuntimeSession`, `RuntimeExecutionContext`, `SessionScope`, `SessionSnapshot`, `TaskSnapshot`, `SessionSummary` |
-| `request` | `src/request.rs` | `TaskKind` (29 variants), `RuntimeSurface` (10 variants), `RunRequest`, payload structs |
+| `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (10 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
 | `capabilities` | `src/capabilities.rs` | `RuntimeCapabilities`, `TaskCapability` |
 | `ids` | `src/ids.rs` | `SessionId`, `TaskId`, `ClientId` — UUID newtypes with serde/display |
@@ -46,7 +55,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `TaskSnapshot` | `session.rs:332` | Per-task snapshot within a session |
 | `SessionSummary` | `session.rs:374` | Lightweight summary for listing |
 | `SessionScope` | `session.rs:58` | Scope metadata: `is_explicit`, `source`, `path` |
-| `RunRequest` | `request.rs:98` | Task submission: `task_kind`, `requested_by`, `surface`, `labels` |
+| `RunRequest` | `request.rs:99` | Task submission: `task_kind`, `requested_by`, `surface`, `labels` |
 
 ### RuntimeSurface — 10 variants (`request.rs:21`)
 
@@ -63,7 +72,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 9 | `SecurityAgent` | `security-agent` | Yes |
 | 10 | `Unknown` | `unknown` (default) | — |
 
-### TaskKind — 29 variants (`request.rs:64`)
+### TaskKind — 30 variants (`request.rs:64`)
 
 | # | Variant | Capability Name | Params Struct |
 |---|---------|----------------|---------------|
@@ -76,28 +85,35 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 7 | `Waf` | `waf` | `WafParams` |
 | 8 | `WafStress` | `waf-stress` | `WafStressParams` |
 | 9 | `Pipeline` | `pipeline` | `PipelineParams` |
-| 10 | `Recon` | `recon` | `ReconParams` |
-| 11 | `PacketCapture` | `packet-capture` | `PacketCaptureParams` |
-| 12 | `PacketTraceroute` | `traceroute` | `PacketTracerouteParams` |
-| 13 | `PacketSend` | `packet-send` | `PacketSendParams` |
-| 14 | `GraphQl` | `graphql` | `GraphQlParams` |
-| 15 | `OAuth` | `oauth` | `OAuthParams` |
-| 16 | `AuthTest` | `auth-test` | `AuthTestParams` |
-| 17 | `Nse` | `nse` | `NseParams` |
-| 18 | `Hunt` | `hunt` | `HuntParams` |
-| 19 | `Browser` | `browser` | `BrowserParams` |
-| 20 | `Compliance` | `compliance` | `ComplianceParams` |
-| 21 | `Storage` | `storage` | `StorageParams` |
-| 22 | `Integrations` | `integration` | `IntegrationsParams` |
-| 23 | `Workflow` | `workflow` | `WorkflowParams` |
-| 24 | `Vuln` | `vuln` | `VulnParams` |
-| 25 | `Wireless` | `wireless` | `WirelessParams` |
-| 26 | `WirelessActive` | `wireless-active` | `WirelessActiveParams` |
-| 27 | `DbPentest` | `db-pentest` | `DbPentestParams` |
-| 28 | `Intercept` | `intercept` | `InterceptParams` |
-| 29 | `C2` | `c2` | `C2Params` |
+| 10 | `Resume` | `resume` | `ResumeParams` |
+| 11 | `Recon` | `recon` | `ReconParams` |
+| 12 | `PacketCapture` | `packet-capture` | `PacketCaptureParams` |
+| 13 | `PacketTraceroute` | `traceroute` | `PacketTracerouteParams` |
+| 14 | `PacketSend` | `packet-send` | `PacketSendParams` |
+| 15 | `GraphQl` | `graphql` | `GraphQlParams` |
+| 16 | `OAuth` | `oauth` | `OAuthParams` |
+| 17 | `AuthTest` | `auth-test` | `AuthTestParams` |
+| 18 | `Nse` | `nse` | `NseParams` |
+| 19 | `Hunt` | `hunt` | `HuntParams` |
+| 20 | `Browser` | `browser` | `BrowserParams` |
+| 21 | `Compliance` | `compliance` | `ComplianceParams` |
+| 22 | `Storage` | `storage` | `StorageParams` |
+| 23 | `Integrations` | `integration` | `IntegrationsParams` |
+| 24 | `Workflow` | `workflow` | `WorkflowParams` |
+| 25 | `Vuln` | `vuln` | `VulnParams` |
+| 26 | `Wireless` | `wireless` | `WirelessParams` |
+| 27 | `WirelessActive` | `wireless-active` | `WirelessActiveParams` |
+| 28 | `DbPentest` | `db-pentest` | `DbPentestParams` |
+| 29 | `Intercept` | `intercept` | `InterceptParams` |
+| 30 | `C2` | `c2` | `C2Params` |
 
-### RuntimeEvent — 12 variants (`event.rs:115`)
+`Resume` carries its own capability name (`resume`) so a runtime can advertise
+pipeline support without advertising resume support; its canonical operation ID
+is `pipeline` (it executes the pipeline stage set from a saved checkpoint) and
+its canonical target is `None` — the target lives inside the checkpoint
+(`request.rs:538`, `:598`, `:644`).
+
+### RuntimeEvent — 12 variants (`event.rs:114`)
 
 | # | Variant | Fields |
 |---|---------|--------|
@@ -181,7 +197,7 @@ hydrate_session(snapshot) [daemon recovery]
 Events broadcast via `tokio::sync::broadcast` channel (default capacity: 256).
 
 - `emit_event()`: logs at `trace` level when no subscribers or on send failure
-- `emit_event_critical()`: logs at `warn` level when no subscribers or on send failure (for policy-relevant events: TaskFailed, TaskCancelled, TaskCancelled, SessionClosed)
+- `emit_event_critical()`: logs at `warn` level when no subscribers or on send failure (for policy-relevant events: TaskFailed, TaskCancelled, SessionClosed)
 - `RuntimeEventReceiver::recv()`: handles `RecvError::Lagged(n)` by logging warning and continuing (recoverable lag, not closure)
 - `RuntimeEventReceiver::try_recv()`: non-blocking variant with same lag handling
 
@@ -189,8 +205,8 @@ Events broadcast via `tokio::sync::broadcast` channel (default capacity: 256).
 
 | Mode | Constructor | Task Kinds |
 |------|-------------|-----------|
-| Conservative | `daemon_conservative()` (default) | 20 kinds — excludes stress-test, packet-send, packet-capture, traceroute, wireless, wireless-active, db-pentest, intercept, c2 |
-| Full lab | `full_lab()` | All 29 kinds |
+| Conservative | `daemon_conservative()` (default) | 20 kinds — excludes stress-test, packet-send, packet-capture, traceroute, wireless, wireless-active, db-pentest, intercept, c2, **resume** |
+| Full lab | `full_lab()` | 29 registered capabilities — every wire kind except `resume` |
 | No-op | `noop()` | Empty (no task kinds) |
 
 ### RuntimeTaskExecutor Trait (`runtime.rs:40`)
@@ -215,6 +231,8 @@ The engine crate provides `EggsecRuntimeExecutor` which:
 Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 
 ## Public API
+
+All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
 
 | Method | Signature | Purpose |
 |--------|-----------|---------|
@@ -244,7 +262,7 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 
 - `runtime.rs`: 36 tests covering session creation, submit, cancel, timeout, stale completion guard, event emission, multiple sessions, cancel_active, session timeout override
 - `session.rs`: 13 tests for snapshot roundtrip, hydration, scope, capabilities, close
-- `request.rs`: 2 roundtrip and label tests
+- `request.rs`: 5 roundtrip, surface-label, and wireless-active dry-run/legacy-payload tests
 - `event.rs`: 4 roundtrip and terminal-state tests
 - `capabilities.rs`: 10 conservative/full/noop mode tests, `supports_task_kind` positive/negative
 
@@ -272,4 +290,4 @@ Without `full-executor`: `NoopExecutorStub` rejects all tasks.
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25*
+*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25; full re-verification 2026-10-06 (TaskKind 30 variants incl. `Resume`)*

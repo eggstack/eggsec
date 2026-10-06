@@ -6,6 +6,8 @@ Unified error types for the entire Eggsec codebase. `EggsecError` is the primary
 
 Related: [types.md](types.md), [constants.md](constants.md), [overview.md](overview.md).
 
+> **Corrections (verified against source 2026-10-06):** `EggsecError` variant table (23), all 22 `From` conversions (1 `#[from]` + 21 manual), and all 12 related error-type locations + variant counts re-verified **unchanged**. Fixed: non-feature-gated `From` impl line *range* `:85-277` → `:85-361` (the `ParseIntError`/`AcquireError`/`quick_xml`/`maxminddb`/`InvalidHeaderValue` impls live at `:333-361`, outside the old range); sanitization test range `:82-112` → `:83-113`; `test_error_is_timeout` cite `:374` → `:375`.
+
 ---
 
 ## Location & Feature Gating
@@ -15,7 +17,7 @@ Related: [types.md](types.md), [constants.md](constants.md), [overview.md](overv
 | `EggsecError` enum | `crates/eggsec/src/error/mod.rs:44` | 23 variants |
 | `Result<T>` alias | `crates/eggsec/src/error/mod.rs:173` | `std::result::Result<T, EggsecError>` |
 | Helper methods | `crates/eggsec/src/error/mod.rs:121-170` | `is_timeout()`, `is_network()`, `http_status()`, `with_timeout()` |
-| Non-feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:85-277` | 18 impls (1 `#[from]` + 17 manual) |
+| Non-feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:85-361` | 18 impls (1 `#[from]` + 17 manual) |
 | Feature-gated `From` impls | `crates/eggsec/src/error/mod.rs:279-368` | 4 impls: `ai-integration`, `packet-inspection`, `packet-inspection` OR `stress-testing`, `web-proxy` |
 | Sanitization utilities | `crates/eggsec/src/utils/error.rs` | 3 public functions |
 
@@ -191,7 +193,7 @@ Tests in `crates/eggsec/src/error/mod.rs:370-417`:
 
 | Test | Source | What it verifies |
 |------|--------|-----------------|
-| `test_error_is_timeout` | `:374` | `is_timeout()` true for `Timeout`, false for others |
+| `test_error_is_timeout` | `:375` | `is_timeout()` true for `Timeout`, false for others |
 | `test_error_is_network` | `:384` | `is_network()` true for `Network`, false for others |
 | `test_error_http_status` | `:392` | `http_status()` returns `Some(404)` for `HttpStatus`, `None` otherwise |
 | `test_error_display` | `:404` | `Display` format: `"Invalid target: empty host"` |
@@ -199,7 +201,7 @@ Tests in `crates/eggsec/src/error/mod.rs:370-417`:
 
 Additional test in `crates/eggsec/tests/feature_tests.rs:10`: constructs `EggsecError::Config` to verify the type is accessible.
 
-Sanitization tests in `crates/eggsec/src/utils/error.rs:82-112`:
+Sanitization tests in `crates/eggsec/src/utils/error.rs:83-113`:
 
 | Test | What it verifies |
 |------|-----------------|
@@ -230,4 +232,4 @@ Sanitization tests in `crates/eggsec/src/utils/error.rs:82-112`:
 
 ---
 
-*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); From-count table and 8 related-type line cites fixed 2026-09-25 (systematic review)*
+*Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); From-count table and 8 related-type line cites fixed 2026-09-25 (systematic review); all 23 variant rows + 22 From rows + related-type counts re-verified, 3 cites fixed 2026-10-06 (systematic review)*

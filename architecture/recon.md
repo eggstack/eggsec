@@ -9,7 +9,7 @@ The reconnaissance module performs **passive and active information gathering** 
 ## Location & Feature Gating
 
 - **Path**: `crates/eggsec/src/recon/` (35 `.rs` files: 30 top-level + 5 in `cloud/`)
-- **Declared modules** (`mod.rs:78-102`): 21 unconditional `pub mod` + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = 23 total
+- **Declared modules** (`mod.rs:78-109`): **20 unconditional `pub mod`** + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = **22 total**
 - **Feature-gated modules**: `cloud` (feature `cloud`), `git_secrets` (feature `git-secrets`)
 - **Detached utilities** (7 files exist on disk but are NOT declared as `pub mod` — `mod.rs:520-528`): `asn`, `cve_lookup`, `dns_enhanced`, `ftp_auth`, `smtp_auth`, `ssh_auth`, `ssl_audit`
 
@@ -23,7 +23,7 @@ The reconnaissance module performs **passive and active information gathering** 
 | `subdomain.rs` | 461 | Subdomain enumeration via crt.sh certificate transparency, Threatminer API, DNS brute-force | Yes | Uses `hickory_resolver` with configurable concurrency |
 | `ssl.rs` | 339 | SSL/TLS certificate analysis: chain inspection, protocol versions, cipher suites, expiry checks | Yes | Extracts `CertificateDer` from reqwest extensions |
 | `cve.rs` | 498 | CVE mapping: built-in database (7 product families) + NVD API v2.0 fallback | Yes | Global `OnceLock` cache (`CVE_CACHE`); optional NVD API key |
-| ~~`secrets.rs`~~ | — | **Moved to the `eggsec-secrets` crate in Phase G** (492 lines: 25 patterns, 30 `SecretType` variants, entropy gate). Re-exported at `eggsec::recon::secrets`; see the section below. |
+| ~~`secrets.rs`~~ | — | **Moved to the `eggsec-secrets` crate in Phase G** (520 lines: 25 patterns covering 20 of 30 `SecretType` variants, entropy gate frozen at 3.5 and scoped to `AwsSecretKey`). Re-exported at `eggsec::recon::secrets`; see the section below. |
 | `content.rs` | 423 | Content/directory discovery: scans ~80 sensitive paths concurrently | Yes | Semaphore-bounded concurrency |
 | `cors.rs` | 281 | CORS misconfiguration testing: sends 9 test origins, checks `Access-Control-*` headers | Yes | Tests `null`, `*`, localhost, evil origins |
 | `dns_records.rs` | 185 | DNS record enumeration: A, AAAA, MX, TXT, NS, SOA, CAA via `hickory_resolver` | Yes | No external API dependency |

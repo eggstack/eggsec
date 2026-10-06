@@ -24,7 +24,7 @@ shapes, no H3/retries/env-proxies/decompression.
 
 ## Role & Responsibilities
 
-[`EggfetchTransport`](../../../crates/eggsec-transport-eggfetch/src/adapter.rs)
+[`EggfetchTransport`](../crates/eggsec-transport-eggfetch/src/adapter.rs)
 implements [`HttpTransport`](transport.md) over the **published**
 `eggfetch-core 0.2.0` client using only stable public APIs.
 

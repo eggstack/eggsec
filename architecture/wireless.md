@@ -7,7 +7,7 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 - **Passive scanning** (`wireless` feature): Linux `iwlist`-based scanning, security type parsing (7 types), WPS/hidden/transition detection, rogue-AP/evil-twin heuristics, known-good suppression, temporal scan diffing, and structured output.
 - **Active attacks** (`wireless-advanced` feature): 802.11 deauthentication and disassociation frame crafting and injection via raw sockets. Broadcast and targeted modes. Dry-run safe.
 
-**Safety posture**: Passive scanning is the base surface. Active attacks are opt-in (`wireless-advanced`), require root or `CAP_NET_ADMIN`, monitor-mode interface, and explicit `--allow-active-wireless` flag (or policy confirmation for non-dry-run). MCP/agent tool exposure is intentionally absent — wireless is a standalone defense-lab surface only.
+**Safety posture**: Passive scanning is the base surface. Active attacks are opt-in (`wireless-advanced`), require root or `CAP_NET_ADMIN`, monitor-mode interface, and explicit `--allow-active-wireless` flag (or policy confirmation for non-dry-run). Passive `wireless` **is** exposed to every automated surface — `mcp_exposable`, `rest_exposable`, `grpc_exposable` and `agent_exposable` are all `true` in `eggsec-policy/src/catalog.rs`. It is the *active* `wireless-deauth` operation that is deliberately withheld (`mcp/rest/grpc/agent_exposable: false`), so the defense-lab-only posture applies to frame injection, not to passive scanning.
 
 ## Location & Feature Gating
 
@@ -53,7 +53,7 @@ Standalone-complete passive WiFi network reconnaissance and active defense-valid
 ### Passive Scan Lifecycle
 
 1. **Invoke**: `eggsec wireless <iface>` → `handle_wireless()` → `handle_scan()`
-2. **Policy gate**: `EnforcementContext::evaluate()` with `OperationRisk::SafeActive`, `required_features: ["wireless"]`; no `requires_explicit_scope` (target is local interface name)
+2. **Policy gate**: `EnforcementContext::evaluate()` with `OperationRisk::SafeActive`, `required_capabilities: [Capability::PassiveFingerprint]`, `required_features: ["wireless"]`, and `target_policy: TargetPolicyKind::ExplicitScopeRequired` — the interface name is still a scope target, so this operation *does* require an explicit scope
 3. **Scan**: `WirelessScanner::scan()` spawns `iwlist <iface> scan` via `tokio::process::Command` (`mod.rs:89`)
 4. **Parse**: `parse_scan_output()` (`mod.rs:154`) iterates iwlist line-by-line. State resets per `Cell` line. Handles:
    - `Address:` → BSSID
@@ -236,7 +236,7 @@ suppression, frame bytes + repetition loops. No interface or privilege.
 
 ## Invariants & Gotchas
 
-1. **Standalone defense-lab**: Wireless is intentionally not a `SecurityTool` — no MCP/agent registration, no `ScanProfile` pipeline participation.
+1. **Split exposure**: Passive `wireless` is a fully registered operation (manual + TUI + MCP + REST + gRPC + agent) with no `ScanProfile` pipeline participation. Active `wireless-deauth` is restricted to manual/TUI surfaces only.
 2. **Known-good suppression is UX-only**: The report bridge always analyzes with `None` for `known_good` — suppression only affects human output and repeat-scan summaries.
 3. **Hidden SSID normalization**: Empty ESSID, `"<hidden>"`, and `'""'` all normalize to `"<hidden>"` with `is_hidden=true`.
 4. **Transition mode dual detection**: Set if iwlist line contains `"WPA2/WPA3"` or `"transition"`, OR if both `saw_wpa2` and `saw_wpa3` are true within a single Cell block.

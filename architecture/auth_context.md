@@ -4,6 +4,8 @@
 
 `auth_context/mod.rs` provides YAML-based authentication context parsing for multi-user/multi-role security testing. It loads credential sets (HTTP headers and cookies) from YAML files, interpolates environment variables, and applies them to HTTP requests.
 
+> **Corrections (verified against source 2026-10-06):** fixed stale cites — `AuthContextEntry` struct `:20` → `:21` (its `#[serde(deny_unknown_fields)]` is at `:20`); `deny_unknown_fields` pair `:13,19` → `:13,20`; `load_auth_context_file` error wrapping `:84-88` → `:119-124`; `get_context_entry` error `:92-98` → `:127-135`; fuzzer consumer cite `utils.rs:30,120,165,261` → `:30,121,166,261`. Re-verified unchanged: `SUPPORTED_VERSION` `:9`, `ENV_VAR_RE` `:29`, regex `:30`, `interpolate_env_vars` `:33`, interpolation loop `:58-65`, and the 12-test count.
+
 **Non-responsibilities:**
 - Auth context does not perform authorization or scope checking — it only injects credentials.
 - Auth context does not manage session lifecycle (token refresh, expiry) — it is a static credential injection mechanism.
@@ -14,8 +16,8 @@
 
 | Item | Path | Feature Gate |
 |------|------|:------------:|
-| Auth context module | `crates/eggsec/src/auth_context/mod.rs` | None (always compiled) |
-| Fuzzer consumer (apply) | `crates/eggsec/src/fuzzer/engine/utils.rs:30,120,165,261` | None |
+| Auth context module | `crates/eggsec/src/auth_context/mod.rs` (332 lines) | None (always compiled) |
+| Fuzzer consumer (apply) | `crates/eggsec/src/fuzzer/engine/utils.rs:30,121,166,261` | None |
 | Fuzzer consumer (load) | `crates/eggsec/src/fuzzer/engine/core.rs:181` | None |
 
 ## Architecture
@@ -25,9 +27,9 @@
 | Type | Line | Derives | Purpose |
 |------|------|---------|---------|
 | `AuthContext` | `:14` | `Debug, Clone, Serialize, Deserialize` | Top-level parsed YAML structure |
-| `AuthContextEntry` | `:20` | `Debug, Clone, Serialize, Deserialize` | Individual role's credentials |
+| `AuthContextEntry` | `:21` | `Debug, Clone, Serialize, Deserialize` | Individual role's credentials |
 
-Both structs use `#[serde(deny_unknown_fields)]` (`:13,19`) — extra YAML keys cause a parse error.
+Both structs use `#[serde(deny_unknown_fields)]` (`:13,20`) — extra YAML keys cause a parse error.
 
 #### `AuthContext` (`:14`)
 
@@ -118,8 +120,8 @@ apply_auth_context_to_map(headers, existing_cookie?, entry)
 ### Error Handling
 
 - `parse_auth_context()`: Returns `anyhow::Result`. YAML parse errors and version mismatches produce descriptive errors.
-- `load_auth_context_file()`: Wraps file I/O and parse errors with context (`:84-88`).
-- `get_context_entry()`: Returns error with available role names if role not found (`:92-98`).
+- `load_auth_context_file()`: Wraps file I/O and parse errors with context (`:119-124`).
+- `get_context_entry()`: Returns error with available role names if role not found (`:127-135`).
 
 ## Integration Points
 
@@ -159,4 +161,4 @@ All tests are in `auth_context/mod.rs`. Test count: 12 tests total
 
 See also: [transport.md](transport.md), [network_dependency_baseline.md](network_dependency_baseline.md)
 
-*Last verified against source: 2026-09-12; fuzzer consumer cites re-verified 2026-09-25*
+*Last verified against source: 2026-09-12; fuzzer consumer cites re-verified 2026-09-25; 6 stale cites fixed 2026-10-06 (systematic review)*

@@ -5,6 +5,21 @@ Deep-dive into the configuration, scope enforcement, and policy evaluation syste
 > Parent: [overview.md](overview.md)
 > Related: [runtime_bridge.md](runtime_bridge.md), [dispatch.md](dispatch.md), [audit.md](audit.md)
 
+> **Corrections (2026-10-06, verified against source).** Refreshed the file-layout
+> line counts (`mod.rs` 145→241, `loader.rs` 479→552, `feature_registry.rs` 690→699),
+> `ALL_FEATURES` 49→50 entries, `ALL_OPERATION_METADATA_ALIASES` cite 875→903,
+> `metadata_for_tool_id` cite 926→954, and `PolicyDecision` 17→20 fields. Re-pointed
+> the `PolicyDecision`/`EnforcementContext`/`ApprovedOperation`/`ManualOverride`/
+> `PreflightResult`/`Scope`/`ScopeRule`/`LoadedScope`/`TargetScope` cites to their
+> canonical `eggsec-policy` locations (the old `policy_decision.rs:N` / `scope.rs:N`
+> line numbers predate the Phase C extraction; `config/policy_*.rs` are now thin
+> re-export facades). Re-pointed resolver/address cites to
+> `eggsec-policy/src/address.rs` + `policy_bridge/resolver.rs`. Updated the
+> surface→profile mapping lines, test counts (`catalog::operation_metadata_tests`
+> 16→21, `loader` 22→23, `enforcement_matrix` 105+→172), and added the missing
+> `Scope::scope_file` field. All enforcement invariants below were re-checked
+> against `eggsec-policy` and are unchanged.
+
 ## Phase C ownership (2026-09-16): `eggsec-policy` + engine bridge
 
 The authorization semantic kernel lives in the `eggsec-policy` crate
@@ -64,7 +79,7 @@ All source files live under `crates/eggsec/src/config/`:
 
 | File | Lines | Feature Gate | Purpose |
 |------|-------|:---:|---------|
-| `mod.rs` | 145 | — | Re-exports, `ENV_PREFIX`, default config template |
+| `mod.rs` | 241 | — | Re-exports, `ENV_PREFIX`, default config template |
 | `policy.rs` | facade | — | Re-exports `eggsec-policy` vocabulary: `OperationRisk`, `ExecutionPolicy`, `OperationMode`, `IntendedUse`, `ExecutionSurface`, `ExecutionProfile`, `Capability`, `DenialClass`, `OperationDescriptor` (plus target/catalog re-exports) |
 | `policy_target.rs` | facade | — | Re-exports `TargetHint`, `OperationTarget`, `normalize_target()`, `TargetPolicyKind`, `DescriptorError` |
 | `policy_catalog.rs` | facade | — | Re-exports `OperationMetadata`, `ALL_OPERATION_METADATA`, `ALL_OPERATION_METADATA_ALIASES`, lookup helpers; plus engine-only `derive_operation_integration` extension |
@@ -76,13 +91,13 @@ All source files live under `crates/eggsec/src/config/`:
 | `scope_transport.rs` | facade | — | Re-exports bridge `ScopeAuthority` |
 | `scope_spec.rs` | 750 | — | `scope_from_spec()`, `ScopeSpecError`, `is_target_allowed_by_scope_and_spec[_with_resolver]()`, `is_parsed_target_allowed_by_scope_and_spec()` — conservative `ScopeSpec`→`Scope` conversion plus intersection evaluation |
 | `settings.rs` | 744 | — | `EggsecConfig`, `ScanConfig`, `HttpConfig`, `OutputConfig`, `NotificationConfig`, `AiConfig`, `ReconConfig`, `RemoteConfig`, `SearchConfig`, `AlertChannelsConfig`, `ProxyConfigEntry`, `ConfigError`, validation impls |
-| `loader.rs` | 479 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
+| `loader.rs` | 552 | — | `load_config()`, `load_scope()`, `load_scope_with_source()`, `find_config_file()`, `find_scope_file()`, config search order |
 | `scan.rs` | 258 | — | `ScanConfig`, `ScanProfile`, `FuzzProfile`, `OutputConfig`, `NotificationConfig`, `WebhookConfig`, `WebhookEvent` |
 | `http.rs` | 75 | — | `HttpConfig`, `Verbosity` (4 variants) |
 | `api.rs` | 76 | — | `ApiConfig`, `ApiKeyConfig`, `IpApiConfig`, `MaxMindConfig`, `NvdConfig`, `WaybackConfig` |
 | `budget.rs` | 217 | — | `ExecutionBudget`, `BudgetError` (3 variants) |
 | `discovery.rs` | 70 | — | `DiscoveredTargetStatus` (4 variants) |
-| `feature_registry.rs` | 690 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (49 entries, one per Cargo feature except `default`), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
+| `feature_registry.rs` | 699 | — | `FeatureEntry`, `FeatureState`, `FeatureCategory`, `ALL_FEATURES` (50 entries, one per Cargo feature except `default`; the engine declares 51 Cargo features), `feature_state()`, `is_feature_enabled()`, `is_known_feature()`, `feature_missing_hint()` |
 | `presets.rs` | 233 | — | `DefenseLabPreset` (7 built-in presets) |
 
 **Feature gating:** The config module itself requires no feature gates. Individual `OperationMetadata` entries declare `required_features` that are checked at evaluation time via `feature_registry::is_feature_enabled()`.
@@ -100,33 +115,33 @@ All source files live under `crates/eggsec/src/config/`:
 | `Capability` | `policy.rs` | 19 | Operation capability declarations |
 | `IntendedUse` | `policy.rs` | 8 | Operation use-case classification |
 | `DenialClass` | `policy.rs` | 8 | Typed denial classification |
-| `ConfirmationClass` | `policy_decision.rs` | 8 | Manual discretion trigger categories |
-| `EnforcementOutcome` | `policy_decision.rs` | 4 | Profile-aware enforcement result |
-| `AddressClass` | `scope_address.rs` | 7 | IP address classification |
-| `ScopeSource` | `scope.rs` | 4 | Scope provenance |
-| `DescriptorError` | `policy_target.rs` (facade; canonical `eggsec-policy/src/target.rs`) | 3 (`UnexpectedTarget`, `MissingTarget`, `UnknownOperation`) | Target-policy violation errors |
+| `ConfirmationClass` | `eggsec-policy/src/decision.rs:347` (facade: `policy_decision.rs`) | 8 | Manual discretion trigger categories |
+| `EnforcementOutcome` | `eggsec-policy/src/decision.rs:258` (facade: `policy_decision.rs`) | 4 | Profile-aware enforcement result |
+| `AddressClass` | `eggsec-policy/src/address.rs:20` (facade: `scope_address.rs`) | 7 | IP address classification |
+| `ScopeSource` | `eggsec-policy/src/scope.rs:30` (facade: `scope.rs`) | 4 | Scope provenance |
+| `DescriptorError` | `policy_target.rs` (facade; canonical `eggsec-policy/src/target.rs:196`) | 3 (`UnexpectedTarget`, `MissingTarget`, `UnknownOperation`) | Target-policy violation errors |
 | `DiscoveredTargetStatus` | `discovery.rs:10` | 4 | Discovery promotion model |
 | `BudgetError` | `budget.rs:107` | 3 | Budget validation errors |
 | `ConfigError` | `settings.rs:708` | 4 | Config loading/parsing errors |
-| `ScopeError` | `scope.rs` | 7 | Scope validation/loading errors |
+| `ScopeError` | `eggsec-policy/src/scope.rs:509` (facade: `scope.rs`) | 7 | Scope validation/loading errors |
 
 ### Key Types — Structs
 
 | Type | File:Line | Purpose |
 |------|-----------|---------|
-| `EggsecConfig` | `settings.rs:92` | Main configuration struct |
-| `ExecutionPolicy` | `policy.rs:33` | Operation policy controls (14 boolean flags + risk + capabilities) |
-| `OperationDescriptor` | `policy.rs:279` | Unit of policy evaluation |
+| `EggsecConfig` | `settings.rs:93` | Main configuration struct |
+| `ExecutionPolicy` | `eggsec-policy/src/policy.rs:33` (facade: `policy.rs`) | Operation policy controls (17 fields: 14 boolean flags + `max_risk_without_confirm` + allowed/denied capabilities) |
+| `OperationDescriptor` | `eggsec-policy/src/policy.rs:284` (facade: `policy.rs`) | Unit of policy evaluation (11 fields) |
 | `OperationMetadata` | `eggsec-policy/src/catalog.rs:25` (facade: `policy_catalog.rs`) | Static metadata for one operation (15 fields) |
-| `PolicyDecision` | `policy_decision.rs:11` | Fully-populated enforcement decision record (17 fields) |
-| `EnforcementContext` | `policy_decision.rs:472` | Bundles profile + policy + scope for shared evaluation |
-| `ApprovedOperation` | `policy_decision.rs:331` | Proof-of-enforcement token (private fields) |
-| `ManualOverride` | `policy_decision.rs:432` | Manual override flags (10 fields) |
-| `PreflightResult` | `policy_decision.rs:733` | Read-only pre-dispatch policy preview |
-| `Scope` | `scope.rs:274` | Allowed/excluded targets + port rules |
-| `ScopeRule` | `scope.rs:554` | Single scope rule (pattern or CIDR) |
-| `LoadedScope` | `scope.rs:217` | Scope + provenance metadata |
-| `TargetScope` | `scope.rs:677` | Parsed target with resolved addresses |
+| `PolicyDecision` | `eggsec-policy/src/decision.rs:33` (facade: `policy_decision.rs`) | Fully-populated enforcement decision record (20 fields) |
+| `EnforcementContext` | `eggsec-policy/src/decision.rs:424` (engine I/O wrapper: `policy_decision.rs:42`) | Bundles profile + policy + scope for shared evaluation |
+| `ApprovedOperation` | `eggsec-policy/src/approval.rs:22` (facade: `policy_approval.rs`) | Proof-of-enforcement token (private fields) |
+| `ManualOverride` | `eggsec-policy/src/decision.rs:381` (facade: `policy_decision.rs`) | Manual override flags (10 fields) |
+| `PreflightResult` | `eggsec-policy/src/decision.rs:730` (facade: `policy_decision.rs`) | Read-only pre-dispatch policy preview |
+| `Scope` | `eggsec-policy/src/scope.rs:88` (facade: `scope.rs`) | Allowed/excluded targets + port rules |
+| `ScopeRule` | `eggsec-policy/src/scope.rs:284` (facade: `scope.rs`) | Single scope rule (pattern or CIDR) |
+| `LoadedScope` | `eggsec-policy/src/scope.rs:46` (facade: `scope.rs`) | Scope + provenance metadata |
+| `TargetScope` | `eggsec-policy/src/scope.rs:403` (facade: `scope.rs`) | Parsed target with resolved addresses |
 | `ExecutionBudget` | `budget.rs:8` | Execution constraints (10 fields) |
 | `DefenseLabPreset` | `presets.rs:7` | Preset lab constraints (15 fields) |
 | `HttpConfig` | `http.rs:19` | HTTP client settings (10 fields) |
@@ -137,29 +152,42 @@ All source files live under `crates/eggsec/src/config/`:
 | Registry | File:Line | Count | Purpose |
 |----------|-----------|-------|---------|
 | `ALL_OPERATION_METADATA` | `eggsec-policy/src/catalog.rs:291` (facade: `policy_catalog.rs`) | 34 | Canonical operation definitions |
-| `ALL_OPERATION_METADATA_ALIASES` | `eggsec-policy/src/catalog.rs:875` (facade: `policy_catalog.rs`) | 42 | Tool-ID → canonical-ID mappings |
-| `ALL_FEATURES` | `feature_registry.rs:110` (generated by `feature_registry!` macro) | 49 | Compile-time feature registry |
+| `ALL_OPERATION_METADATA_ALIASES` | `eggsec-policy/src/catalog.rs:903` (facade: `policy_catalog.rs`) | 42 | Tool-ID → canonical-ID mappings |
+| `ALL_FEATURES` | `feature_registry.rs:110` (generated by `feature_registry!` macro) | 50 | Compile-time feature registry |
+
+**Registry relationship to the wire task enum.** `ALL_OPERATION_METADATA` holds
+**34** canonical operations, but `TaskKind` (`crates/eggsec-runtime/src/request.rs:64`)
+has **30** variants. The mapping is many-to-one and deliberately partial:
+`TaskKind::operation_id()` (`request.rs`) collapses packet sub-kinds
+(`PacketCapture`/`PacketTraceroute`/`PacketSend` → `packet`), maps
+`Wireless`/`WirelessActive` → `wireless`, and `Resume` → `pipeline`, so 30
+`TaskKind` variants cover only 26 distinct catalog IDs. The remaining **8**
+catalog operations (`waf-bypass`, `wireless-deauth`, `mobile-static`,
+`mobile-dynamic`, `remote`, `search`, `evasion`, `postex`) have no `TaskKind`
+arm and are reachable only through surface adapters (CLI flags, MCP/REST/gRPC
+tool calls). Growth in either registry without the other is drift — see the
+"34 metadata vs 30 TaskKind gap" note in [dispatch.md](dispatch.md).
 
 ### ExecutionSurface → ExecutionProfile Mapping
 
 | Surface | Profile | Manual Override | File:Line |
 |---------|---------|:---:|-----------|
-| `CliManual` | `ManualPermissive` | Yes | `policy.rs:382` |
-| `TuiManual` | `ManualPermissive` | Yes | `policy.rs:382` |
-| `CliManualStrict` | `ManualGuarded` | No | `policy.rs:383` |
-| `TuiManualStrict` | `ManualGuarded` | No | `policy.rs:383` |
-| `McpServer` | `McpStrict` | No | `policy.rs:384` |
-| `SecurityAgent` | `AgentStrict` | No | `policy.rs:385` |
-| `Ci` | `CiStrict` | No | `policy.rs:386` |
-| `RestApi` | `McpStrict` | No | `policy.rs:387` |
-| `GrpcApi` | `McpStrict` | No | `policy.rs:388` |
+| `CliManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:387` |
+| `TuiManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:387` |
+| `CliManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:388` |
+| `TuiManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:388` |
+| `McpServer` | `McpStrict` | No | `eggsec-policy/src/policy.rs:389` |
+| `SecurityAgent` | `AgentStrict` | No | `eggsec-policy/src/policy.rs:390` |
+| `Ci` | `CiStrict` | No | `eggsec-policy/src/policy.rs:391` |
+| `RestApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:392` |
+| `GrpcApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:393` |
 
 ### Capability Classification
 
 Baseline capabilities allowed by default for strict profiles (no explicit allow needed):
 - `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`
 
-Defined by `baseline_allowed_capability()` at `policy.rs:557`. All other capabilities require explicit listing in `ExecutionPolicy::allowed_capabilities` for strict automated profiles.
+Defined by `baseline_allowed_capability()` at `eggsec-policy/src/policy.rs:562`. All other capabilities require explicit listing in `ExecutionPolicy::allowed_capabilities` for strict automated profiles.
 
 ## Enforcement Flow
 
@@ -220,10 +248,10 @@ Defined by `baseline_allowed_capability()` at `policy.rs:557`. All other capabil
 |--------|---------|---------|----------|
 | `approve(surface, descriptor)` | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | REST, MCP, Agent, CI |
 | `approve_manual(surface, descriptor, override)` | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | CLI, TUI |
-| `approve_execution(surface, descriptor)` (`policy_decision.rs:238`) | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | Strict surfaces via the `ApprovedExecution` bundle (token + scope snapshot from the same context) |
-| `approve_manual_execution(surface, descriptor, override)` (`policy_decision.rs:251`) | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | Manual surfaces via the `ApprovedExecution` bundle |
+| `approve_execution(surface, descriptor)` (engine wrapper `policy_decision.rs:238`; pure kernel `eggsec-policy/src/decision.rs` `approve*`) | `Allow` only | `Warn`, `RequireConfirmation`, `Deny` | Strict surfaces via the `ApprovedExecution` bundle (token + scope snapshot from the same context) |
+| `approve_manual_execution(surface, descriptor, override)` (engine wrapper `policy_decision.rs:251`) | `Allow`, `Warn`, `RequireConfirmation` (with matching override) | `Deny` | Manual surfaces via the `ApprovedExecution` bundle |
 
-`approve()`/`approve_manual()` return an `ApprovedOperation` token for scope-insensitive dispatch via `dispatch_checked()`. `approve_execution()`/`approve_manual_execution()` return an `ApprovedExecution` bundle (token + scope snapshot coupled at approval time) for scope-bearing dispatch via `EnforcedDispatcher::dispatch_execution()` → `execute_approved_execution()` (`dispatch/canonical_execution.rs:755`). Strict surfaces dispatch only through the bundle path; never construct `ApprovedExecution` directly.
+`approve()`/`approve_manual()` return an `ApprovedOperation` token for scope-insensitive dispatch via `dispatch_checked()`. `approve_execution()`/`approve_manual_execution()` return an `ApprovedExecution` bundle (token + scope snapshot coupled at approval time) for scope-bearing dispatch via `EnforcedDispatcher::dispatch_execution()` → `execute_approved_execution()` (`dispatch/canonical_execution.rs:772`). Strict surfaces dispatch only through the bundle path; never construct `ApprovedExecution` directly.
 
 Both methods verify that the caller-provided `surface` derives the same profile as the context was constructed with. Mismatches return `EnforcementError::SurfaceProfileMismatch`.
 
@@ -248,14 +276,14 @@ Under `ManualPermissive`, `RequireConfirmation` is produced for these operator-d
 
 ### Scope vs LoadedScope
 
-- **`Scope`** (`scope.rs:274`): The raw scope rules — `allowed_targets`, `excluded_targets`, `allowed_ports`, `excluded_ports`, `max_requests_per_second`, `require_explicit_scope`.
+- **`Scope`** (`eggsec-policy/src/scope.rs:88`): The raw scope rules — `allowed_targets`, `excluded_targets`, `allowed_ports`, `excluded_ports`, `max_requests_per_second`, `require_explicit_scope`, `scope_file`.
 
-- **`LoadedScope`** (`scope.rs:217`): Wraps `Scope` with provenance metadata:
+- **`LoadedScope`** (`eggsec-policy/src/scope.rs:46`): Wraps `Scope` with provenance metadata:
   - `scope: Scope` — the underlying rules (public field, accessed directly)
   - `source: ScopeSource` — where the scope came from (public field)
   - `path: Option<String>` — optional file path
 
-- **`is_explicit_manifest()`** (`scope.rs:226`): Returns `true` if source is `ConfigFile`, `CliScopeFile`, or `GeneratedPreset`. Returns `false` for `DefaultEmpty`. This is the critical check for strict-profile enforcement.
+- **`is_explicit_manifest()`** (`eggsec-policy/src/scope.rs:55`): Returns `true` if source is `ConfigFile`, `CliScopeFile`, or `GeneratedPreset`. Returns `false` for `DefaultEmpty`. This is the critical check for strict-profile enforcement.
 
 ### ScopeSource Variants
 
@@ -268,7 +296,7 @@ Under `ManualPermissive`, `RequireConfirmation` is produced for these operator-d
 
 ### Address Classification
 
-`classify_address(ip)` at `scope.rs:65` reports facts only; policy decides authorization.
+`classify_address(ip)` at `eggsec-policy/src/address.rs:71` (facade: `scope_address.rs`) reports facts only; policy decides authorization.
 
 | Class | IPv4 | IPv6 | is_non_public |
 |-------|------|------|:---:|
@@ -280,11 +308,11 @@ Under `ManualPermissive`, `RequireConfirmation` is produced for these operator-d
 | `Unspecified` | 0.0.0.0 | :: | Yes |
 | `Multicast` | 224/4 | ff00::/8 | Yes |
 
-`is_non_public()` at `scope.rs:50` returns `true` for all classes except `Public`. Loopback is exempted from scope blocking when no scope rules are defined (`scope.rs:411`).
+`is_non_public()` at `eggsec-policy/src/address.rs:56` returns `true` for all classes except `Public`. Loopback is exempted from scope blocking when no scope rules are defined (`eggsec-policy/src/scope.rs:191-197`).
 
 ### HostResolver Trait and SystemResolver
 
-The `HostResolver` trait (`scope.rs:142`) decouples DNS resolution from policy:
+The `HostResolver` trait (`policy_bridge/resolver.rs:50`, re-exported through `scope_resolver.rs`) decouples DNS resolution from policy:
 
 ```rust
 pub trait HostResolver: Send + Sync {
@@ -292,13 +320,13 @@ pub trait HostResolver: Send + Sync {
 }
 ```
 
-- **`SystemResolver`** (`scope.rs:156`): Default implementation using `std::net::ToSocketAddrs`. Collects unique addresses, returns sorted for deterministic ordering. Does **not** reject any address classes — policy decides authorization.
-- **`ResolutionResult`** (`scope.rs:117`): Contains `hostname`, `addresses: Vec<IpAddr>`, `error: Option<String>`.
-- **`default_resolver()`** (`scope.rs:190`): Factory returning `Arc<dyn HostResolver>`.
+- **`SystemResolver`** (`policy_bridge/resolver.rs:64`): Default implementation using `std::net::ToSocketAddrs`. Collects unique addresses, returns sorted for deterministic ordering. Does **not** reject any address classes — policy decides authorization.
+- **`ResolutionResult`** (`policy_bridge/resolver.rs:25`): Contains `hostname`, `addresses: Vec<IpAddr>`, `error: Option<String>`.
+- **`default_resolver()`** (`policy_bridge/resolver.rs:98`): Factory returning `Arc<dyn HostResolver>`.
 
 ### TargetScope Resolution
 
-`TargetScope` (`scope.rs:677`) holds the parsed target with all resolved addresses:
+`TargetScope` (`eggsec-policy/src/scope.rs:403`) holds the parsed target with all resolved addresses:
 
 ```rust
 pub struct TargetScope {
@@ -309,16 +337,16 @@ pub struct TargetScope {
 ```
 
 Key methods:
-- `parse_with_resolver(target, resolver)` at `scope.rs:695`: Full DNS resolution. Literal IPs skip resolution; URLs extract host; bare hostnames resolve via the resolver.
-- `parse_hostname_only_with_resolver(target, resolver)` at `scope.rs:788`: Hostname-only matching; resolution failures are non-fatal.
-- `evaluate_addresses(allowed, excluded)` at `scope.rs:849`: Returns `(all_allowed, any_excluded, classes)`. Every resolved address must match at least one allowed rule; no address may match an exclusion.
+- `resolve_target_facts_with(target, resolver)` (`policy_bridge/resolver.rs:112`): Full DNS resolution. Literal IPs skip resolution; URLs extract host; bare hostnames resolve via the resolver.
+- `resolve_hostname_facts_with(target, resolver)` (`policy_bridge/resolver.rs:186`): Hostname-only matching; resolution failures are non-fatal.
+- `evaluate_addresses(allowed, excluded)` (`eggsec-policy/src/scope.rs:445`): Returns `(all_allowed, any_excluded, classes)`. Every resolved address must match at least one allowed rule; no address may match an exclusion.
 
 ### Scope Evaluation — `is_target_allowed()`
 
-`Scope::is_target_allowed()` at `scope.rs:368` delegates to `is_target_allowed_with_resolver()`:
+`ScopeResolution::is_target_allowed()` (trait at `policy_bridge/resolver.rs:222`, impl at `:243`) delegates to `is_target_allowed_with_resolver()`:
 
-1. If scope has CIDR rules: use full `TargetScope::parse_with_resolver()` (requires DNS)
-2. Otherwise: use `TargetScope::parse_hostname_only_with_resolver()` (DNS failures non-fatal)
+1. If scope has CIDR rules: use full `resolve_target_facts_with()` (requires DNS)
+2. Otherwise: use `resolve_hostname_facts_with()` (DNS failures non-fatal)
 3. Check exclusions first (exclusion always wins)
 4. If no allowed targets: block non-public addresses (except loopback); allow public
 5. If allowed targets exist: use `evaluate_addresses()` for all-address evaluation
@@ -326,9 +354,9 @@ Key methods:
 
 ### Scope Loading
 
-- `load_config()` at `loader.rs:14`: Searches 5 locations in order: `--config` arg → `./eggsec.toml` → `./.eggsec/eggsec.toml` → `./config/eggsec.toml` → `~/.config/eggsec/eggsec.toml`
-- `load_scope()` at `loader.rs:58`: Loads scope without provenance
-- `load_scope_with_source()` at `loader.rs:102`: Loads scope with `ScopeSource` tracking. `--scope` → `CliScopeFile`; found file → `ConfigFile`; not found → `DefaultEmpty`
+- `load_config()` at `loader.rs:15`: Searches 5 locations in order: `--config` arg → `./eggsec.toml` → `./.eggsec/eggsec.toml` → `./config/eggsec.toml` → `~/.config/eggsec/eggsec.toml`
+- `load_scope()` at `loader.rs:59`: Loads scope without provenance
+- `load_scope_with_source()` at `loader.rs:119`: Loads scope with `ScopeSource` tracking. `--scope` → `CliScopeFile`; found file → `ConfigFile`; not found → `DefaultEmpty`
 - Config format: TOML (primary), YAML (`.yaml`/`.yml`)
 - Permissions: `check_config_file_permissions()` warns about world/group-readable files
 
@@ -349,8 +377,8 @@ Key methods:
 
 ### OperationMetadata → OperationDescriptor Flow
 
-1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `eggsec-policy/src/catalog.rs:926` (facade: `policy_catalog.rs`)
-2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `eggsec-policy/src/catalog.rs:875` map alternative IDs to canonical operation IDs
+1. External surfaces (REST, MCP, TUI) look up metadata via `metadata_for_tool_id(tool_id)` at `eggsec-policy/src/catalog.rs:954` (facade: `policy_catalog.rs`)
+2. Alias resolution: 42 aliases in `ALL_OPERATION_METADATA_ALIASES` at `eggsec-policy/src/catalog.rs:903` map alternative IDs to canonical operation IDs
 3. Descriptor generation: `metadata.try_descriptor_for_target(target)` at `catalog.rs:106` (validated) or `metadata.descriptor_for_target(target)` at `catalog.rs:49` (unchecked stable shim for backward compatibility; new strict-surface code must use `try_`)
 4. Policy evaluation: `enforcement.evaluate(&descriptor)` or `enforcement.approve(surface, descriptor)`
 
@@ -365,11 +393,11 @@ REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `
 | File | Test Module | Count | Key Coverage |
 |------|-------------|-------|--------------|
 | `policy.rs` | facade (tests live in `eggsec-policy/src/policy.rs::tests`, 29) | Risk ordering, profile display, capability display, serialization roundtrips |
-| `policy.rs` | `operation_metadata_tests` (in `eggsec-policy/src/catalog.rs`, 16) | Metadata uniqueness, alias resolution, descriptor generation, feature-gated ops |
-| `policy_decision.rs` | facade (unit tests in `eggsec-policy/src/decision.rs`, 7; bulk coverage in `enforcement_matrix` integration tests, 105+) | Manual-mode invariants, downgrade logic, confirmation classes, approval tokens, preflight |
+| `policy.rs` | `operation_metadata_tests` (in `eggsec-policy/src/catalog.rs:998`, 21) | Metadata uniqueness, alias resolution, descriptor generation, feature-gated ops |
+| `policy_decision.rs` | facade (unit tests in `eggsec-policy/src/decision.rs::pure_evaluation_tests`, 7; bulk coverage in `enforcement_matrix` integration tests, 172) | Manual-mode invariants, downgrade logic, confirmation classes, approval tokens, preflight |
 | `scope.rs` | facade (tests live in `eggsec-policy/src/scope.rs`, 15) | Scope rules, CIDR matching, address classification, resolver tests, loaded scope provenance |
 | `settings.rs` | `tests` | 1 | Config default path |
-| `loader.rs` | `tests` | 22 | Config/scope loading, format support, source tracking |
+| `loader.rs` | `tests` | 23 | Config/scope loading, format support, source tracking |
 | `budget.rs` | `tests` | 9 | Budget validation, defaults, serialization |
 | `discovery.rs` | `tests` | 3 | Status display, scannability, serialization |
 | `feature_registry.rs` | `tests` | 4 | Registry coverage, category matching |
@@ -377,7 +405,7 @@ REST, MCP, gRPC, and Agent surfaces use `EnforcedDispatcher` which requires an `
 
 ### Integration Tests
 
-- `crates/eggsec/tests/enforcement_matrix.rs`: 105+ tests providing systematic cross-surface coverage for the dual-mode enforcement contract
+- `crates/eggsec/tests/enforcement_matrix.rs`: 172 tests providing systematic cross-surface coverage for the dual-mode enforcement contract
 - Tests cover: all execution surfaces, manual permissive/guarded/strict behavior, capability matrix, override isolation, scope state matrix
 
 ### Running Tests
@@ -395,29 +423,29 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 
 2. **`ApprovedExecution` is the dispatch bundle for scope-bearing operations.** Strict surfaces dispatch via `EnforcedDispatcher::dispatch_execution()` with an `ApprovedExecution` bundle (token + scope snapshot from the same context, via `approve_execution()`/`approve_manual_execution()`). Raw `dispatch_checked()` with `ApprovedOperation` alone remains for scope-insensitive tools. (`policy_decision.rs:238-251,330`)
 
-3. **Scope provenance matters.** Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `LoadedScope::is_explicit_manifest() == true` for networked operations with `requires_explicit_scope`. `DefaultEmpty` blocks these. (`policy_decision.rs:569`)
+3. **Scope provenance matters.** Strict profiles (`CiStrict`, `McpStrict`, `AgentStrict`) require `LoadedScope::is_explicit_manifest() == true` for networked operations with `requires_explicit_scope`. `DefaultEmpty` blocks these. (`eggsec-policy/src/decision.rs:557`)
 
-4. **OperationMetadata is the single source of truth.** All surfaces use `metadata_for_tool_id()` to look up canonical operation definitions. Don't build policy checks inline. (`policy_catalog.rs:317`)
+4. **OperationMetadata is the single source of truth.** All surfaces use `metadata_for_tool_id()` to look up canonical operation definitions. Don't build policy checks inline. (`eggsec-policy/src/catalog.rs:954`, facade `policy_catalog.rs:12`)
 
-5. **ManualOverride is CLI-only.** Never part of MCP/agent schemas or automated paths. Automated profiles never honor overrides. (`policy_decision.rs:432`)
+5. **ManualOverride is CLI-only.** Never part of MCP/agent schemas or automated paths. Automated profiles never honor overrides. (`eggsec-policy/src/decision.rs:381`)
 
-6. **`--yes` is narrow.** Only covers `OutOfScope` and `TargetExpansion`. Dedicated `--allow-*` flags required for all other confirmation classes. (`policy_decision.rs:453`)
+6. **`--yes` is narrow.** Only covers `OutOfScope` and `TargetExpansion`. Dedicated `--allow-*` flags required for all other confirmation classes. (`eggsec-policy/src/decision.rs:401`)
 
 7. **Feature registry is fail-closed.** Unknown feature names return `false` from `is_feature_enabled()`. (`feature_registry.rs:141`)
 
-8. **Resolver reports facts; policy decides.** `HostResolver` never rejects addresses. `classify_address()` never authorizes. (`scope.rs:62`)
+8. **Resolver reports facts; policy decides.** `HostResolver` never rejects addresses. `classify_address()` never authorizes. (`policy_bridge/resolver.rs:64`, `eggsec-policy/src/address.rs:71`)
 
 ### Gotchas
 
 - **TOCTOU on scope checks.** Scope checks occur at dispatch time, not per-connection. `reqwest` may re-resolve DNS between scope check and connection. Strict surfaces should pin connections when possible.
 
-- **`is_explicitly_excluded()` checks all resolved addresses.** A hostname that resolves to multiple IPs, where one IP matches an exclusion rule, will be excluded. (`scope.rs:500`)
+- **`is_explicitly_excluded()` checks all resolved addresses.** A hostname that resolves to multiple IPs, where one IP matches an exclusion rule, will be excluded. (`eggsec-policy/src/scope.rs:241`)
 
-- **Empty scope with positive rules + target miss = `RequireConfirmation` in ManualPermissive** (not a silent warn). This was a deliberate 2026-06-10 hardening decision. (`policy_decision.rs:1230`)
+- **Empty scope with positive rules + target miss = `RequireConfirmation` in ManualPermissive** (not a silent warn). This was a deliberate 2026-06-10 hardening decision. (`eggsec-policy/src/decision.rs:1225`)
 
-- **Strict profiles deny on warnings.** If `evaluate_operation_policy` produces warnings for a strict profile, the outcome is `Deny`. (`policy_decision.rs:1345`)
+- **Strict profiles deny on warnings.** If `evaluate_operation_policy` produces warnings for a strict profile, the outcome is `Deny`. (`eggsec-policy/src/decision.rs:1311`)
 
-- **`classify_denial_reasons()` dual path.** When `denial_classes` is populated (new code path), returns typed classes directly. Falls back to string inspection for legacy. (`policy_decision.rs:1058`)
+- **`classify_denial_reasons()` dual path.** When `denial_classes` is populated (new code path), returns typed classes directly. Falls back to string inspection for legacy. (`eggsec-policy/src/decision.rs:1045`)
 
 - **`ExecutionBudget::from_preset()` doesn't propagate `max_bytes`.** The `from_preset()` constructor at `budget.rs:90` sets `max_bytes: None` regardless of the preset's potential byte limits.
 
@@ -425,6 +453,6 @@ cargo test --test enforcement_matrix -p eggsec    # enforcement matrix
 
 | Location | Finding | Severity |
 |----------|---------|----------|
-| `policy_decision.rs:727` | `expect("ExecutionPolicy is JSON-serializable")` in `policy_hash()` — will panic on serialization failure | Low (in practice, always serializable) |
+| `decision.rs:727` | `expect("ExecutionPolicy is JSON-serializable")` in `policy_hash()` — will panic on serialization failure | Low (in practice, always serializable) |
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review; enforcement paths re-pointed to `eggsec-policy` kernel); file sizes, registry/test counts, and facade test locations re-verified 2026-09-25*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review; enforcement paths re-pointed to `eggsec-policy` kernel); file sizes, registry/test counts, and facade test locations re-verified 2026-09-25; all cites and counts re-verified 2026-10-06 (see Corrections note)*

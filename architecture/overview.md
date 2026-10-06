@@ -2,7 +2,7 @@
 
 Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. This document is the bird's-eye view of the system and the index into the per-component deep-dive documents that live alongside it in `architecture/`.
 
-Every number in this document was verified against source on 2026-09-22. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
+Every number in this document was verified against source on 2026-10-06. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
 
 ## Quick Navigation
 
@@ -16,6 +16,7 @@ Every number in this document was verified against source on 2026-09-22. Where a
 | **What features gate what** | [Feature Flags](#feature-flags), [feature_matrix.md](feature_matrix.md) |
 | **Core types** | [Key Types](#key-types) |
 | **Crate dependency rules** | [Dependency Map](#dependency-map) |
+| **The 4 leaf data crates** (service tables, secrets, payloads, UDP scanning) | [Knowledge Corpus](#knowledge-corpus-leaf-data-crates), [knowledge_corpus.md](knowledge_corpus.md) |
 | **Full deep-dive doc catalog** | [Deep-Dive Index](#deep-dive-index) |
 
 ## Table of Contents
@@ -38,7 +39,7 @@ Every number in this document was verified against source on 2026-09-22. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with 19 crates plus the standalone NSE runtime. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with **23 crates** plus the standalone NSE runtime. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -58,7 +59,7 @@ nor hosted CI publishes a package.
 | `eggsec-tool-core` | Protocol-neutral DTOs | Yes | `ToolRequest`, `ToolResponse`, `ToolError`, history/rate-limit types. Depends only on `eggsec-core`. |
 | `eggsec-report-model` | Report data contracts | Yes | `ScanReportData`, `ReportEnvelope`, evidence/summary DTOs. Data only; depends only on `eggsec-core`. Domain DTO owner (Phase B). |
 | `eggsec-output` | Report rendering | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, dedup, trends, diff over `eggsec-report-model` (never the reverse). No engine/runtime deps. PDF lives in the engine crate, not here. Scheduling/session removed in Phase A (cron in `eggsec-agent::cron`). |
-| `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation, cron. Internal deps: `eggsec-core` only. |
+| `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation, cron. Internal deps: `eggsec-core` + `eggsec-transport` (the outbound contract for agent-issued network work). |
 | `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
@@ -75,7 +76,10 @@ nor hosted CI publishes a package.
 | `eggsec-policy` | Authorization semantics | Yes | `ExecutionPolicy`, descriptors, catalog, scope data + pure matching, decisions, approval tokens, evaluation over explicit `EnabledFeatures` + `TargetScope` facts. No I/O/runtime/transport/frontend/engine deps. Engine bridges DNS/features/authority via `policy_bridge/` (Phase C). |
 | `eggsec-service-db` | Service fingerprint knowledge | Yes | Port→service tables, banner heuristics, service classifiers. Pure lookup data behind `LazyLock`; no I/O, no resolver, no authority state. Only dep is `rustc-hash`; no `eggsec-*` dependency (Check 148). Engine re-exports it at `eggsec::scanner::service_data` (Phase G). |
 | `eggsec-secrets` | Credential detection | Yes | 25 secret patterns covering 20 of 30 `SecretType` variants, `SecretFinding`, `Confidence` tiers, and an entropy gate scoped to AWS secret keys. Pure regex+entropy over strings; no network, no subprocess, no authority. `eggsec-core` is its only workspace dep (for `Severity`); Check 148 polices it, Check 149 pins the entropy constant. Engine re-exports it at `eggsec::recon::secrets` (Phase G). |
-| `eggsec-payloads` | Attack payload corpora | Yes | **All 40** payload modules plus `PayloadType` (40 variants), `Payload`, `get_payloads`, and the cross-variant caches. No network: the 6 modules that hold a `reqwest::Client` and make live requests (`GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc`) are *probers*, not payload generators — their payload sets moved here too, so `get_payloads` resolves every variant and never panics. `eggsec-core` is its only workspace dep (for `Severity`); Check 148 polices the leaf, Check 150 polices the corpus/prober seam. Engine re-exports it at `eggsec::fuzzer::payloads` and keeps the 6 probers there (Phase G). |
+| `eggsec-payloads` | Attack payload corpora | Yes | **All 40** payload modules plus `PayloadType` (40 variants), `Payload`, `get_payloads`, and the cross-variant caches. No network: the 6 modules that make live requests (`GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc`) are *probers*, not payload generators — 4 of them (`idor`, `jwt`, `oauth`, `ssti`) own a `reqwest::Client` field, while `GraphQL`/`Grpc` take `&reqwest::Client` as a method parameter — their payload sets moved here too, so `get_payloads` resolves every variant and never panics. `eggsec-core` is its only workspace dep (for `Severity`); Check 148 polices the leaf, Check 150 polices the corpus/prober seam. Engine re-exports it at `eggsec::fuzzer::payloads` and keeps the 6 probers there (Phase G). |
+| `eggsec-udp-scan` | UDP port scanning | Yes | Standalone UDP scanner (~1970 LOC across `lib`/`classify`/`correlate`/`icmp`/`socket`): ICMP-error correlation, honest `Open`/`Closed`/`Filtered`/`OpenFiltered` classification, unprivileged-socket fallback (`IcmpReceiver::open_unprivileged()` → `open()`). **Zero workspace deps**, and no `eggsec_udp_scan` type crosses the boundary — `dispatch/scanner.rs` projects its DTOs into engine `PortStatus`. Feature-gated: `udp-scan`. Deep dive: [knowledge_corpus.md](knowledge_corpus.md). |
+
+The four **knowledge-corpus crates** — `eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, and `eggsec-udp-scan` — are the newest members. They exist because static lookup data (service tables, credential patterns, attack payloads) and one deterministic protocol implementation had outgrown the engine crate: each is a leaf with a near-empty dependency closure, so the engine keeps only facades (`pub use`) over them and never re-implements their data. Rationale, guards, and per-crate API detail: [knowledge_corpus.md](knowledge_corpus.md).
 
 **Dependency direction**: Leaf crates have no engine/runtime dependencies (except where noted above). `eggsec-report-model` owns report/evidence data contracts (`eggsec-output` renders over it, never the reverse); `eggsec-policy` owns authorization semantics (engine `config` stays a facade; `policy_bridge/` owns the feature/resolver/`NetworkAuthority` adapters; never `policy` → `transport`); domain DTO consumers (`eggsec-db-lab`, `eggsec-mobile-lab`, `eggsec-web-proxy`) depend on the model, not the renderer. The standalone [`eggsec-nse` repository](https://github.com/eggstack/eggsec-nse) has zero `eggsec-*` dependencies; Eggsec consumes its published crates.io release only through the engine, while TUI/Python use the `eggsec::nse` facade. Report-envelope conversion and scoped-transport adaptation remain engine-owned (`eggsec::nse_bridge`, `eggsec::nse_http_capability`). The main `eggsec` crate is the composition root and depends on `eggsec-transport` for the outbound contract. Only `eggsec-cli`, `eggsec-tui`, and `eggsec-python` sit above it.
 
@@ -157,7 +161,7 @@ Active vulnerability discovery modules. Each sends crafted input to targets and 
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine, **40 `PayloadType` variants** (`fuzzer/payloads/mod.rs:49`), Aho-Corasick leak detection, timing analysis, response diffing, grammar/stateful fuzzers, chained requests, per-target profiles (Apache/PHP/nginx), calibration. Always compiled | [fuzzer.md](fuzzer.md) |
+| Fuzzer | `crates/eggsec/src/fuzzer/` | Security fuzzing engine, **40 `PayloadType` variants** (`eggsec-payloads/src/lib.rs:95`, re-exported as `fuzzer/payloads`), Aho-Corasick leak detection, timing analysis, response diffing, grammar/stateful fuzzers, chained requests, per-target profiles (Apache/PHP/nginx), calibration. Always compiled | [fuzzer.md](fuzzer.md) |
 | WAF | `crates/eggsec/src/waf/` | Detection of **34 WAF signatures/products** (`waf/data/patterns.rs`, includes one generic catch-all), block-page comparison, bypass library (evasion/headers/smuggling/profiles), regression reporting. Always compiled; shares types bidirectionally with fuzzer | [waf.md](waf.md) |
 | Auth | `crates/eggsec/src/auth/` | Brute force, credential stuffing, lockout detection, MFA bypass, rate-limit analysis, session tests, timing attacks, password policy; multi-protocol (FTP/SSH/SMTP) under `nse-ssh2` | [auth.md](auth.md) |
 | Hunt | `crates/eggsec/src/hunt/` | Authorization bypass, business logic, race conditions, attack chains, session issues (`run_hunt()`); feature-gated: `advanced-hunting` | [hunt.md](hunt.md) |
@@ -183,8 +187,8 @@ Modules that coordinate, schedule, and chain other modules into complete assessm
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Pipeline | `crates/eggsec/src/pipeline/` | Chained assessments: **18 `ScanProfile` variants** (`types.rs:123`: Quick … WebProxy), stage context/session/report/executor split | [pipeline.md](pipeline.md) |
-| Dispatch | `crates/eggsec/src/dispatch/` | Frontend-neutral task execution: `dispatch_task()`/`dispatch_inner()` route `TaskKind` (29 variants) → engine workers, returning typed `TaskResult`s over channels; registry-backed executor adapters (Scanner/Recon/Waf/Fuzz/Network always; NSE/DB-pentest gated) | [dispatch.md](dispatch.md) |
-| Tool Registry | `crates/eggsec/src/tool/` | `ToolRegistry` (FxHashMap + RwLock) registering 11 base tools (+ gated proxy/db-pentest/c2 tools), protocol servers (REST/MCP/gRPC/agent/AI routes/OpenAI-compatible), and `EnforcedDispatcher` with fail-closed binding validation; protocols behind `rest-api`/`grpc-api` | [ai_agents.md](ai_agents.md), [cli_commands.md](cli_commands.md) |
+| Dispatch | `crates/eggsec/src/dispatch/` | Frontend-neutral task execution: `dispatch_task()`/`dispatch_inner()` route `TaskKind` (30 variants) → engine workers, returning typed `TaskResult`s over channels; registry-backed executor adapters (Scanner/Recon/Waf/Fuzz/Network always; NSE/DB-pentest gated) | [dispatch.md](dispatch.md) |
+| Tool Registry | `crates/eggsec/src/tool/` | `ToolRegistry` (FxHashMap + RwLock) holding `SecurityTool` impls from `tool/implementations/` — 8 always compiled (`fuzzer`, `loadtest`, `oast`, `pipeline`, `recon`, `scanner`, `search`, `waf`) plus 3 feature-gated (`proxy`→`web-proxy-mcp`, `db_pentest`→`db-pentest-mcp`, `c2`→`c2-mcp`) — alongside protocol servers (REST/MCP/gRPC/agent/AI routes/OpenAI-compatible), and `EnforcedDispatcher` with fail-closed binding validation; protocols behind `rest-api`/`grpc-api` | [ai_agents.md](ai_agents.md), [cli_commands.md](cli_commands.md) |
 | Agent | `crates/eggsec/src/agent/` | Autonomous security agent: event-driven scheduling, longitudinal memory, portfolio management, alert routing (engine crate side; coordination primitives live in `eggsec-agent`) | [ai_agents.md](ai_agents.md) |
 | Distributed | `crates/eggsec/src/distributed/` | Worker/coordinator cluster (`RemoteListener`/`RemoteClient`): PSK auth with constant-time compare, TLS, heartbeats, task queue, result aggregation | [distributed.md](distributed.md) |
 
@@ -268,7 +272,7 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Tool Core | `crates/eggsec-tool-core/` | Protocol-neutral DTOs: `ToolRequest`, `ToolResponse`, `ToolError`, finding/history/rate-limit types, cancellation tokens | [ai_agents.md](ai_agents.md) |
 | Error | `crates/eggsec/src/error/` | `EggsecError` with **23 variants** spanning config/target/network/http/parse/policy/proxy domains, ergonomic `From` impls | [error.md](error.md) |
 | Logging | `crates/eggsec/src/logging/` | tracing init: Pretty/Json/Compact formats (`LogFormat`); subscriber/appender setup also ships as the portable `logging-subscriber` feature for process hosts | [logging.md](logging.md) |
-| Utils | `crates/eggsec/src/utils/` | **20 utility sub-modules**: HTTP client, caching, circuit breaker, client pool, rate limiter, redaction, stealth, service detection, target/validation helpers, formatting (`strip_controls`), privilege (gated) | [utils.md](utils.md) |
+| Utils | `crates/eggsec/src/utils/` | **12 utility sub-modules**: `auth`, `circuit_breaker`, `error`, `formatting`, `http`, `logging`, `network`, `parsing`, `rate_limiter`, `target`, `urlencoding`, `validation`. Zero-consumer modules were pruned across Phases A/D/G — `cache`, `output`, `progress`, `client_pool`, `stealth` and `redaction` are gone (the redaction contract is the declarative `RedactionState` on report-model evidence; debug masking lives in `eggsec-transport`). Domain helpers moved to their owners: service tables → `eggsec-service-db`, privilege gates → `platform/`, cron → `eggsec-agent::cron` | [utils.md](utils.md) |
 | Auth Context | `crates/eggsec/src/auth_context/` | Auth-context YAML parsing with env-var interpolation; canonical transport-neutral header/cookie application (former `RequestBuilder` compat wrapper removed in Phase D) | [auth_context.md](auth_context.md) |
 | Transport | `crates/eggsec-transport/` | Scope-aware outbound HTTP contract: neutral DTOs, mandatory `NetworkAuthority` checkpoints, TOCTOU-closed resolver binding, recording fake | [transport.md](transport.md) |
 | Transport/Eggfetch | `crates/eggsec-transport-eggfetch/` | `HttpTransport` over published `eggfetch-core 0.2.0` (logical-URL + singular resolved-address direct, manual authorized redirects, H1/H2 route reuse via ALPN, pinned proxy peers/targets, total through body EOF; production direct load-test backend) | [transport_eggfetch.md](transport_eggfetch.md) |
@@ -281,6 +285,19 @@ Shared types, utilities, and cross-cutting infrastructure used by all other modu
 | Platform | `crates/eggsec/src/platform/` | Read-only capability/prerequisite detection (`PrereqStatus`, `DomainPrerequisites`, `PlatformReport`); feeds `eggsec doctor` and hermetic test skips | [platform.md](platform.md) |
 | Python | `crates/eggsec-python/` | PyO3 bindings: `_core` module, `Engine`/`AsyncEngine`, 22 stable-core operations (exhaustiveness test-enforced), feature-gated provisional/experimental domains | [python_api.md](python_api.md) |
 
+### Knowledge Corpus (leaf data crates)
+
+The four newest workspace crates. They hold **data and one deterministic algorithm**, not policy or I/O policy — each has a near-empty dependency closure, and the engine reaches them only through `pub use` facades, never re-implementing their content. They are the reference implementation of the "extract when a leaf has no runtime coupling" rule.
+
+| Component | Source | Purpose | Architecture Doc |
+|-----------|--------|---------|------------------|
+| Service DB | `crates/eggsec-service-db/` | Port→service tables, banner heuristics, service classifiers behind `LazyLock`. Pure lookup; no I/O, resolver, or authority state | [knowledge_corpus.md](knowledge_corpus.md), [scanner.md](scanner.md) |
+| Secrets | `crates/eggsec-secrets/` | Credential detection: typed patterns, `Confidence` tiers, entropy gate. Pure regex+entropy over strings | [knowledge_corpus.md](knowledge_corpus.md), [recon.md](recon.md) |
+| Payloads | `crates/eggsec-payloads/` | All 40 attack payload corpora + `PayloadType`/`Payload`/`get_payloads`. 34 generators + 6 live probers | [knowledge_corpus.md](knowledge_corpus.md), [fuzzer.md](fuzzer.md) |
+| UDP Scan | `crates/eggsec-udp-scan/` | UDP port scanning with ICMP-error correlation and honest open/closed/filtered verdicts. Zero workspace deps | [knowledge_corpus.md](knowledge_corpus.md), [scanner.md](scanner.md) |
+
+**Why these are separate crates**: they were lifted out of the engine across milestones M001–M005 (knowledge-corpus program, ADR-0005) so the engine's compile surface shrinks and the data becomes reusable and testable in isolation. The engine keeps only facades — `eggsec::scanner::service_data`, `eggsec::recon::secrets`, `eggsec::fuzzer::payloads` — and the architecture guards (Checks 148–150) enforce that these stay leaves with no runtime, network, TLS, frontend, persistence, or authorization coupling.
+
 ---
 
 ## Enforcement Model
@@ -289,7 +306,7 @@ All side-effecting operations pass through a centralized enforcement gate. The m
 
 ### Surfaces
 
-`ExecutionSurface` identifies the caller origin — 9 variants (`config/policy.rs:357`):
+`ExecutionSurface` identifies the caller origin — 9 variants (`eggsec-policy/src/policy.rs:362`, re-exported through the `config/policy` facade):
 
 | Surface | Profile | Overrides | Automated |
 |---------|---------|:---------:|:---------:|
@@ -307,7 +324,7 @@ Supporting vocabularies (same file): `ExecutionProfile` (5 variants), `Operation
 
 ### Evaluation
 
-`EnforcementContext::evaluate()` (`config/policy_decision.rs:561`) is the mandatory pre-dispatch gate:
+`EnforcementContext::evaluate()` (`config/policy_decision.rs:141`, delegating to `eggsec-policy`) is the mandatory pre-dispatch gate:
 
 1. **Scope provenance**: automated surfaces require `LoadedScope` from an explicit manifest (`DefaultEmpty` scope + networked op ⇒ `Deny(ScopeMissing)`)
 2. **Risk assessment**: operation risk tier against profile allowlists
@@ -389,7 +406,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities. 
 | `rest-api` | `tool/protocol/*` (REST/MCP/ws/agent/AI routes) | HTTP REST + MCP API servers |
 | `grpc-api` | `tool/protocol/grpc` | gRPC API server |
 | `ws-api` | `tool/protocol/ws` | WebSocket pub/sub |
-| `nse` | Pinned `eggsec-nse` Git dependency, engine `nse_bridge`/`nse_http_capability`/`nse_tool` | Nmap NSE script support (Lua VM) |
+| `nse` | Published `eggsec-nse` 0.2.0 crates.io release (standalone repo; **not** a git dependency), engine `nse_bridge`/`nse_http_capability`/`nse_tool` | Nmap NSE script support (Lua VM) |
 | `nse-ssh2` | NSE SSH2 libs, `auth/multi_protocol` | SSH2/libssh2 support |
 | `nse-sandbox` | NSE sandbox | Restrict dangerous Lua operations |
 | `ai-integration` | `ai/planner`, `ai/script_gen` | AI planner, script generation |
@@ -411,6 +428,7 @@ Eggsec uses Cargo feature flags to conditionally compile optional capabilities. 
 | `postex` | `postex/` | Post-exploitation simulation. Defense-lab only |
 | `c2` | `c2/` | C2 simulation (`= ["postex", "evasion"]`) |
 | `web-proxy` | `proxy/` facade, `eggsec-web-proxy` deps | MITM web proxy. Defense-lab only |
+| `udp-scan` | `scanner/ports` + `eggsec-udp-scan` | UDP port scanning with ICMP-error correlation (`--udp` on `scan-ports`). Root only on Linux for raw ICMP; unprivileged fallback otherwise |
 | `pdf` | engine `output/pdf` (printpdf) | PDF report generation |
 | `email-notifications` | rest-api email transport | SMTP email via lettre |
 | `logging-subscriber` | process-host crates | tracing subscriber/appender setup |
@@ -431,24 +449,24 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 | `SensitiveString` | `eggsec-core::types` | Zeroized credential wrapper, constant-time compare |
 | `EggsecConfig` | `config/settings.rs` | Main configuration struct |
 | `OutputFormat` | `types.rs` | Report format enum |
-| `PayloadType` | `fuzzer/payloads/mod.rs:49` | Exactly 40 payload categories |
+| `PayloadType` | `eggsec-payloads/src/lib.rs:95` (facade: `fuzzer/payloads`) | Exactly 40 payload categories |
 | `ScanProfile` | `types.rs:123` | 18 pipeline profile variants |
 | `EggsecError` | `error/mod.rs:44` | Canonical error type, 23 variants |
 | `Finding` | `findings/mod.rs` | Canonical finding structure (19 fields) |
 | `DomainDescriptor` | `domain/mod.rs` | Static metadata descriptor for capability domains |
-| `TaskKind` | `eggsec-runtime/src/request.rs:53` | 29 frontend-neutral task variants |
+| `TaskKind` | `eggsec-runtime/src/request.rs:64` | 30 frontend-neutral task variants |
 
 ### Enforcement Types
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `ExecutionSurface` | `config/policy.rs:357` | Caller origin (9 variants) |
-| `ExecutionProfile` | `config/policy.rs:461` | Trust boundary (5 variants) |
-| `OperationRisk` | `config/policy.rs:9` | Risk tier (15 levels) |
+| `ExecutionSurface` | `eggsec-policy/src/policy.rs:362` | Caller origin (9 variants) |
+| `ExecutionProfile` | `eggsec-policy/src/policy.rs:466` | Trust boundary (5 variants) |
+| `OperationRisk` | `eggsec-policy/src/policy.rs:9` | Risk tier (15 levels) |
 | `OperationMetadata` | `eggsec-policy::catalog` (facade: `config/policy_catalog.rs`) | Static registry of all operations (34 canonical + 42 aliases) — single source of truth |
 | `OperationDescriptor` | `config/policy.rs` | Unit of policy evaluation |
-| `EnforcementContext` | `config/policy_decision.rs` | Central policy evaluation gate |
-| `ApprovedOperation` | `config/policy_decision.rs:331` | Proof-of-enforcement token |
+| `EnforcementContext` | `config/policy_decision.rs:42` (engine facade over `eggsec-policy`) | Central policy evaluation gate |
+| `ApprovedOperation` | `eggsec-policy/src/approval.rs:22` | Proof-of-enforcement token |
 | `EnforcedDispatcher` | `tool/dispatcher.rs` | Type-level dispatch gate with binding validation |
 | `LoadedScope` | `config/scope.rs:217` | Scope + provenance (`ScopeSource`: DefaultEmpty/ConfigFile/CliScopeFile/GeneratedPreset) |
 
@@ -478,13 +496,15 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-report-model  (report/evidence DTOs — ScanReportData, ReportEnvelope; data only)
     │       ↑
     │       └── eggsec-output (report formats, dedup, trends over the model — never the reverse)
-    ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron)
+    ├── eggsec-agent         (agent registry, scheduler, lifecycle, cron; + eggsec-transport)
     ├── eggsec-transport     (scoped HTTP contract — bytes/http/url/thiserror + log-only tracing)
     ├── eggsec-transport-eggfetch (pinned HttpTransport over eggfetch-core 0.2.0; logical-URL + singular resolved direct, production direct load-test backend)
     ├── eggsec-policy         (authorization semantics — pure data + algorithms; engine bridges DNS/features/authority)
     ├── eggsec-service-db     (service fingerprint knowledge — port→service tables + banner heuristics; rustc-hash only)
     ├── eggsec-secrets        (credential detection — 25 patterns + entropy gate; eggsec-core only)
-    ├── eggsec-payloads       (payload corpora — 34 data-only modules + PayloadType/Payload; eggsec-core only)
+    ├── eggsec-payloads       (payload corpora — 40 payload modules + PayloadType/Payload; eggsec-core only)
+    │
+    ├── eggsec-udp-scan       (UDP scanner — ICMP correlation + honest classification; zero workspace deps)
     │
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
@@ -495,7 +515,7 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-db-lab        (database pentest domain)
     ├── eggsec-web-proxy     (MITM proxy domain)
     ├── eggsec-mobile-lab    (mobile analysis domain)
-    ├── eggstack/eggsec-nse  (external pinned Nmap NSE/Lua runtime)
+    ├── eggstack/eggsec-nse  (published crates.io 0.2.0 — Nmap NSE/Lua runtime, standalone repo)
     │
     └── eggsec               (ALL above incl. transport — main engine, lib only)
             ↑
@@ -516,7 +536,7 @@ Enforced by `scripts/check-architecture-guards.sh`:
 - Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend on `eggsec-report-model` for DTOs, never on `eggsec-output` (Check 120)
 - `eggsec-policy` has no Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!` feature queries, no resolver/authority behavior (Check 121); engine → policy one-way with transport independent of policy (Check 122); engine policy modules stay facades with no redefined core types (Check 123)
 - `eggsec-service-db` has no workspace dependency at all, no runtime/network/TLS/frontend/persistence dep, and no `Scope`/`ApprovedOperation`/`Capability` reference (Check 148); the engine reaches it only through the `pub use eggsec_service_db as service_data` facade, and Check 114 pins it as the single canonical service-table owner
-- `eggsec-payloads` has `eggsec-core` as its only workspace dependency, no `reqwest`/Tokio/TLS/frontend/persistence dep, and no authorization reference (Check 148); the engine dispatches the 6 live-probe types locally and delegates the other 34 (Check 150), and `tests/fuzzer_payload_corpus_seam.rs` asserts all 6 advanced types still return real payloads and that the cached union equals the per-type sum over all 40
+- `eggsec-payloads` has `eggsec-core` as its only workspace dependency, no `reqwest`/Tokio/TLS/frontend/persistence dep, and no authorization reference (Check 148); the engine dispatches the 6 live-probe types locally and delegates the other 34 payload generators (40 total) (Check 150), and `tests/fuzzer_payload_corpus_seam.rs` asserts all 6 advanced types still return real payloads and that the cached union equals the per-type sum over all 40
 - `eggsec-secrets` has `eggsec-core` as its only workspace dependency, no runtime/network/TLS/frontend/persistence dep, and no `Scope`/`ApprovedOperation`/`Capability` reference (Check 148); the engine reaches it only through the `pub use eggsec_secrets as secrets` facade, which is what keeps the Python bindings' exhaustive 30-arm `SecretType` match compiling with zero edits. Check 149 pins the canonical owner and freezes the entropy gate at `3.5`, scoped only to `SecretType::AwsSecretKey`
 - Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine
 
@@ -604,6 +624,7 @@ Complete catalog of component deep-dives in this directory:
 | **Compliance & Risk** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
+| **Knowledge Corpus** | [knowledge_corpus.md](knowledge_corpus.md) — `eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan` |
 | **Utilities & Support** | [utils.md](utils.md), [logging.md](logging.md), [generated.md](generated.md), [operation_request.md](operation_request.md), [platform.md](platform.md) |
 | **Process & Reference** | [compile_time_baseline.md](compile_time_baseline.md), [network_dependency_baseline.md](network_dependency_baseline.md), [network_dependency_closure.md](network_dependency_closure.md), [transport.md](transport.md), [transport_eggfetch.md](transport_eggfetch.md), [egress_reuse_decision.md](egress_reuse_decision.md), [capability_segregation.md](capability_segregation.md), [api_extraction_boundary.md](api_extraction_boundary.md), [report_envelope.md](report_envelope.md), [supply_chain.md](supply_chain.md), [workflow.md](workflow.md), [performance.md](performance.md) |
 
@@ -628,4 +649,6 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-09-30 — Same-day systematic deep-dive review: 8 subagent batches across all deep-dives; applied verified HIGH fixes (config + dispatch `ApprovedExecution`/`execute_approved_execution` bundle path + 34-metadata-vs-29-TaskKind gap note, recon `containers` gate + secrets 25-count, scanner `service_data.rs`, cli_commands stress/network handler rows, ai_agents 3740-line/tool-18-entry, web_proxy ProxyFlow 19/BudgetUsage 14/RuleCondition 13, notify test counts, domain_contract 15 fields, supply_chain `cyclonedx-bom`, container kube/k8s-openapi deps, db-lab 23 correlation/16 compliance rules, transport crate ordinals) plus line-cite drift corrections (networking, egress, capability_segregation, hunt, browser, websocket, evasion, nse_report_display, logging, generated). Headline counts re-verified: 19 workspace crates, 34 ops + 42 aliases, 29 TaskKind, 33 TUI tabs, 52 CLI subcommands, 32 handler modules. Prior review: 2026-09-25 (8 subagent batches).*
+*Last updated: 2026-10-06 — Knowledge-corpus convergence review (subagent batches across discovery, interfaces, enforcement/config, and the new corpus crates). Corrections applied here: **19 → 23 workspace crates** (added `eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan` to the crate table with an inline boundary note); added the missing `eggsec-udp-scan` row and a dedicated **Knowledge Corpus** module-index section linking [knowledge_corpus.md](knowledge_corpus.md); **TaskKind 29 → 30** variants (`eggsec-runtime/src/request.rs:64`, new `C2` variant); `PayloadType` citation re-pointed from `fuzzer/payloads/mod.rs:49` to its new owner `eggsec-payloads/src/lib.rs:95`; enforcement-type citations re-pointed from the `config/` facades to their real owners in `eggsec-policy` (`policy.rs:362`/`466`, `approval.rs:22`) and `EnforcementContext::evaluate` to `policy_decision.rs:141`; `eggsec-nse` corrected from *pinned Git dependency* to the **published crates.io 0.2.0 release**; `eggsec-agent` internal deps corrected from "`eggsec-core` only" to `eggsec-core` + `eggsec-transport`; `utils` corrected from "20 sub-modules" to the **12 that remain** (with the Phase A/D/G pruning history); added the `udp-scan` feature gate to the flag table; payloads corpus count corrected from "34 data-only modules" to **40 payload modules (34 generators + 6 probers)**.
+
+Re-verified unchanged: 34 operations + 42 aliases (`eggsec-policy/src/catalog.rs`), 33 TUI tabs (`eggsec-tui/src/tabs/mod.rs:154`), 52 CLI subcommands (`eggsec/src/cli/mod.rs`), 32 handler modules, `ExecutionSurface` 9 / `ExecutionProfile` 5 / `OperationRisk` 15 / `Capability` 19 / `IntendedUse` 8 / `DenialClass` 8 / `ConfirmationClass` 8, engine default feature set empty. Prior review: 2026-09-30 (8 subagent batches).*

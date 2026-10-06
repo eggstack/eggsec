@@ -4,6 +4,8 @@ The TUI is a ratatui-based interactive terminal frontend for Eggsec. It provides
 
 See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md) for frontend-neutral DTOs, [cli_commands.md](cli_commands.md) for CLI command dispatch, [dispatch.md](dispatch.md) for task dispatch architecture, and [runtime.md](runtime.md) for the runtime lifecycle.
 
+**Corrections (2026-10-06 re-verification)**: the 33-variant tab table, `TabSpec` field values, 21+12 base/gated split, 27 operation-backed / 12 direct-launch / 6 operation-less summaries, 50 packaged themes, 37 theme color fields, 27 named CSS colors, 7-overlay precedence, and the guard rules (`.get(i)`, no-console-writer, `TerminalSession`, `block_on_ambient`) all re-verified as **correct**. Stale items fixed: shifted `tabs/mod.rs`/`spec.rs`/`runner.rs` line cites; `intercept.rs` → `intercept/`; dead `has_settings_selector_open()` → `has_any_tab_selector_open()`; incomplete global-shortcut list (Ctrl+U, Ctrl+D, Ctrl+/, Ctrl+V, `w`/`b`, `/`, `Shift+H`/`Shift+L`); per-file test counts (shell 7→16, core 96→98, navigation 53→55, action-hints 16→20, crate total ~983→1,128); `handle_enter_regression` described as table-driven (it is per-tab); and a new section for the custom NSE script dispatch path, which was previously undocumented.
+
 ## Role & Responsibilities
 
 - Render the shell (tab bar, breadcrumb, content area, status bar) and all overlays.
@@ -17,7 +19,7 @@ See [overview.md](overview.md) for workspace context, [ui_model.md](ui_model.md)
 
 ### Tab Inventory (33 variants)
 
-The `Tab` enum at `tabs/mod.rs:147-182` declares 33 variants. `Tab::all()` at `tabs/mod.rs:196-227` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:113-717` has exactly 33 entries; the tests `test_tab_spec_count_matches_all_tab_variants` (`spec.rs:1136`, asserts `tab_specs().len() == all_variants.len()`) and `test_tab_specs_returns_all_33` (`spec.rs:1183`, asserts `len == 33`) pin the count.
+The `Tab` enum at `tabs/mod.rs:154–188` declares 33 variants (discriminants 0..=32). `Tab::all()` at `tabs/mod.rs:203–232` uses `LazyLock` + `cfg_push_tabs!` to return 21 base tabs (always compiled) + 12 feature-gated tabs. `TAB_SPECS` at `tabs/spec.rs:113–721` has exactly 33 entries; the tests `test_tab_spec_count_matches_all_tab_variants` (`spec.rs:1141`, asserts `tab_specs().len() == all_variants.len()`) and `test_tab_specs_returns_all_33` (`spec.rs:1188`, asserts `len == 33`) pin the count.
 
 | # | Variant | stable_id | Feature Gate | Category | Risk | Operation | direct_launch | Source Module |
 |---|---------|-----------|-------------|----------|------|-----------|--------------|---------------|
@@ -52,7 +54,7 @@ The `Tab` enum at `tabs/mod.rs:147-182` declares 33 variants. `Tab::all()` at `t
 | 28 | Wireless | `wireless` | `wireless` | Assessment | SafeActive | `wireless` | **yes** | `wireless.rs` |
 | 29 | Auth | `auth` | — | Assessment | Intrusive | `auth-test` | **yes** | `auth.rs` |
 | 30 | DbPentest | `db_pentest` | `db-pentest` | Assessment | Intrusive | `db-pentest` | **yes** | `db_pentest.rs` |
-| 31 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept.rs` |
+| 31 | Intercept | `intercept` | `web-proxy` | Traffic | Intrusive | `proxy-intercept` | **yes** | `intercept/` (mod + render + types + utils) |
 | 32 | C2 | `c2` | `c2` | Assessment | Intrusive | `c2` | **yes** | `c2.rs` |
 
 **Summary**: 21 base + 12 gated = 33 total. 27 have operation IDs (enforcement evaluation). 12 are direct-launch (pre-dispatch policy gate in `handle_enter()`). 6 have no operation/task/descriptor (Proxy, Cluster, Report, Settings, History, Dashboard).
@@ -67,7 +69,7 @@ Phase 0 parity resolutions (see `crates/eggsec-tui/src/parity.rs` and `crates/eg
 - `compliance`/`storage`/`integrations`/`workflow`/`vuln` are operation-backed TUI/runtime tabs; their CLI commands (where present) are helper-only.
 - No TUI tabs for `waf-bypass`, `remote`, `search`, `mobile-static`, `mobile-dynamic`, `evasion`, `postex` (intentionally CLI/programmatic-only; `wireless-deauth` via Wireless active-mode override).
 
-Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:468-560`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
+Tab dispatch uses the `tab_dispatch!` macro (`tabs/mod.rs:490–525`) which generates `as_tab_state`, `as_tab_state_mut`, `as_tab_render`, and `as_tab_input` methods. Feature-gated tabs fall back to `dashboard` when their feature is disabled.
 
 ### Surface Model (Phase 2)
 
@@ -101,11 +103,11 @@ implying a live reload.
 
 `TabStore` owns all tab instances as named fields (one per variant). When a feature is disabled, the gated field still exists but is only accessible through the `dashboard` fallback in the dispatch macro.
 
-### Tab Traits (`tabs/mod.rs:568-632`)
+### Tab Traits (`tabs/mod.rs:590–676`)
 
 | Trait | Methods | Purpose |
 |-------|---------|---------|
-| `TabState` | `state()`, `progress()`, `is_running()`, `has_selector_open()`, `reset()`, `set_error()`, `set_completed_message()` | State inspection and mutation |
+| `TabState` | `state()`, `progress()`, `is_running()`, `has_selector_open()`, `reset()`, `set_error()`, `set_completed_message()` (plus a `#[cfg(test)] set_state()`) | State inspection and mutation |
 | `TabRender` | `render()`, `render_overlays()`, `breadcrumb()` | Rendering |
 | `TabInput` | 28 methods (see below) | Input handling |
 
@@ -277,8 +279,8 @@ See [logging.md](logging.md) for the console emission policy and
 Three-layer decode, each returning `Vec<UiAction>`:
 
 1. **Overlay decode** (`decode_topmost_overlay` → `OverlayController::decode`) — PolicyConfirm, ConfirmPopup, CommandPalette, QuickSwitch, Search, HttpOptions, Help.
-2. **Global shortcuts** (`decode_global_shortcuts`) — `Ctrl+C`, `Ctrl+P`, `Ctrl+X`, `Ctrl+F`, `Ctrl+T`, `Ctrl+B`, `Ctrl+Z`, `Ctrl+Y`, `Shift+E`, `Space`, digit keys `1-9`/`0`, `gg` pending.
-3. **Mode-specific** (`decode_mode_specific_input`) — Normal mode: hjkl, i, q, n/p, e, s, r, g/G. Insert mode: char input, backspace, delete, autocomplete, paste, Esc → Normal.
+2. **Global shortcuts** (`decode_global_shortcuts`) — `Ctrl+C`, `Ctrl+X`, `Ctrl+U`/`Ctrl+D` (and bare PageUp/PageDown), `Ctrl+/`, `Ctrl+P`, `Ctrl+F`, `Ctrl+T`, `Ctrl+G`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+Y`, Home/End, arrows, `Esc`, `Tab`/`Shift+BackTab`, `Enter`, plus the `gg` pending sequence. Normal-mode-only keys (`Space`, `Ctrl+B`, digits, `hjkl`, …) live in layer 3.
+3. **Mode-specific** (`decode_mode_specific_input`) — Normal mode: `hjkl`, `i`, `q`, `y`, `w`/`b`/`B`, `n`/`N`/`p`, `Shift+H`/`Shift+L`, `e`, `s` (Settings only), `d` (History only), `r`, `/`, `G`/`g`. Insert mode: char input, backspace, delete, autocomplete, paste, Esc → Normal.
 
 `App::apply_action()` / `apply_actions()` is the single mutation point for all key-driven UI changes.
 
@@ -298,7 +300,7 @@ The user-visible symptom is **dead input**, not a stale internal field: a focus 
 
 All three shared input macros (`tab_input_2area!`, `tab_input_3area!`, `tab_input_narea!`) and every hand-written `impl TabInput` now carry the guard. `tabs/mid_run_navigation.rs` pins the invariant: it drives every runnable tab into `Running` and asserts that no navigation key moves focus off the input area, plus a companion test that navigation still works while idle (so the guard cannot be applied unconditionally).
 
-`Tabs/mod.rs` exposes a `#[cfg(test)] fn set_state` on `TabState`, generated by `tab_state_boilerplate!` and by hand for the tabs with a manual `TabState` impl. Production code never calls it — a tab reaches `Running` only through a dispatch. Tabs with no task lifecycle (`Dashboard`, `History`, `Settings`) report `AppState::Idle` unconditionally and have no hook.
+`tabs/mod.rs:609` exposes a `#[cfg(test)] fn set_state` on `TabState`, generated by `tab_state_boilerplate!` and by hand for the tabs with a manual `TabState` impl. Production code never calls it — a tab reaches `Running` only through a dispatch. Tabs with no task lifecycle (`Dashboard`, `History`, `Settings`) report `AppState::Idle` unconditionally and have no hook.
 
 ### The Tab-Entry Focus Invariant
 
@@ -379,11 +381,11 @@ handler does before dispatch.
 
 ## Daemon/Runtime Integration
 
-### Runtime Binding (`app/mod.rs:146`)
+### Runtime Binding (`app/mod.rs:152`)
 
 `RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
 
-### Attach Mode (`app/runner.rs:403-494`)
+### Attach Mode (`app/runner.rs:415–507`)
 
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`.
 
@@ -426,7 +428,7 @@ pub struct EnforcementFacade {
 
 Phase 0.1 exact binding: cached reuse requires `ApprovedOperation::matches_descriptor()` (derived `PartialEq`, future fields automatic) plus unchanged scope fingerprint, policy hash, surface/profile, and manual-override state. Stale tokens are discarded for fresh evaluation; engine `validate_request_binding` remains the final gate. `toggle_posture()` and override changes invalidate the cache; `invalidate_cached_approval()` covers future live reload.
 
-Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `set_cached_approval(approved)`, `clear_cached_approval()`, `invalidate_cached_approval()`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation: `toggle_posture()`, `mode_label()`, `status_string()`, `preflight()`, `enforcement()`, `loaded_scope()`.
+Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `set_cached_approval(approved)`, `clear_cached_approval()`, `invalidate_cached_approval()`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation and read accessors: `state()`, `state_mut()`, `toggle_posture()`, `mode_label()`, `status_string()`, `scope_label()`, `allow_rule_count()`, `exclusion_rule_count()`, `is_guarded()`, `preflight()`, `enforcement()`, `loaded_scope()`.
 
 ### Pre-Dispatch Gate
 
@@ -471,14 +473,19 @@ assert!(text.contains("Mode:"));
 
 ### Test Counts
 
+Counts below are `#[test]` / `#[tokio::test]` attributes in source (no cargo run for this re-verification).
+
 - `ui/tests.rs`: 16 tests (shell rendering, overlays, preflight indicators, empty states)
-- `ui/shell.rs`: 7 tests (status bar, tab bar, breadcrumb)
-- `tabs/core.rs`: 96 tests (field helpers, start/render patterns, per-tab cases)
-- `app/navigation.rs`: 53 tests (tab switching, edge detection)
-- `tabs/handle_enter_regression.rs`: 40 table-driven tests across 12 tabs
+- `ui/shell.rs`: 16 tests (status bar, tab bar, breadcrumb, notification-priority status field)
+- `tabs/core.rs`: 98 tests (field helpers, start/render patterns, per-tab cases)
+- `app/navigation.rs`: 55 tests (tab switching, edge detection)
+- `tabs/handle_enter_regression.rs`: 40 tests across 12 tabs (GraphQl, OAuth, Recon, Load, ScanPorts, Stress, Packet, Waf, Cluster, Dashboard, Settings, History)
 - `tabs/input_accessibility.rs`: `#[cfg(test)]` module verifying unique input labels and focus traversal
-- `app/task_management.rs`: builder semantic tests for feature-gated runtime request construction (db-pentest, intercept, C2) plus canonical-conversion round trips
-- Total TUI crate: ~983 tests
+- `tabs/mid_run_navigation.rs`: mid-run `is_running()` navigation invariant + the idle counter-test
+- `tabs/tab_entry_focus.rs`: per-tab entry-focus invariant
+- `app/task_management.rs`: 37 tests over feature-gated runtime request builders (db-pentest, intercept, C2, NSE) plus canonical-conversion round trips
+- `app/action_hints.rs`: 20 tests covering hint priority levels
+- Total TUI crate `src/`: **1,128** test attributes across 121 `.rs` files
 
 ### Runtime Request Builders (`app/task_management.rs`)
 
@@ -490,6 +497,22 @@ Semantic rules for safety-relevant fields:
 - `detect_db_type_from_target()` infers the mandatory `db_type` from the connection-string scheme (the tab has no db-type control); unknown schemes return `None` from the builder rather than fabricating a value.
 - `parse_listen_addr()` splits the Intercept listen address into typed host/port components without silently coercing missing pieces.
 
+### Custom NSE Script Dispatch (Nse tab)
+
+The Nse tab can dispatch an operator-supplied script path, not only a named
+built-in. The path crosses `NseParams::custom_script` (`eggsec-runtime/src/request.rs:327–331`,
+`#[serde(default)]` so pre-existing serialized requests still decode) and
+`dispatch::canonical_execution` forwards it to `run_nse` instead of pinning
+`None` (`canonical_execution.rs:1584–1592`).
+
+`NseTab::start()` (`tabs/nse.rs:520–549`) still refuses a whitespace-only path,
+which would otherwise resolve as a literal filename, and reports it as a
+`TabError::Config` rather than silently falling back to the selected built-in.
+`NseTab::uses_custom_script()` (`tabs/nse.rs:556–558`) is true when a path is set
+or the selector is on `custom`. Resolution stays with the engine's
+`NseScriptSource::File` / `ScriptResolver` (allow-script-files → existence →
+extension allowlist → canonical root containment), not a TUI filesystem read.
+
 ### Feature-Profile Verification
 
 - `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only).
@@ -498,7 +521,7 @@ Semantic rules for safety-relevant fields:
 
 ### Regression Test Harness (`tabs/handle_enter_regression.rs`)
 
-40 table-driven tests validate `handle_enter()` across all focus areas for 12 tabs: focused input blurs without starting, unfocused input with valid target starts, options toggle without starting, results area is no-op.
+40 tests validate `handle_enter()` across all focus areas for 12 tabs: focused input blurs without starting, unfocused input with valid target starts, options toggle without starting, results area is no-op. They are written per tab rather than table-driven, because each tab has its own focus-area enum.
 
 ## Invariants & Gotchas
 
@@ -507,7 +530,7 @@ Semantic rules for safety-relevant fields:
 1. **No dispatch in TUI**: Worker dispatch lives in `eggsec::dispatch`. TUI submits via `spawn_task()` and receives results.
 2. **Enforcement is central**: `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. TUI never bypasses it.
 3. **Decode/apply split**: `KeyHandler` decodes to `Vec<UiAction>`; `App::apply_action()` applies. Testable independently.
-4. **TabSpec is metadata source**: `TabSpec` carries title, stable_id, cli_command, category, risk_group, feature, operation, direct_launch. `Tab` methods delegate to `TabSpec`.
+4. **TabSpec is metadata source**: `TabSpec` carries `tab`, `stable_id`, `title`, `cli_command`, `description`, `help_text`, `breadcrumb_label`, `category`, `risk_group`, `feature`, `operation`, `direct_launch`, plus the reserved/test-only `supports_run` / `supports_export` / `supports_help` / `has_settings` flags. `Tab` methods delegate to `TabSpec`.
 5. **Runtime dependency boundary**: `eggsec-runtime` must never depend on `eggsec`. Architecture guard enforces this.
 6. **`eggsec-output` independence**: Must not depend on `eggsec` (engine) or `eggsec-runtime`.
 
@@ -516,19 +539,19 @@ Semantic rules for safety-relevant fields:
 1. **`is_running()` guards**: All input/navigation handlers must check `!self.is_running()` before processing — including `handle_focus_next`/`handle_focus_prev`/`handle_up`/`handle_down`, which mutate focus mid-scan. Pinned by `tabs/mid_run_navigation.rs`.
 2. **`reset()` completeness**: Must reset ALL state — focus_area, selectors (`.cancel()`), inputs (`.blur()`, `.clear()`), checkboxes, progress, results, error strings, mode flags.
 3. **Tab-entry focus**: Every `TabInput` impl must provide `ensure_input_focus`; otherwise a freshly entered tab discards all input. Pinned by `tabs/tab_entry_focus.rs`.
-3. **Bounds safety**: Use `.get(i)` not `chunks[i]`. Use `InputGroup::valid_focused_index()` not `self.focused` directly. Use `.first()` not `.get(0)`.
-4. **No silent error suppression**: Never `let _ =` or `filter_map(|e| e.ok())`. Always `tracing::warn!`.
-5. **FxHashMap/FxHashSet**: Use `rustc_hash::FxHashMap`/`FxHashSet` in performance paths, not std collections.
-6. **Explicit `&Theme` params**: New rendering code should prefer explicit `&Theme` parameters over `tc!()` macro.
-7. **TabWindow/TabSpan**: Use `TabWindow` for pagination, not raw tab count division. Never use `tab as usize` for indexing.
-8. **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
-9. **Stale-focus guard**: Always use `InputGroup::valid_focused_index()` instead of direct `self.focused` indexing.
-10. **Single-writer terminal rule**: Never `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or touch `stdout` / `stderr` directly in production TUI code. Keep `tracing` diagnostics; surface user-actionable conditions through `Notification`, per-tab error, popup, or status state. See the Single-Terminal-Writer section above.
-11. **Cleanup-safe lifecycle**: Terminal setup/teardown lives in `TerminalSession` (`app/runner.rs`) over `ratatui::try_init()`; never reintroduce open-coded raw/alternate-screen calls, nested `tokio::runtime::Runtime::new()` on the daemon path (use `runner::block_on_ambient`), competing panic hooks, or `Stdio::inherit()`. Guard Check 139 pins this.
+4. **Bounds safety**: Use `.get(i)` not `chunks[i]`. Use `InputGroup::valid_focused_index()` not `self.focused` directly. Use `.first()` not `.get(0)`.
+5. **No silent error suppression**: Never `let _ =` or `filter_map(|e| e.ok())`. Always `tracing::warn!`.
+6. **FxHashMap/FxHashSet**: Use `rustc_hash::FxHashMap`/`FxHashSet` in performance paths, not std collections.
+7. **Explicit `&Theme` params**: New rendering code should prefer explicit `&Theme` parameters over `tc!()` macro.
+8. **TabWindow/TabSpan**: Use `TabWindow` for pagination, not raw tab count division. Never use `tab as usize` for indexing.
+9. **Timeout wrappers**: All spawned tokio tasks need timeout wrappers (30-300s).
+10. **Stale-focus guard**: Always use `InputGroup::valid_focused_index()` instead of direct `self.focused` indexing.
+11. **Single-writer terminal rule**: Never `println!` / `eprintln!` / `print!` / `eprint!` / `dbg!` or touch `stdout` / `stderr` directly in production TUI code. Keep `tracing` diagnostics; surface user-actionable conditions through `Notification`, per-tab error, popup, or status state. See the Single-Terminal-Writer section above.
+12. **Cleanup-safe lifecycle**: Terminal setup/teardown lives in `TerminalSession` (`app/runner.rs`) over `ratatui::try_init()`; never reintroduce open-coded raw/alternate-screen calls, nested `tokio::runtime::Runtime::new()` on the daemon path (use `runner::block_on_ambient`), competing panic hooks, or `Stdio::inherit()`. Guard Check 139 pins this.
 
 ### Overlay Selector Containment
 
-When an embedded Settings selector is open, normal-mode shortcuts are blocked via `has_settings_selector_open()` in `decode_normal_mode_input`. Only Up/Down, Enter, Escape, modifier keys, and Left/Right pass through.
+Embedded selectors are not overlays (`topmost_overlay()` returns `None` while one is open), so the normal-mode decoder is gated by `App::has_any_tab_selector_open()` (`app/mod.rs:1254`, used at `app/key_handler.rs:238`). While any tab selector is open, every normal-mode key decodes to `UiAction::Noop` except `j`/`k`, which pass through for Vim-style selector navigation. (The older per-tab `has_settings_selector_open()` guard no longer exists.) Tabs expose their own state through `TabState::has_selector_open()`.
 
 ### Entry Point
 
@@ -541,27 +564,37 @@ TUI launches from `eggsec-cli/src/main.rs` when no subcommand is provided and st
 | `Ctrl+C` | Interrupt task or quit |
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
-| `Ctrl+F` | Global search |
+| `Ctrl+F` | Global search (re-run when already open) |
 | `Ctrl+T` | Cycle all themes alphabetically |
-| `Ctrl+B` | Bookmark current tab |
 | `Ctrl+G` | Toggle Manual/Guarded enforcement posture |
-| `Ctrl+Z` | Pause/resume active task updates |
-| `Shift+E` | Export with format selection |
+| `Ctrl+B` | Bookmark current tab |
+| `Ctrl+Z` | Pause active task updates (no-op at idle) |
+| `Ctrl+U` / `Ctrl+D` | Page up / page down |
+| `Ctrl+V` | Paste (idle only) |
+| `Ctrl+Y` | Copy, or resume a paused task |
+| `Ctrl+/` | Toggle help overlay |
+| `Shift+E` | Cycle export format |
 | `Space` | Toggle help overlay |
 | `1-9`/`0` | Jump to tab by visible index |
 | `gg`/`G` | Go to top/bottom |
-| `n`/`p` | Next/prev tab |
+| `n`/`p`/`N` | Next/prev tab |
+| `Shift+H`/`Shift+L` | Prev/next tab |
 | `hjkl`/arrows | Navigation |
+| `w`/`b`/`B` | Word forward/backward |
 | `i` | Enter insert mode |
+| `/` | Tab-local search |
 | `Esc` | Return to normal / close overlay |
 | `q` | Quit (no active task) |
+| `y` | Copy |
 | `e` | Export results |
-| `s` | Save settings |
+| `s` | Save settings (Settings tab, idle) |
+| `d` | Delete history entry (History tab, idle) |
+| `r` | Reset current tab (Settings > Theme reloads themes) |
 
 ## Action Hints System (`app/action_hints.rs`)
 
-Context-aware hints replace static help text. `ActionHint` contains `key` + `label` (e.g. `"C:stop"`). `get_action_hints(app)` computes hints with priority: running task → overlay-specific → insert-mode → tab-specific → settings section-aware. `format_hints()` renders the compact string. 16 unit tests cover all priority levels.
+Context-aware hints replace static help text. `ActionHint` contains `key` + `label` (e.g. `"C:stop"`). `get_action_hints(app)` computes hints with priority: running task → overlay-specific (including `HttpOptions`) → insert-mode → tab-specific → settings section-aware. `format_hints()` renders the compact string. 20 unit tests cover all priority levels.
 
 ---
 
-*Last verified against source: 2026-08-25; single-writer section verified 2026-09-20; lifecycle/child-output closure verified 2026-09-20; cites re-verified 2026-09-22 (systematic review); tab/trait/runner cites + test counts corrected 2026-09-25 (systematic review)*
+*Last verified against source: 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*

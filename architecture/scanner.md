@@ -14,7 +14,7 @@ The Scanner module is responsible for the "discovery" phase of a security assess
   `proved_open_ports()` rather than `open_ports.len()` when counting.
 - **Endpoint discovery** via wordlist-based brute forcing (347 built-in paths) with custom wordlist support
 - **Service fingerprinting** through banner grabbing and protocol-specific probes (45 probes, CPE/CVE output)
-- **UDP fingerprinting** for DNS, SNMP, NTP, game servers, ICS/SCADA, and 40+ other services
+- **UDP fingerprinting** over a static `UDP_PROBES` table of **42 probes across 39 distinct ports** (`scanner/udp_fingerprint.rs:66`) — DNS, SNMP, NTP, MQTT, SIP, game servers, ICS/SCADA, and more
 - **ICMP host discovery** (feature-gated behind `stress-testing`)
 - **CMS scanning** for WordPress, Drupal, and Joomla (detection, component enumeration, CVE version compare, misconfiguration checks)
 - **Nuclei-style template engine** with YAML/JSON templates, Ed25519 signing/verification, marketplace integration, and Interactsh callback support

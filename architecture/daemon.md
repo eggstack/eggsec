@@ -2,6 +2,8 @@
 
 Two crates provide the persistent session host and its IPC wire format: `eggsec-daemon-protocol` (shared types, RBAC) and `eggsec-daemon` (server, persistence, optional HTTP transport). Together they enable multi-client session management, background task execution, and durable state across restarts.
 
+**Corrections (2026-10-06 re-verification)**: `rusqlite` dependency corrected 0.31 → **0.32** (cleared RUSTSEC-2024-0363); the `eggsec-daemon` dependency list was missing seven crates (`serde`, `tokio-util`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`); `full-executor` now also enables the engine's `cli` feature. All variant counts, permission mappings, route tables, socket/timeout constants, schema version, and `file:line` cites were re-checked against source and are current — no other changes.
+
 ## Role & Responsibilities
 
 | Concern | Crate |
@@ -18,7 +20,7 @@ Two crates provide the persistent session host and its IPC wire format: `eggsec-
 | Crate | Path | Dependencies | Features |
 |-------|------|-------------|----------|
 | `eggsec-daemon-protocol` | `crates/eggsec-daemon-protocol/` | `eggsec-runtime` only (no persistence, transport, or TUI deps) | None |
-| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.31 (bundled)`, `tokio`, `tracing`, `serde_json`, `anyhow`, `clap` | `http-api` (axum + async-stream + futures), `full-executor` (engine crate) |
+| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.32 (bundled)`, `tokio`, `tokio-util`, `serde`, `serde_json`, `tracing`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`, `anyhow`, `clap`; optional `eggsec` | `http-api` (axum + async-stream + futures), `full-executor` (`dep:eggsec` + `eggsec/cli`) |
 
 Architecture guards enforce:
 - `eggsec-daemon` has no TUI dependencies (`ratatui`/`crossterm`)
@@ -115,7 +117,7 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | `lib` | `src/lib.rs` | Library root: re-exports `protocol` and `client_registry` from daemon-protocol; declares `host`, `host_auth`, `host_persistence`, `server`, `config`, `error`, `store`, `client`; `http` behind `http-api` |
 | `host` | `src/host.rs` | `DaemonHost`: command dispatch, recovery (facade; RBAC/persistence delegated) |
 | `host_auth` | `src/host_auth.rs` | RBAC ownership/role helpers (`role_for_session`, `may_observe_session`) |
-| `host_persistence` | `src/host_persistence.rs` | Persistence fan-out (`PERSISTENCE_TASK_TIMEOUT`, `persistence_with_timeout`, `record_audit_event_logged`) |
+| `host_persistence` | `src/host_persistence.rs` | Persistence fan-out (`PERSISTENCE_TASK_TIMEOUT` = 30s at `:13`, `persistence_with_timeout` at `:29`, `record_audit_event_logged`) |
 | `server` | `src/server.rs` | Unix socket server: JSON-line protocol, client handler loop, subscribe streaming, bounded read |
 | `client` | `src/client.rs` | `DaemonClient`: typed client library for Unix socket communication |
 | `config` | `src/config.rs` | `DaemonConfig`: socket path, max clients, default surface, data dir, persistence toggle |
@@ -280,7 +282,7 @@ schema_meta (
 
 Schema version: `2` (stored in `schema_meta`). Migration refuses to load when stored version > current.
 
-## Configuration (`config.rs:7-26`)
+## Configuration (`config.rs:6-26`)
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
@@ -320,4 +322,4 @@ Schema version: `2` (stored in `schema_meta`). Migration refuses to load when st
 - [tui.md](tui.md) — TUI daemon attach mode
 - [cli_commands.md](cli_commands.md) — CLI daemon/session/task commands
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review); orphan-file claim, protocol lines, and server cites re-verified 2026-09-25*
+*Last verified against source: 2026-10-06 (full re-verification: variant counts, permission mapping, HTTP route table, socket/timeout constants, SQLite schema v2, dependency set, all `file:line` cites); earlier passes 2026-08-25 / 2026-09-22 / 2026-09-25*

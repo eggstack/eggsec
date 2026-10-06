@@ -4,6 +4,8 @@
 
 Standalone defense-lab module for simulating post-exploitation techniques against authorized lab targets. Provides **16 default techniques across 4 categories** (4 each) for purple teaming and defense validation. This is **simulation and detection validation**, not offensive tooling. Techniques are dry-run safe: zero side effects, complete reports with synthetic detections and confidence scores.
 
+> **Corrections (verified against source 2026-10-06):** the headline **16 techniques / 4 categories** claim was re-counted from source and is **correct** (16 `PostexTechnique` entries in `default_techniques()`, 4 per category). Re-verified unchanged: all 6 file line counts (488/87/113/92/100/68), all 8 key-type cites, all `Public API` cites (`mod.rs:122,139,143,394,449`; `lotl.rs:71`; `persistence.rs:72,91`; `lateral.rs:72`; `credential.rs:78`), the 4 domain-enum locations and variant counts, all 4 `confidence` values (0.85/0.75/0.65/0.55 dry-run, 0.3 real), `cred-001` `reversible: false` at `:357`, the bridge filter at `mod.rs:400`, and `postex = []` / `c2 = ["postex", "evasion"]` / `full` includes `postex`. Fixed stale cites: CLI dispatch `handlers/mod.rs:560` → `:533`; handler entry `handlers/postex.rs:5` → `:4`; forced-`dry_run` site `:15-16` → `:18-19` (also in Safety Model and Invariants); registry block ranges `:238-275`/`:276-312`/`:313-348`/`:349-389` → `:239-275`/`:277-312`/`:314-348`/`:350-389`; Minimal filter `:127` → `:126-129`; `to_technique()` `lotl.rs:60` → `:58`.
+
 **Non-responsibilities**: Does not perform real post-exploitation. Does not integrate with MCP, TUI pipeline, or agent surfaces (standalone defense-lab CLI). Does not interact with remote systems in dry-run mode.
 
 ## Location & Feature Gating
@@ -13,7 +15,7 @@ Standalone defense-lab module for simulating post-exploitation techniques agains
 | Module declaration | `crates/eggsec/src/postex/` | `#[cfg(feature = "postex")]` |
 | Feature flag | `crates/eggsec/Cargo.toml` | `postex = []` (marker, no deps) |
 | Included in `full` | `crates/eggsec/Cargo.toml` | `full = [..., "postex", ...]` |
-| CLI handler | `crates/eggsec/src/commands/handlers/postex.rs:5` | `#[cfg(feature = "cli")]` |
+| CLI handler | `crates/eggsec/src/commands/handlers/postex.rs:4` | `#[cfg(feature = "cli")]` |
 | CLI args | `crates/eggsec/src/cli/postex.rs` | `#[cfg(feature = "cli")]` |
 | `run_cli()` | `crates/eggsec/src/postex/mod.rs:449` | `#[cfg(feature = "cli")]` |
 
@@ -47,7 +49,7 @@ Standalone defense-lab module for simulating post-exploitation techniques agains
 
 All 16 default techniques are defined in `PostexScanner::default_techniques()` at `mod.rs:236-389`:
 
-#### LOTL (Living-Off-The-Land) — `mod.rs:238-275`
+#### LOTL (Living-Off-The-Land) — `mod.rs:239-275`
 
 | ID | Name | MITRE | Risk | Reversible | Description |
 |----|------|-------|------|------------|-------------|
@@ -56,7 +58,7 @@ All 16 default techniques are defined in `PostexScanner::default_techniques()` a
 | `lotl-003` | Certutil Download | T1105 | High | Yes | Detection of certutil.exe used for file download/decode |
 | `lotl-004` | Rundll32 Execution | T1218.011 | Medium | Yes | Detection of rundll32.exe loading malicious DLLs |
 
-#### Persistence — `mod.rs:276-312`
+#### Persistence — `mod.rs:277-312`
 
 | ID | Name | MITRE | Risk | Reversible | Description |
 |----|------|-------|------|------------|-------------|
@@ -65,7 +67,7 @@ All 16 default techniques are defined in `PostexScanner::default_techniques()` a
 | `persist-003` | Service Creation | T1543.003 | Critical | Yes | Detection of Windows service creation for persistence |
 | `persist-004` | DLL Side-Loading | T1574.002 | Critical | Yes | Detection of DLL side-loading via search order hijacking |
 
-#### Lateral Movement — `mod.rs:313-348`
+#### Lateral Movement — `mod.rs:314-348`
 
 | ID | Name | MITRE | Risk | Reversible | Description |
 |----|------|-------|------|------------|-------------|
@@ -74,7 +76,7 @@ All 16 default techniques are defined in `PostexScanner::default_techniques()` a
 | `lateral-003` | Port Forwarding | T1090 | Medium | Yes | Detection of network port forwarding for pivoting |
 | `lateral-004` | SOCKS Proxy | T1090.002 | Medium | Yes | Detection of SOCKS proxy setup for traffic relay |
 
-#### Credential Access — `mod.rs:349-389`
+#### Credential Access — `mod.rs:350-389`
 
 | ID | Name | MITRE | Risk | Reversible | Description |
 |----|------|-------|------|------------|-------------|
@@ -118,7 +120,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 - **Mode**: `DefenseLab`
 - **Risk**: `SafeActive` for dry-run, `ExploitAdjacent` for real
-- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (`commands/handlers/postex.rs:15-16`). Real mode is effectively unreachable from the CLI handler.
+- **Override**: Handler **always forces `dry_run: true`** regardless of CLI args (`commands/handlers/postex.rs:18-19`). Real mode is effectively unreachable from the CLI handler.
 
 ### Cleanup Commands
 
@@ -139,7 +141,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Safety Model
 
-- **Dry-run default**: Handler forces `dry_run: true` at `postex.rs:16`, overriding any CLI input
+- **Dry-run default**: Handler forces `dry_run: true` at `postex.rs:19`, overriding any CLI input
 - **Scope**: `DefenseLab` mode only
 - **Risk gating**: `SafeActive` (dry) / `ExploitAdjacent` (real, unreachable from CLI)
 - **No real execution**: `real_simulations()` produces low-confidence detections but does NOT execute techniques — it is a simulation stub
@@ -163,7 +165,7 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Integration Points
 
-- **CLI dispatch**: `commands/handlers/mod.rs:560` → `handle_postex()`
+- **CLI dispatch**: `commands/handlers/mod.rs:533` → `handle_postex()`
 - **CLI args**: `cli/postex.rs` — `PostexArgs` (target, dry_run, profile, category, json, output, quiet)
 - **Reporting bridge**: `to_scan_report_data()` produces `ScanReportData` with `postex-*` categories (e.g., `postex-living-off-the-land`, `postex-persistence`, `postex-lateral-movement`, `postex-credential-access`, `postex-summary`)
 - **Auto-bridge**: `report convert` handler detects `postex` scan_type and converts automatically
@@ -180,15 +182,15 @@ CLI args → handle_postex() → EnforcementContext → PostexScanner::new(dry_r
 
 ## Invariants & Gotchas
 
-1. **Handler forces dry-run**: `commands/handlers/postex.rs:15-16` always sets `dry_run: true` — real mode is unreachable from CLI
+1. **Handler forces dry-run**: `commands/handlers/postex.rs:18-19` always sets `dry_run: true` — real mode is unreachable from CLI
 2. **16 default techniques**: Exactly 4 categories × 4 techniques each, defined at `mod.rs:236-389`
-3. **Minimal profile filters**: Uses `risk <= Medium` ordering (`mod.rs:127`), not explicit list
+3. **Minimal profile filters**: Uses `risk <= Medium` ordering (`mod.rs:126-129`), not explicit list
 4. **`Aggressive == Standard`**: Both return all 16 techniques; `Aggressive` is a future expansion point (`mod.rs:130`)
 5. **Only one irreversible technique**: `cred-001` (LSASS Memory Dump, `reversible: false`) at `mod.rs:357`
-6. **Extended enums produce different IDs**: Domain module enums (`LotpCommand`, etc.) generate IDs like `lotl-T1059-001` (via `lotl.rs:60`), distinct from the default registry IDs (`lotl-001`)
+6. **Extended enums produce different IDs**: Domain module enums (`LotpCommand`, etc.) generate IDs like `lotl-T1059-001` (via `lotl.rs:58`), distinct from the default registry IDs (`lotl-001`)
 7. **No real execution**: Both `dry_run_simulations()` and `real_simulations()` produce synthetic results — neither executes actual post-exploitation techniques
 8. **Bridge skips non-simulated**: `to_scan_report_data()` filters `d.simulated` (`mod.rs:400`), so real-mode detections (always `simulated: false`) produce no bridged findings
 
 ---
 
-*Last verified against source: 2026-09-25 (LotlCommand typo fixed, Minimal filter mod.rs:122-130 verified, handler path clarified)*
+*Last verified against source: 2026-09-25 (LotlCommand typo fixed, Minimal filter mod.rs:122-130 verified, handler path clarified); counts re-verified, 11 stale cites fixed 2026-10-06 (systematic review)*
