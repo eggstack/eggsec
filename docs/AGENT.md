@@ -14,53 +14,32 @@ The agent system consists of several components:
 | **AlertRouter** | Routes alerts to configured channels (webhooks) |
 | **SkillRegistry** | Indexes and matches skills for agent behavior |
 
-## Runtime Status Tracking
+## Longitudinal Memory
 
-The agent tracks runtime state for each target and scan execution.
-
-### Runtime States
-
-| State | Description |
-|-------|-------------|
-| `Idle` | Target is not currently being scanned |
-| `Scanning` | Scan is actively running against the target |
-| `Cooldown` | Scan completed, waiting before next scheduled scan |
-| `Paused` | Target scanning is temporarily suspended |
-| `Error` | Last scan failed, waiting for retry |
-
-### State Transitions
+The agent persists scan history through `agent::memory::LongitudinalMemory`
+(`crates/eggsec/src/agent/memory.rs`). It creates two subdirectories under the
+configured `--memory-dir`:
 
 ```
-Idle → Scanning → Cooldown → Idle
-Idle → Scanning → Error → Idle
-Idle → Paused → Idle (manual resume)
-```
-
-### Runtime State Persistence
-
-Agent runtime state is persisted to `~/.config/eggsec/memory/runtime/`:
-
-```
-~/.config/eggsec/memory/runtime/
-├── agent-state.json         # Global agent state (start time, last poll)
+~/.config/eggsec/memory/
 ├── targets/
-│   ├── example.com.json     # Per-target runtime state
+│   ├── example.com.json      # Scan history per target
 │   └── api.example.com.json
-└── scans/
-    ├── scan-001.json        # Active scan state (progress, findings so far)
-    └── scan-002.json
+└── patterns/
+    └── detected.json         # Pattern analysis across targets
 ```
 
-State is persisted on:
-- State transitions (Idle → Scanning, Scanning → Cooldown)
-- Periodic snapshots (every 60 seconds during active scans)
-- Graceful shutdown
+The memory layer also derives a per-target snapshot path and an
+"already alerted findings" path from the same root. There is no separate
+`runtime/` tree, `agent-state.json`, or `scans/` directory.
 
-State files are written through an atomic temporary-file-and-rename flow. Each
-write targets a concrete JSON file, creates a sibling `*.tmp` file, flushes it,
-and then renames it over the destination. Paths that do not resolve to a file
-name are rejected with context instead of panicking, so persistence failures can
-be reported cleanly by the agent.
+### Atomic Writes
+
+Every memory file is written through an atomic temporary-file-and-rename flow:
+each write targets a concrete JSON file, creates a sibling `*.tmp` file, flushes
+it, and then renames it over the destination. Paths that do not resolve to a
+file name are rejected with context instead of panicking, so persistence
+failures are reported cleanly by the agent.
 
 ## Graceful Shutdown
 
@@ -73,62 +52,54 @@ The agent handles shutdown signals (`SIGTERM`, `SIGINT`) gracefully:
 5. **Close connections** - HTTP clients, database connections, and file handles are closed
 
 On restart, the agent:
-- Loads persisted runtime state
-- Resumes cooldown timers from where they left off
-- Skips targets that were mid-scan (treats them as errored for retry)
+- Loads persisted memory (per-target scan history and detected patterns)
+- Re-derives cooldown state from the last recorded scan timestamp
 
 ## Scan Budgets and Cooldowns
 
-### Scan Budgets
+### Operational Constraints
 
-Each target scan has resource budgets to prevent runaway executions:
+Per-run throttling is expressed as `agent::constraints::OperationalConstraints`
+(`crates/eggsec/src/agent/constraints.rs:167`), not as a per-scan budget block:
 
-| Budget | Default | Description |
-|--------|---------|-------------|
-| `max_duration_ms` | 300,000 (5 min) | Maximum scan duration |
-| `max_findings` | 100 | Stop after N findings |
-| `max_requests` | 1,000 | Maximum HTTP requests |
-| `max_payloads` | 500 | Maximum fuzzing payloads |
-
-Budgets can be set per-target in the portfolio:
-
-```json
-{
-  "target": "https://api.example.com",
-  "budgets": {
-    "max_duration_ms": 600000,
-    "max_findings": 50,
-    "max_requests": 500
-  }
+```rust
+pub struct OperationalConstraints {
+    pub off_peak_config: OffPeakConfig,
+    pub alert_routing: AlertRoutingRules,
+    pub do_not_do_list: DoNotDoList,
+    pub rate_limit_budget: Option<usize>,
+    pub require_approval_for: Vec<String>,
+    pub max_concurrent_scans: Option<usize>,
+    pub per_target_cooldown_secs: Option<u64>,
 }
 ```
 
+Every field is `Option`-or-defaulted; the builder methods (`with_off_peak_config`,
+`with_alert_routing`, `with_do_not_do_list`, `with_max_concurrent_scans`,
+`with_per_target_cooldown`) are the intended construction path.
+
+Per-scan resource budgets (max duration, max findings, max payloads) live with
+the scan depth / probe risk configuration, not in the agent constraints -- see
+`architecture/runtime.md`.
+
 **Enforcement (2026-06-28, Phase 3):** `handle_agent()` requires explicit scope manifest (`LoadedScope::is_explicit_manifest()`) and refuses to run without it. As defense-in-depth, `handle_agent` defensively rebuilds `EnforcementContext::agent_strict` from the current policy and loaded scope instead of trusting the incoming `CommandContext` enforcement. `Agent::new()` validates that `config.enforcement` is `AgentStrict` and rejects `ManualPermissive`, `ManualGuarded`, or other non-agent profiles (the `None` case is allowed for test-only construction). Per-scan `enforcement.evaluate` (central boundary: provenance, DenialClass downgrade for ManualPermissive only, positive capability checks) is re-evaluated immediately before dispatch in `execute_scan_with_depth` (in addition to startup gating). If `enforced_dispatcher` is present but `ApprovedOperation` is missing at dispatch time, agent returns a hard invariant error (no raw dispatch fallback). Manual override flags are never honored by agent execution.
+
+Verified at `crates/eggsec/src/commands/handlers/agent.rs:35` (profile check),
+`:54` (explicit manifest), `:61` (rebuild), and
+`crates/eggsec/src/agent/mod.rs:244` (`Agent::new`).
 
 > For MCP and autonomous-agent execution, `EnforcementContext::evaluate()` is the mandatory pre-dispatch gate. Scope provenance must come from `LoadedScope`; raw `Scope` is not sufficient for automated execution.
 
 ### Cooldowns
 
-After a scan completes, the target enters a cooldown period before the next scan is allowed:
+Cooldown is a single per-target interval, not a per-scan-type table. When
+`per_target_cooldown_secs` is set, the scheduler skips a target whose elapsed
+time since the last scan is still below the threshold
+(`crates/eggsec/src/agent/mod.rs:805`):
 
-| Scan Type | Default Cooldown |
-|-----------|-----------------|
-| Quick scan | 5 minutes |
-| Full assessment | 1 hour |
-| WAF testing | 30 minutes |
-| Stress testing | 4 hours |
-| Recon only | 15 minutes |
-
-Cooldowns are configurable per-target:
-
-```json
-{
-  "target": "https://api.example.com",
-  "cooldowns": {
-    "full_assessment_ms": 3600000,
-    "quick_scan_ms": 300000,
-    "stress_test_ms": 14400000
-  }
+```rust
+if let Some(cooldown) = self.constraints.as_ref().and_then(|c| c.per_target_cooldown_secs) {
+    // "Skipping {target} - per-target cooldown ({n}s remaining)"
 }
 ```
 
@@ -137,15 +108,20 @@ Cooldowns are configurable per-target:
 ### Build Requirements
 
 ```bash
-# Agent requires rest-api feature
-cargo build --release --features "rest-api"
+# The workspace root is a virtual manifest -- build the CLI package.
+# Agent requires the rest-api feature
+cargo build --release -p eggsec-cli --features rest-api
 
 # With AI integration (recommended for smart scanning)
-cargo build --release --features "rest-api ai-integration"
+cargo build --release -p eggsec-cli --features "rest-api ai-integration"
 
-# Full features
-cargo build --release --features "full"
+# Install from source
+cargo install --path crates/eggsec-cli --features rest-api
 ```
+
+`--features` must be applied to the `-p eggsec-cli` package; a bare
+`cargo build --features ...` at the workspace root does not resolve. `full`
+aggregates are curated rather than exhaustive -- see `docs/FEATURE_MATRIX.md`.
 
 ### Directory Setup
 
@@ -192,41 +168,48 @@ A portfolio defines the targets to monitor:
 
 ### 2. Configure Alerts
 
-Add webhook configuration to `~/.config/eggsec/config.toml`:
+Add webhook configuration to `~/.config/eggsec/config.toml`. `alert_channels`
+is a top-level table keyed by channel name:
 
 ```toml
-[agent]
-memory_dir = "~/.config/eggsec/memory"
-poll_interval_secs = 60
-
-[[agent.alert_channels]]
+[alert_channels.security-webhook]
 type = "webhook"
-name = "security-webhook"
 url = "https://hooks.example.com/security/alerts"
 secret = "your-hmac-secret"
 
-[[agent.alert_channels]]
-type = "webhook"
-name = "pagerduty"
+[alert_channels.pagerduty]
+type = "pagerduty"
 url = "https://events.pagerduty.com/v2/enqueue"
 service_key = "your-pagerduty-key"
 ```
+
+Per-run agent options such as `--portfolio`, `--memory-dir` and `--poll-interval`
+are CLI flags (defaulting to `~/.config/eggsec/memory` and 60 seconds), not
+config.toml keys.
 
 ### 3. Run the Agent
 
 ```bash
 # Continuous monitoring
-./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json
+eggsec agent --portfolio ~/.config/eggsec/portfolio.json run
 
 # With AI integration
-./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --with-ai --ai-config ~/.config/eggsec/ai.toml
+eggsec agent --portfolio ~/.config/eggsec/portfolio.json --with-ai \
+  --ai-config ~/.config/eggsec/ai.toml run
 
 # Run once (useful for testing)
-./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --once
+eggsec agent --portfolio ~/.config/eggsec/portfolio.json run --once
 
-# Custom memory directory
-./eggsec agent run --portfolio ~/.config/eggsec/portfolio.json --memory-dir /var/lib/eggsec/memory
+# Custom memory directory and poll interval
+eggsec agent --portfolio ~/.config/eggsec/portfolio.json \
+  --memory-dir /var/lib/eggsec/memory \
+  --poll-interval 300 run
 ```
+
+`--portfolio`, `--memory-dir`, `--poll-interval`, `--with-ai` and `--ai-config`
+are **flags on `eggsec agent` itself**, not on the `run` subcommand
+(`crates/eggsec/src/cli/agent.rs:19`). The `run` subcommand only accepts
+`--once`.
 
 ## CLI Commands
 
@@ -234,47 +217,53 @@ service_key = "your-pagerduty-key"
 
 ```bash
 # Show agent status
-./eggsec agent status
+eggsec agent status
 
 # Run agent (default or explicit)
-./eggsec agent run
-./eggsec agent run --once
-./eggsec agent run --with-ai --ai-config /path/to/ai.toml
+eggsec agent
+eggsec agent run --once
+eggsec agent --with-ai --ai-config /path/to/ai.toml run
 ```
 
 ### Target Management
 
 ```bash
 # List all targets
-./eggsec agent targets list
+eggsec agent targets list
 
 # Add a new target
-./eggsec agent targets add mytarget \
-  --target https://example.com \
+eggsec agent targets add mytarget https://example.com \
   --schedule "0 0 * * *" \
   --priority high
 
+# Update a target
+eggsec agent targets update mytarget --priority critical --scan-depth deep
+
 # Remove a target
-./eggsec agent targets remove mytarget
+eggsec agent targets remove mytarget
 
 # Enable/disable a target
-./eggsec agent targets enable mytarget
-./eggsec agent targets disable mytarget
+eggsec agent targets enable mytarget
+eggsec agent targets disable mytarget
 ```
+
+For `targets add`, the target URL is a **positional** argument (`target:`), not
+`--target`; the accepted flags are `--target-type` (default `url`), `--schedule`
+and `--priority` (default `normal`).
 
 ### Skills Management
 
 ```bash
 # List available skills
-./eggsec agent skills list
+eggsec agent skills list
 
 # Load skills from directory
-./eggsec agent skills load ~/.config/eggsec/skills/
+eggsec agent skills load ~/.config/eggsec/skills/
 
 # Show skill details
-./eggsec agent skills show dns_reconnaissance
-./eggsec agent skills show sql_injection_fuzzing
-./eggsec agent skills show waf_detection_bypass
+eggsec agent skills show dns_reconnaissance
+eggsec agent skills show sql_injection
+eggsec agent skills show waf_detection_bypass
 ```
 
 ## Configuration Reference
@@ -294,11 +283,18 @@ service_key = "your-pagerduty-key"
       "last_scan": "<ISO8601-timestamp>",
       "scan_history": [],
       "baseline_findings": ["<finding-id>"],
-      "enabled": true
+      "enabled": true,
+      "scan_depth": "shallow | deep",
+      "off_peak_window": { "start_hour": 0, "end_hour": 6, "timezone": "UTC" },
+      "scope": { "allowed_targets": [] }
     }
   }
 }
 ```
+
+`scan_depth`, `off_peak_window` and `scope` are the optional fields the old
+schema omitted; `off_peak_window` is only honoured when the matching
+`OffPeakConfig` constraint is set (`crates/eggsec/src/agent/portfolio.rs:117`).
 
 ### Cron Schedule Format
 
@@ -312,42 +308,41 @@ service_key = "your-pagerduty-key"
 
 ### Alert Channel Types
 
+`alert_channels` is a **top-level** key in `config.toml` holding a map of named
+channels, each tagged by `type`
+(`AlertChannelsConfig { channels: FxHashMap<String, AlertChannelConfigEntry> }`,
+`crates/eggsec/src/config/settings.rs:20`). There is no `[agent]` section.
+Supported `type` values are `webhook`, `email`, `slack` and `pagerduty`.
+
 ```toml
 # Webhook alert
-[[agent.alert_channels]]
+[alert_channels.my-webhook]
 type = "webhook"
-name = "my-webhook"
 url = "https://hooks.example.com/alerts"
 secret = "hmac-secret"
 
-# Email alert (future)
-[[agent.alert_channels]]
+[alert_channels.security-team]
 type = "email"
-name = "security-team"
 smtp_host = "smtp.example.com"
+smtp_port = 587
+from = "eggsec@example.com"
 to = ["security@example.com"]
 ```
 
+Channel URLs are validated at config load (`http://`/`https://` for webhooks;
+non-zero port and non-empty `from`/`to` for email).
+
 ## Memory Structure
 
-The agent stores scan history in `~/.config/eggsec/memory/`:
-
-```
-~/.config/eggsec/memory/
-├── targets/
-│   ├── example.com.json      # Scan history per target
-│   └── api.example.com.json
-├── patterns/
-│   └── detected.json         # Pattern analysis
-├── baselines/
-│   └── example.com.json      # Baseline findings
-└── cache/
-    └── ai_cache.json         # AI analysis cache
-```
+See [Longitudinal Memory](#longitudinal-memory) above -- the agent writes only
+`targets/` and `patterns/` under the memory directory.
 
 ## Skills
 
-Skills define agent capabilities using YAML frontmatter + Markdown. See `eggsec_skills/` for all available skills.
+Skills define agent capabilities using YAML frontmatter + Markdown. They are
+loaded from `~/.config/eggsec/skills` (the default in
+`crates/eggsec/src/commands/handlers/agent.rs:360`) or from an explicit path
+passed to `eggsec agent skills load <path>`.
 
 ### Skill Format
 
@@ -398,28 +393,30 @@ Keywords that activate this skill
 
 ### Configuration
 
-Create `~/.config/eggsec/ai.toml`:
+Create `~/.config/eggsec/ai.toml`. The schema is `AiConfig`
+(`crates/eggsec/src/config/settings.rs:204`):
 
 ```toml
 provider = "openai"           # or "ollama" for local
 model = "gpt-4"              # or "llama3" for Ollama
 base_url = "https://api.openai.com/v1"
+api_key = "sk-..."
+max_tokens = 4096
+temperature = 0.2
+max_payloads = 50             # default 50
+max_bypasses = 10             # default 10
 
 # Optional for Ollama
 # provider = "ollama"
 # model = "llama3"
 # base_url = "http://localhost:11434/v1"
-
-[output]
-format = "json"
-path = "./reports"
 ```
 
 ### Usage with AI
 
 ```bash
 # Run with AI analysis
-./eggsec agent run --with-ai --ai-config ~/.config/eggsec/ai.toml
+eggsec agent --with-ai --ai-config ~/.config/eggsec/ai.toml run
 
 # AI features:
 # - Adaptive scan strategy based on findings
@@ -432,49 +429,64 @@ path = "./reports"
 
 ### Alert Format
 
-When an alert is triggered, the agent sends:
+When a webhook alert is triggered, the agent POSTs a payload with the alert
+nested under a single `alert` key (`crates/eggsec/src/agent/alerts/routing.rs:240`):
 
 ```json
 {
-  "version": "1.0",
-  "alert_id": "uuid",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "severity": "critical | high | medium | low | info",
-  "title": "Critical finding on example.com",
-  "message": "SQL injection vulnerability detected",
-  "target": "https://example.com/api",
-  "finding_ids": ["sqli-001", "sqli-002"],
-  "recommended_actions": [
-    "Review and patch vulnerable code",
-    "Implement input validation",
-    "Use parameterized queries"
-  ]
+  "alert": {
+    "severity": "critical | high | medium | low | info",
+    "title": "Critical finding on example.com",
+    "message": "SQL injection vulnerability detected",
+    "target": "https://example.com/api",
+    "finding_ids": ["sqli-001", "sqli-002"],
+    "recommended_actions": [
+      "Review and patch vulnerable code",
+      "Implement input validation",
+      "Use parameterized queries"
+    ],
+    "timestamp": "2024-01-15T10:30:00Z"
+  }
 }
 ```
 
+There is no `version` or `alert_id` field; `timestamp` is generated at send time
+as RFC 3339.
+
 ### HMAC Verification
 
-Webhook requests include HMAC signature for verification:
+When the channel sets `secret`, the request carries an HMAC-SHA256 signature
+header:
 
 ```http
-X-Eggsec-Signature: sha256=<hmac-sha256>
-X-Eggsec-Timestamp: <unix-timestamp>
+X-Signature-256: sha256=<hex-hmac-sha256>
 ```
 
-Verify in your webhook handler:
+There is no separate timestamp header, and **no timestamp is mixed into the
+signature** -- the MAC is computed over the canonical JSON serialization of the
+`{"alert": {...}}` payload object (the same `serde_json::json!` value that is
+sent), not over the raw request body
+(`crates/eggsec/src/agent/alerts/routing.rs:253-261`).
+
+Verify in your webhook handler by re-serializing the received JSON canonically:
 
 ```python
 import hmac
 import hashlib
+import json
 
-def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
+def verify_signature(payload: dict, signature: str, secret: str) -> bool:
+    canonical = json.dumps(payload, separators=(",", ":"))
     expected = hmac.new(
         secret.encode(),
-        payload,
+        canonical.encode(),
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(f"sha256={expected}", signature)
 ```
+
+Any `headers` configured on the webhook channel are appended after the
+signature header.
 
 ## Architecture
 
@@ -507,10 +519,10 @@ def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
 
 ```bash
 # Check portfolio file syntax
-./eggsec agent run --portfolio /path/to/portfolio.json --once
+eggsec agent --portfolio /path/to/portfolio.json run --once
 
 # Verify config
-./eggsec agent status
+eggsec agent status
 ```
 
 ### Memory errors
@@ -521,7 +533,7 @@ ls -la ~/.config/eggsec/memory/
 
 # Recreate if corrupted
 rm -rf ~/.config/eggsec/memory
-mkdir ~/.config/eggsec/memory
+mkdir -p ~/.config/eggsec/memory
 ```
 
 ### AI integration fails
@@ -555,13 +567,13 @@ When the agent runs defense-lab profiles, it:
 
 ```bash
 # General help
-./eggsec --help
-./eggsec agent --help
+eggsec --help
+eggsec agent --help
 
 # Subcommand help
-./eggsec agent run --help
-./eggsec agent targets --help
-./eggsec agent skills --help
+eggsec agent run --help
+eggsec agent targets --help
+eggsec agent skills --help
 ```
 
 ## CI/CD Integration
@@ -575,13 +587,13 @@ Eggsec integrates into CI pipelines for continuous security regression testing:
     eggsec scan "$DEPLOYED_URL" \
       --profile quick \
       --scope .eggsec/scope.toml \
-      --output sarif \
-      --output-dir security-results/
+      --format sarif \
+      -o security-results/results.sarif
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v3
   with:
-    sarif_file: security-results/
+    sarif_file: security-results/results.sarif
 ```
 
 ```makefile
@@ -591,9 +603,14 @@ security-scan:
 	eggsec scan $(TARGET_URL) \
 		--profile full \
 		--scope scopes/$(ENV).toml \
-		--output json \
-		--output-dir reports/security-$(CI_COMMIT_SHA)/
+		--format json \
+		-o reports/security-$(CI_COMMIT_SHA).json
 ```
+
+`--format` accepts `json`, `html`, `csv`, `sarif` and `junit`
+(`crates/eggsec/src/cli/scan.rs:371`). `-o`/`--output` is a single **file path**,
+not a format name, and there is no `--output-dir` flag. `--scope` is the global
+scope-file flag.
 
 Key CI properties:
 - Deterministic - same inputs produce same output structure
