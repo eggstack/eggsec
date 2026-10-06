@@ -32,13 +32,18 @@ Eggsec has **one** MCP implementation with multiple profiles that control availa
 
 ### Ops-Agent Profile
 
-The default profile. Provides full access to all scanning, fuzzing, WAF, stress, and pipeline tools. Designed for AI agents operating in controlled environments with human oversight.
+The default profile. Provides full access to all registered MCP-exposable tools.
+Designed for AI agents operating in controlled environments with human oversight.
 
-- **Target policy:** No restrictions (scope enforcement optional)
-- **Concurrency:** Up to 20 concurrent scans
-- **Timeout:** Up to 300 seconds per tool
+- **Target policy:** `ScopeOrLocalDevOnly` default, external network allowed
+- **Concurrency:** Up to 50 concurrent scans
+- **Timeout:** Up to 600 seconds per tool
 - **Stress testing:** Allowed
-- **External network:** Allowed
+- **Broad recon:** Allowed
+- **Packet features:** Allowed
+- **Explicit scope:** Required
+- **Sessions:** Enabled
+- **`/plan` endpoint:** Enabled
 
 ### Coding-Agent Profile
 
@@ -47,9 +52,21 @@ Optimized for AI coding assistants that need to validate security while writing 
 - **Target policy:** Localhost, loopback, and private IPs only (`ScopeOrLocalDevOnly`)
 - **Concurrency:** Max 5 concurrent scans
 - **Timeout:** Max 60 seconds per tool
+- **Batch size:** Max 10
 - **Stress testing:** Denied
 - **Broad recon:** Denied
 - **External network:** Denied (unless explicitly scoped)
+- **Explicit scope:** Required
+- **Sessions:** Denied (`session/*` is rejected)
+- **`/plan` endpoint:** Denied
+
+The allowlist is a hardcoded exact match on six tool IDs:
+`scan`, `scan-ports`, `fingerprint`, `endpoints`, `waf-detect`, `search`. The
+`stress-testing` and `load-testing` categories are explicitly denied, and
+argument keys such as `stealth` are stripped.
+
+Source: `crates/eggsec/src/tool/protocol/mcp/policy.rs` (`ops_agent()` at :100,
+`coding_agent()` at :120).
 
 **Coding-agent resources** (available via `resources/read`):
 
@@ -91,18 +108,25 @@ eggsec mcp-serve --stdio --profile coding-agent
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/mcp` | JSON-RPC 2.0 API |
-| GET | `/mcp/stream/:request_id` | SSE streaming |
+| POST | `/json-rpc` | Alias for `/mcp` |
+| GET | `/mcp/stream/{request_id}` | SSE streaming (`{request_id}` or `*` for all) |
 | GET | `/openapi.json` | OpenAPI 3.1 spec (JSON) |
 | GET | `/openapi.yaml` | OpenAPI 3.1 spec (YAML) |
-| POST | `/plan` | Execution plan generator |
-| GET | `/health` | Health check |
+| POST | `/plan` | Execution plan generator (ops-agent only) |
+| GET | `/health` | Health check (`"service": "eggsec-mcp"`) |
+
+Routes are registered in `crates/eggsec/src/tool/protocol/mcp/routes.rs:153`.
 
 ## Authentication
 
-API key authentication is optional. Pass the key via:
+API key authentication is optional and compared in constant time
+(`crates/eggsec/src/tool/protocol/mcp/auth.rs`). Pass the key via:
+- Header: `Authorization: Bearer your-key` (a bare key without the `Bearer `
+  prefix is also accepted)
 - Header: `X-API-Key: your-key`
-- Header: `Authorization: Bearer your-key`
-- Query param: `?api_key=your-key`
+- JSON-RPC param: `params.api_key = "your-key"`
+
+When no `--api-key` is configured, every request is authorized.
 
 ## JSON-RPC API
 
@@ -126,19 +150,32 @@ Get server capabilities.
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "serverInfo": {
-      "name": "eggsec-mcp",
-      "version": "0.1.0"
-    },
+    "protocolVersion": "2024-11-05",
     "capabilities": {
-      "tools": true,
-      "streaming": true,
-      "sessions": true
+      "tools": { "listChanged": true },
+      "sessions": true,
+      "roots": { "listChanged": true },
+      "streaming": true
     },
-    "toolCount": 10
+    "serverInfo": {
+      "name": "eggsec-tool-api",
+      "version": "0.1.0",
+      "description": "..."
+    },
+    "profile": "ops-agent",
+    "safety": { }
   }
 }
 ```
+
+There is no `toolCount` field. `serverInfo.name` is profile-dependent:
+`eggsec-tool-api` for `ops-agent`, `eggsec-coding-agent-mcp` for
+`coding-agent`. The `capabilities` flags are driven by the profile policy --
+`sessions`, `streaming` and the `safety` block reflect the active profile, and
+`sessions` is `false` under `coding-agent`.
+
+Source: `crates/eggsec/src/tool/protocol/mcp/handlers/server.rs:348`,
+`crates/eggsec/src/tool/protocol/mcp/profile.rs:17`.
 
 #### `tools/list`
 List all available tools.
@@ -198,7 +235,7 @@ Health check.
 ```
 
 #### `session/create`
-Create a scan session.
+Create a scan session. Only the `target` param is read; `scan_type` is ignored.
 
 ```json
 {
@@ -206,8 +243,23 @@ Create a scan session.
   "id": 6,
   "method": "session/create",
   "params": {
+    "target": "https://example.com"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "session_id": "abc123",
+    "created_at": "2024-01-15T10:30:00Z",
     "target": "https://example.com",
-    "scan_type": "full_assessment"
+    "status": "pending",
+    "scopes": 0,
+    "findings_count": 0
   }
 }
 ```
@@ -238,36 +290,6 @@ List all sessions.
 }
 ```
 
-#### `session/update`
-Update session status.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 9,
-  "method": "session/update",
-  "params": {
-    "session_id": "abc123",
-    "status": "in_progress",
-    "progress": 50
-  }
-}
-```
-
-#### `session/delete`
-Delete a session.
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 10,
-  "method": "session/delete",
-  "params": {
-    "session_id": "abc123"
-  }
-}
-```
-
 #### `rate-limit/status`
 Get rate limit status.
 
@@ -286,10 +308,12 @@ Get rate limit status.
   "jsonrpc": "2.0",
   "id": 11,
   "result": {
+    "client_id": "...",
+    "tokens_available": 9,
+    "requests_this_minute": 1,
     "requests_per_minute": 60,
-    "concurrent_limit": 5,
-    "current_usage": 1,
-    "burst_remaining": 9
+    "concurrent_available": 4,
+    "concurrent_limit": 5
   }
 }
 ```
@@ -307,7 +331,7 @@ List available resources.
 ```
 
 #### `resources/read`
-Read a specific resource.
+Read a specific resource. URIs are profile-scoped.
 
 ```json
 {
@@ -315,55 +339,96 @@ Read a specific resource.
   "id": 13,
   "method": "resources/read",
   "params": {
-    "uri": "eggsec://manifest"
+    "uri": "eggsec://coding-agent/manifest"
   }
 }
 ```
 
-## Structured Output Schemas
+**Available URIs:**
 
-The coding-agent profile returns structured JSON output for all tool executions. The output schema includes:
+| Profile | URIs |
+|---------|------|
+| `coding-agent` | `eggsec://coding-agent/manifest`, `/safety-policy`, `/finding-schema`, `/workflow`, `/tool-contracts` |
+| `ops-agent` | `eggsec://ops-agent/safety-policy`, `/task-schema`, `/event-schema` |
+| `roots/list` | `eggsec://config`, `eggsec://tools`, `eggsec://templates`, `eggsec://payloads` |
+
+#### `prompts/list` and `prompts/read`
+List and read server prompts (`crates/eggsec/src/tool/protocol/mcp/prompts.rs`).
+
+#### `roots/list`
+List roots exposed by the server.
 
 ```json
 {
-  "profile": "coding-agent",
+  "jsonrpc": "2.0",
+  "id": 14,
+  "method": "roots/list",
+  "params": {}
+}
+```
+
+#### `shutdown`
+Request a graceful server shutdown.
+
+#### Additional tool methods
+
+`tools/call-stream`, `tools/cancel`, `tools/history` and `tools/result` are also
+dispatched alongside `tools/list`, `tools/list-by-category` and `tools/call`.
+
+The complete dispatch table is in
+`crates/eggsec/src/tool/protocol/mcp/handlers/server.rs:289-300`.
+
+## Structured Output Schemas
+
+The coding-agent profile returns structured JSON output for all tool executions,
+typed as `CodingAgentFindingReport` / `CodingAgentFinding` / `CodingAgentEvidence`
+/ `CodingAgentSummary` (`crates/eggsec/src/tool/protocol/mcp/coding_agent_output.rs`):
+
+```json
+{
+  "schema_version": "1.0",
   "target": "https://localhost:3000",
-  "tool": "recon",
+  "profile": "coding-agent",
+  "run_id": "req-001",
   "status": "completed",
   "findings": [
     {
-      "id": "finding-001",
-      "severity": "high",
+      "id": "0f8f...",
       "title": "Missing security header",
-      "description": "X-Content-Type-Options header is not set",
-      "remediation": "Add 'X-Content-Type-Options: nosniff' header",
-      "evidence": { "header": "X-Content-Type-Options", "status": "missing" }
+      "category": "vulnerability",
+      "severity": "high",
+      "confidence": "high",
+      "observed_behavior": "X-Content-Type-Options header is not set",
+      "evidence": [
+        { "type": "raw", "content": "..." }
+      ],
+      "patch_relevance": "..."
     }
   ],
-  "metadata": {
-    "duration_ms": 1234,
-    "profile": "coding-agent",
-    "policy": {
-      "target_policy": "ScopeOrLocalDevOnly",
-      "max_concurrency": 5,
-      "max_timeout_ms": 60000
-    }
+  "summary": {
+    "total_findings": 1,
+    "by_severity": { "high": 1 }
   }
 }
 ```
 
 ### Finding Schema
 
-Each finding follows this structure:
-
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique finding identifier |
-| `severity` | enum | `critical`, `high`, `medium`, `low`, `info` |
-| `title` | string | Short descriptive title |
-| `description` | string | Detailed explanation |
-| `remediation` | string | Fix recommendation |
-| `evidence` | object | Tool-specific evidence data |
+| `id` | string | Stable finding identifier (UUID) |
+| `title` | string | Short human-readable title |
+| `category` | string | e.g. `vulnerability`, `open_port`, `endpoint` |
+| `severity` | string | `critical`, `high`, `medium`, `low`, `info` |
+| `confidence` | string | Confidence assessment |
+| `observed_behavior` | string | What was observed during the scan |
+| `evidence` | array | `CodingAgentEvidence` items (`type` + `content`) |
+| `patch_relevance` | string | How the finding relates to merge readiness |
+
+Exploit payload dumps are omitted by default so output stays safe to embed in
+issue trackers and code review comments. The report has no top-level `tool` or
+`metadata` block -- the old `{profile, tool, status, findings, metadata}` shape
+is not what the server emits.
 
 ## SSE Streaming
 
@@ -378,16 +443,20 @@ GET /mcp/stream/your-request-id
 
 **Events:**
 
+Server-emitted events carry the `event_type` of each `StreamEvent`
+(`crates/eggsec/src/tool/protocol/mcp/streaming.rs:4`), so the exact set depends
+on the in-flight tool call. The transport always adds these two:
+
 ```sse
-event: progress
-data: {"type":"progress","progress":25,"message":"Scanning ports..."}
+event: heartbeat
+data: {"timestamp": "alive"}
 
-event: finding
-data: {"type":"finding","severity":"high","title":"Open Port Found","description":"Port 22 is open"}
-
-event: complete
-data: {"type":"complete","status":"success","findings":5}
+event: lagged
+data: {"lagged_events": 12}
 ```
+
+axum also sends a keep-alive comment every 15 seconds. Subscribing to
+`GET /mcp/stream/*` delivers events for every request rather than one.
 
 ## Execution Planning
 
@@ -400,20 +469,22 @@ Generate an execution plan for a security assessment.
 {
   "goal": "full_assessment",
   "target": "https://example.com",
-  "target_type": "Web",
-  "attack_surfaces": ["Web", "Api", "Network"],
+  "target_type": "web",
+  "attack_surfaces": ["web", "network"],
   "max_duration_ms": 3600000,
   "include_load_testing": false,
   "include_stress_testing": false
 }
 ```
 
+`target_type` is `web`, `api`, `network` or `mixed` (lowercase).
+
 **Goals:**
-- `recon` - Reconnaissance only
-- `vuln_scan` - Vulnerability scanning
-- `full_assessment` - Complete assessment (default)
-- `api` - API security testing
-- `quick` - Quick scan
+- `recon` (aliases `reconnaissance`, `discovery`) - Reconnaissance only
+- `vuln_scan` (aliases `vulnerability_scan`, `fuzz`) - Vulnerability scanning
+- `full_assessment` (aliases `full`, `complete`) - Complete assessment
+- `api` (alias `api_security`) - API security testing
+- `quick` (alias `fast`) - Quick scan
 
 **Response:**
 ```json
@@ -446,31 +517,33 @@ Generate an execution plan for a security assessment.
 
 ## Rate Limiting
 
-Default configuration (Standard):
+Default configuration (`standard`):
 - 60 requests per minute
 - 5 concurrent scans
-- 10 burst allowance
+- burst size 10
 
-Configurable via TOML:
+The full `RateLimitConfig` also supports `per_endpoint_limits`,
+`global_rate_limit` and `enable_ip_based_limiting`
+(`crates/eggsec-tool-core/src/ratelimit.rs:6`):
 
 ```toml
 [rate_limit]
-enabled = true
 requests_per_minute = 60
 concurrent_scans = 5
-burst_allowance = 10
+burst_size = 10
 ```
 
-Presets: `standard` (60/5/10), `relaxed` (120/10/20), `strict` (30/2/5)
+Presets: `standard` (60/5/10), `relaxed` (300/10/25), `strict` (20/2/5)
 
-## Session Persistence
+## Sessions
 
-Sessions are stored on disk at `~/.eggsec/sessions/` with:
-- 1-hour TTL (configurable)
-- Automatic cleanup
-- Max 100 sessions (configurable)
+Sessions are backed by `eggsec_runtime::SessionManager` and are only available
+under the `ops-agent` profile -- the `coding-agent` profile sets
+`allow_sessions: false` and rejects the `session/*` methods.
 
 ## Tool Categories
+
+`ToolCategory` (`crates/eggsec/src/tool/traits.rs:10`) has seven variants:
 
 | Category | Description | Example Tools |
 |----------|-------------|---------------|
@@ -478,7 +551,8 @@ Sessions are stored on disk at `~/.eggsec/sessions/` with:
 | Scanning | Port & endpoint discovery | Port scan, fingerprinting |
 | Fuzzing | Vulnerability testing | SQL injection, XSS, SSRF |
 | Waf | WAF detection/bypass | Detection, stress testing |
-| LoadTest | Performance testing | HTTP load, stress |
+| LoadTest | Performance testing | HTTP load |
+| Stress | Network stress testing | SYN/UDP/ICMP flood |
 | Pipeline | Orchestrated testing | Full assessment, quick scan |
 
 ## Error Responses
@@ -500,9 +574,17 @@ Sessions are stored on disk at `~/.eggsec/sessions/` with:
 - `-32601` - Method not found
 - `-32602` - Invalid params
 - `-32603` - Internal error
-- `-32001` - Unauthorized
-- `-32002` - Rate limit exceeded
-- `-32003` - Session not found
+- `-32020` - `ToolDenied` (tool not allowed by the profile policy)
+- `-32021` - `ArgumentDenied` (argument key blocked by profile policy)
+- `-32022` - `ConcurrencyExceeded`
+- `-32023` - `TimeoutExceeded`
+- `-32024` - `TargetDenied`
+- `-32025` - Enforcement/policy decision failure
+
+`tools/call` computes the full `PolicyDecision` via
+`policy_decision_for_mcp_call_with_enforcement` and embeds it in the error
+`data`, so a denial response carries the decision, not just a message
+(`crates/eggsec/src/tool/protocol/mcp/policy.rs:407`).
 
 ## Example Usage
 
