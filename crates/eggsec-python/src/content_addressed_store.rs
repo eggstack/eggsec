@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use crate::checkpoint_store::current_epoch_ms;
+use crate::pagination::paginate;
 
 /// Metadata about a stored artifact.
 #[pyclass(frozen, name = "ArtifactInfo")]
@@ -459,13 +460,8 @@ impl ContentAddressedArtifactStore {
             .collect();
         // Sort by created_at_ms descending for stable ordering
         infos.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
-        let start = offset as usize;
-        let end = (start + limit as usize).min(infos.len());
-        if start >= infos.len() {
-            Ok(vec![])
-        } else {
-            Ok(infos[start..end].to_vec())
-        }
+        paginate(&mut infos, limit, offset);
+        Ok(infos)
     }
 
     /// Return the size in bytes of the artifact with the given hash.
@@ -771,13 +767,8 @@ impl DirectoryArtifactStore {
             )
             .collect();
         infos.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
-        let start = offset as usize;
-        let end = (start + limit as usize).min(infos.len());
-        if start >= infos.len() {
-            Ok(vec![])
-        } else {
-            Ok(infos[start..end].to_vec())
-        }
+        paginate(&mut infos, limit, offset);
+        Ok(infos)
     }
 
     /// Resolve the on-disk file path for a given artifact name.

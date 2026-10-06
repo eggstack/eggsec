@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::pagination::paginate;
 use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -339,13 +340,7 @@ impl SqliteFindingRepository {
             .collect();
 
         // Apply pagination.
-        let start = offset as usize;
-        let end = start + limit as usize;
-        if start >= results.len() {
-            return Ok(Vec::new());
-        }
-        results.drain(..start);
-        results.truncate((end - start) as usize);
+        paginate(&mut results, limit, offset);
 
         Ok(results)
     }
@@ -697,13 +692,7 @@ impl SqliteAssessmentRepository {
         let mut results: Vec<String> = assessments.values().cloned().collect();
 
         // Apply pagination.
-        let start = offset as usize;
-        let end = start + limit as usize;
-        if start >= results.len() {
-            return Ok(Vec::new());
-        }
-        results.drain(..start);
-        results.truncate((end - start) as usize);
+        paginate(&mut results, limit, offset);
 
         Ok(results)
     }

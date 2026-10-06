@@ -95,9 +95,21 @@ def _record(metric_name: str, value: Any) -> None:
 
 
 def _current_process_rss_mb() -> float:
-    """Return the current process RSS in MB (Linux)."""
+    """Return the process peak RSS in MB, normalized across platforms.
+
+    `resource.getrusage().ru_maxrss` is **kilobytes on Linux** but **bytes on
+    macOS/BSD**. Dividing by 1024 unconditionally -- correct for Linux only --
+    inflates every macOS figure by ~1024x, which made the memory-growth budgets
+    report e.g. "grew 3792MB" for what was actually ~3.7MB.
+
+    Note this is the *peak* (high-water mark), not current RSS: a transient peak
+    anywhere in the process raises it permanently. That is fine for a
+    before/after delta, which reads as an upper bound on growth, and it keeps
+    the check dependency-free (`/proc` is Linux-only).
+    """
     usage = resource.getrusage(resource.RUSAGE_SELF)
-    return usage.ru_maxrss / 1024.0  # KB -> MB on Linux
+    bytes_per_mb = 1024.0 * 1024.0 if sys.platform == "darwin" else 1024.0
+    return usage.ru_maxrss / bytes_per_mb
 
 
 def _await_future(future: Any, timeout: float = 30.0) -> Any:

@@ -77,6 +77,7 @@ mod operation_metadata;
 pub(crate) mod operation_registry;
 #[cfg(feature = "packet-inspection")]
 mod packet_inspection;
+mod pagination;
 mod pipeline;
 mod planning;
 mod preflight;
