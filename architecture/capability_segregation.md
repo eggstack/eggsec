@@ -324,7 +324,7 @@ the same rationale that justified `eggsec-policy` in Phase C.
 |---|---|---|
 | `eggsec-service-db` | port→service tables, banner heuristics | zero workspace deps, zero consumers, 21 tests; `nmap-services`-style corpus |
 | `eggsec-secrets` | 25 credential patterns, entropy scoring | pure regex+entropy over strings; gitleaks/trufflehog-adjacent |
-| `eggsec-payloads` | 34 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
+| `eggsec-payloads` | 40 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
 
 Each lands as `publish = false` with an engine re-export facade, so **no consumer import
 changes** — the `eggsec-python` exhaustive matches over 30 `SecretType` and 40
@@ -353,26 +353,38 @@ since the bindings match all 30 variants exhaustively. `git_secrets.rs` (subproc
 orchestration) stays engine-side. **Check 149** pins the owner, the facade, and the
 entropy constant. `cargo test -p eggsec-secrets --tests` is registered in `make check`.
 
-**Status: `eggsec-payloads` implemented (milestone 004).** The 34 pure-data payload
-modules (7,084 lines) moved to `crates/eggsec-payloads`; **233 tests pass**, matching the
-baseline count exactly. The 6 live-probe modules stay engine-side. The four mechanical
-edits were applied (two `Severity` imports, one module-path rewrite across 11 files, the
-`$crate` macro path) — plus one design change that the plan anticipated: the
-cross-variant caches **cannot** live in the corpus crate, because building them requires
-all 40 variants including the engine's. They moved to a new engine-side
-`fuzzer/payloads/mod.rs` that owns the union, dispatching the 6 advanced types locally
-and delegating the other 34. `git diff` shows **zero** changes in `eggsec-python` or
-`eggsec-tui`, so `waf_validation.rs`'s exhaustive 40-arm `parse_payload_type` compiles
-untouched.
+**Status: `eggsec-payloads` implemented (milestone 004), then corrected.** The 34 pure-data
+payload modules (7,084 lines) moved to `crates/eggsec-payloads`; **233 tests pass**,
+matching the baseline count exactly. The four mechanical edits were applied (two
+`Severity` imports, one module-path rewrite across 11 files, the `$crate` macro path).
+`git diff` shows **zero** changes in `eggsec-python` or `eggsec-tui`, so
+`waf_validation.rs`'s exhaustive 40-arm `parse_payload_type` compiles untouched.
 
-The specific trap this milestone called out — a `Vec::new()` stub for the 6 relocated
-types — was designed out rather than shipped: `eggsec-payloads::get_payloads` routes those
-types to a documented `unreachable!`, because a silent empty vector reads as "this type has
-no payloads", which is false. Three layers guard the seam: **check 150** (structure —
-probe modules in place, no `Vec::new` stub, caches engine-side and still `LazyLock`) and
-the new engine integration suite `tests/fuzzer_payload_corpus_seam.rs` (behavior — all 6
-advanced types return non-empty payloads, all 40 variants resolve, the cached union
-equals the per-type sum, and `is_advanced()` matches the split). Verified directly:
+**Correction (2026-10-06).** Milestone 004 rested on a premise that turned out to be
+false: it held that 6 of the 40 payload modules "generate payloads by performing live
+`reqwest` probing" and therefore could not move. That is wrong. Those 6 files hold a
+*prober* (`GraphQLFuzzer`, `OAuthFuzzer`, `JwtFuzzer`, `IdorFuzzer`, `SstiFuzzer`,
+`GrpcFuzzer`) whose async methods take a `reqwest::Client` — but their free
+`get_payloads()` functions are pure static string construction, verified by extracting
+each function body and confirming it references no client, runtime, or `.await`. The
+prober and its payload strings were always separable.
+
+So the 6 payload sets have since moved into `crates/eggsec-payloads` as well, and the
+crate now owns **all 40** variants. `eggsec-payloads::get_payloads` resolves every
+variant and **no longer panics**; the cross-variant caches moved into the corpus crate
+too, since they can now be built from all 40 variants without the engine. The seam is
+**execution, not payload data**: `PayloadType::is_advanced` marks which types the engine
+*runs* through a live prober (`eggsec::fuzzer::engine` branches on it to choose a
+strategy), and is no longer a statement about where payloads live.
+
+The "trap" milestone 004 designed out — routing those 6 to a documented `unreachable!`
+rather than a silent `Vec::new()` — was real but self-inflicted: it existed only because
+the payload data had been left behind. The trap now cannot be reached, and is guarded
+from both sides. **Check 150** asserts the corpus owns all 6 payload modules, dispatches
+every variant to one, never panics or stubs, and that no corpus module reaches for a
+client; the engine keeps the 6 probers behind a re-export; and the corpus crate's own
+`lib` tests pin the all-40 invariant (`every_variant_resolves_to_non_empty_correctly_labelled_payloads`),
+alongside the engine-side `tests/fuzzer_payload_corpus_seam.rs`. Verified directly:
 GraphQL 15, OAuth 22, Jwt 25, Idor 21, Ssti 27, Grpc 14 payloads, with all 40 distinct
 types present in the cached view.
 
@@ -380,7 +392,7 @@ types present in the cached view.
 
 | Candidate | Lines | Why not |
 |---|---|---|
-| `fuzzer/payloads/` live-probe 6 | 4,354 | mixes generation with `reqwest` execution; splitting the module would duplicate the seam |
+| `fuzzer/payloads/` prober 6 | 4,354 | **Rationale corrected 2026-10-06.** The original finding read these as "mixing generation with `reqwest` execution". Wrong: each file bundles a *prober* (needs a client) with a `get_payloads()` that is pure data. The payload halves have since moved; only the probers remain. |
 | `vuln/` | 1,273 | spike found a live `crate::error` seam in `cvss.rs`/`exploit.rs`; not yet free |
 | `scanner/endpoints.rs` `DEFAULT_ENDPOINTS` | 347 paths | table is pure `&[&str]`, but the file carries `reqwest`/`cli`/`tool-api` coupling |
 | `recon/techdetect.rs` | 538 | fingerprint table separable; the file owns an HTTP client |
@@ -444,9 +456,10 @@ The evidence, in one place:
    `eggsec-secrets`/`eggsec-payloads` means publishing `eggsec-core` too.
 3. **No external consumer has been identified.** This is the gate that is unmet, and the
    plan's own stop condition when it is.
-4. **`eggsec-payloads` would ship a panicking public API.** Its `get_payloads` routes the
-   6 engine-owned advanced types to a documented `unreachable!` — correct behind an engine
-   facade, wrong for a general-purpose library whose own enum offers those variants.
+4. ~~**`eggsec-payloads` would ship a panicking public API.**~~ **SATISFIED 2026-10-06.**
+   Its `get_payloads` used to route 6 types to a documented `unreachable!`. Those payload
+   sets were static data misfiled as probe output; they now live in the corpus crate,
+   `get_payloads` resolves all 40 variants, and no public path panics.
 
 Reopening requires all four: a named external consumer; one release cycle without
 variant or content changes; a corpus update policy with an owner; and a library-appropriate
@@ -500,9 +513,11 @@ recorded here.
   additionally pins secret
   detection's canonical owner and engine facade, and freezes the entropy gate at `3.5`
   scoped only to `SecretType::AwsSecretKey`, because retuning or widening it would
-  silently change what the scanner detects. **Check 150** polices the payload corpus/probe
-  seam: the 6 live-probe modules stay engine-side, the corpus crate fails loudly instead
-  of stubbing them, and the cross-variant caches stay engine-side and `LazyLock`.
+  silently change what the scanner detects. **Check 150** polices the payload
+  corpus/prober seam: the corpus owns all 40 payload sets and dispatches every variant,
+  never panics or stubs one; the 6 probers stay engine-side behind a re-export of the
+  corpus builder; no corpus module reaches for a client; and the cross-variant caches live
+  in the corpus and stay `LazyLock`.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
 

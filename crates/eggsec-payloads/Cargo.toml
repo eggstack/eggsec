@@ -15,13 +15,14 @@ categories = ["development-tools"]
 publish = false
 
 # Deliberately leaf. This crate is payload *data*: it builds strings and
-# returns them. It opens no socket and performs no live probing — the six
-# advanced types (GraphQL, OAuth, JWT, IDOR, SSTI, gRPC) need `reqwest` and
-# stay engine-side, dispatched by the engine. Guard 148 forbids any I/O,
-# transport, frontend, or engine dependency here, and any workspace dependency
-# other than `eggsec-core`.
+# returns them. It opens no socket and performs no live probing. The six
+# probers that drive these payloads over the network (GraphQL, OAuth, JWT,
+# IDOR, SSTI, gRPC) need `reqwest` and stay engine-side; the payload strings
+# they send are here. Guard 148 forbids any I/O, transport, frontend, or engine
+# dependency here, and any workspace dependency other than `eggsec-core`.
 [dependencies]
 eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+base64.workspace = true
 serde.workspace = true
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 flate2.workspace = true

@@ -145,7 +145,8 @@ Three new leaf crates, each depending on `eggsec-core` and its own third-party
 libraries only:
 
 ```text
-eggsec-payloads   -> eggsec-core, serde, strum, flate2, rustc-hash, tracing  [LANDED 2026-10-05, M004]
+eggsec-payloads   -> eggsec-core, base64, serde, strum, flate2, rustc-hash, tracing  [LANDED 2026-10-05, M004]
+                     (base64 added 2026-10-06 with the last 6 payload sets)
 eggsec-secrets    -> eggsec-core, regex, serde, tracing
 eggsec-service-db -> rustc-hash                  [LANDED 2026-10-05, M002]
 

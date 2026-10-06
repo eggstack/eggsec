@@ -1,6 +1,17 @@
 # Security Knowledge Corpus Milestone 004 — Payload corpus extraction
 
-Status: closed (`plans/closure/security-knowledge-corpus/004-closure.md`; `eggsec-payloads` extracted, caches engine-side, guards 148/150 + seam suite)
+Status: closed (`plans/closure/security-knowledge-corpus/004-closure.md`; `eggsec-payloads` extracted, guards 148/150 + seam suite)
+
+> **Amended 2026-10-06 — one premise in this plan was factually wrong.** It treated the 6
+> remaining modules (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`) as "live-probe"
+> payload *generators* that could not leave the engine. They are not. Each file bundles a
+> **prober** (`GraphQLFuzzer`, `JwtFuzzer`, …) whose async methods take a `reqwest::Client`,
+> with a free `get_payloads()` that is pure static string construction. Extracting and
+> checking each function body confirms no client, runtime, or `.await` is referenced.
+> Those 6 payload sets have since moved into `eggsec-payloads`, which now owns **all 40**
+> variants; the caches moved with them, and the crate no longer panics. The plan's
+> designed-out `unreachable!` trap only ever existed because the data had been left behind.
+> Everything else in this plan stands as written.
 
 Repository baseline: `fix/cli-usability-audit` at `979dca67` (pushed); this plan lands on a branch cut from it
 

@@ -21,8 +21,16 @@ Implementation commits or pull requests:
 The extraction is complete, all 233 tests pass, and the milestone's named trap was
 **designed out rather than shipped**.
 
-The 34 pure-data payload modules (7,084 lines) now live in `crates/eggsec-payloads`. The
-6 live-probe modules stay in the engine. Zero consumers were edited.
+The 34 pure-data payload modules (7,084 lines) now live in `crates/eggsec-payloads`. Zero
+consumers were edited.
+
+> **Correction 2026-10-06.** This closure recorded the 6 remaining modules as "live-probe"
+> generators that had to stay engine-side. That was a false premise: their `get_payloads()`
+> functions are pure static data, separable from the `reqwest` probers bundled in the same
+> files. Those 6 payload sets have since moved into `crates/eggsec-payloads` (now **all 40**
+> variants, no panic), and the cross-variant caches moved with them. The rest of this
+> record — test counts, the four mechanical edits, the trap analysis, the zero-diff
+> consumer result — stands as written.
 
 The plan warned that the spike's `Vec::new()` placeholder for the 6 relocated types must
 not ship, because a silent empty vector reads as "this payload type has no payloads" —

@@ -162,7 +162,8 @@ later:
   drifts from upstream vulnerability research.
 - **Naming.** `eggsec-` is right for internal workspace crates and awkward for
   general-purpose libraries. Renaming after publication breaks every downstream import.
-- **`eggsec-payloads`' panic contract.** `get_payloads` routes the 6 engine-owned advanced
+- **`eggsec-payloads`' panic contract. (RESOLVED 2026-10-06.)** At the time of writing,
+  `get_payloads` routed the 6 advanced types
   types to a documented `unreachable!`. Correct behind an engine facade; a poor contract
   for a published library whose own enum offers those variants. This is API design work,
   not a flag flip.

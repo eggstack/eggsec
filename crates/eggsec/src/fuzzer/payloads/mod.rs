@@ -1,25 +1,26 @@
-//! Payload corpora — engine-side dispatch.
+//! Payload corpora — engine-side seam.
 //!
-//! Phase G split this module in two along a seam that already existed in the
-//! source. The 34 pure-data payload modules live in the leaf crate
-//! `eggsec-payloads`; the 6 that generate payloads by performing live `reqwest`
-//! probing — [`graphql`], [`grpc`], [`idor`], [`jwt`], [`oauth`], [`ssti`] —
-//! stay here, because probing is an engine concern.
+//! The 40 payload modules live in the leaf crate `eggsec-payloads`, which owns
+//! every [`PayloadType`] variant and resolves all of them through its
+//! `get_payloads`. The cross-variant caches live there too, for the same
+//! reason: they span all 40 variants, and the corpus now owns all 40.
 //!
-//! This file owns the **union**: the dispatch across all 40 [`PayloadType`]
-//! variants, and the cross-variant caches that span them. Those caches cannot
-//! live in `eggsec-payloads`, because building them needs the 6 probe variants
-//! this crate owns. See the crate docs for why that matters.
+//! What stays here are the six **probers** — [`graphql`], [`grpc`], [`idor`],
+//! [`jwt`], [`oauth`], [`ssti`] — modules holding a `reqwest::Client` that make
+//! live requests. They cannot move into a crate with no network surface.
 //!
-//! Both the corpus types and the cache accessors are re-exported below, so
-//! `eggsec::fuzzer::payloads::*` and `eggsec::fuzzer::{PayloadType, Payload,
-//! get_payloads, …}` keep resolving exactly as before. The re-exports are a
-//! **permanent** facade, not transitional scaffolding.
+//! The seam is **execution, not payload data**. Each prober module re-exports
+//! the static payload builder of the same name from `eggsec-payloads`, so
+//! `GraphQLFuzzer` (here) and the GraphQL payload strings (there) are separate
+//! things that happen to share a name.
+//!
+//! Everything is re-exported below, so `eggsec::fuzzer::payloads::*` and
+//! `eggsec::fuzzer::{PayloadType, Payload, get_payloads, …}` keep resolving
+//! exactly as before. The re-exports are a **permanent** facade, not
+//! transitional scaffolding.
 
-// The 6 live-probe payload types. These take a `&reqwest::Client` and perform
-// asynchronous probing, so they cannot move into a crate with no network
-// surface. `eggsec-payloads` panics rather than stubbing them — see
-// `engine_owned_probe_payloads` there.
+// The six live-probe modules: the probers, not the payloads. Each also
+// re-exports its corpus module's `get_payloads` (and, for ssti, `TemplateEngine`).
 pub mod graphql;
 pub mod grpc;
 pub mod idor;
@@ -27,60 +28,12 @@ pub mod jwt;
 pub mod oauth;
 pub mod ssti;
 
-// Corpus types, re-exported from the leaf crate. Everything below refers to
-// these; no consumer import changes as a result of the extraction.
-pub use eggsec_payloads::{Payload, PayloadType, Severity};
-
-/// Everything else from the corpus crate: the 34 data modules, `macros`, and
-/// `PayloadType::{is_advanced, all_variants}`.
+// Everything from the corpus crate: the 40 payload modules, `macros`, the
+// `Payload` / `PayloadType` / `Severity` types, `PayloadType::all_variants`,
+// `is_advanced`, and the cross-variant `get_payloads*` caches.
+//
+// The six modules of the same name are shadowed by the prober modules declared
+// above; a glob import loses to an explicit item, so `payloads::graphql` is the
+// prober, not the payload strings. Consumers that want the payload strings ask
+// for them through `get_payloads`, which is why nothing needs that path.
 pub use eggsec_payloads::*;
-
-use std::sync::LazyLock;
-
-/// Cross-variant caches.
-///
-/// **Laziness is load-bearing.** These stay `LazyLock` and stay in the engine:
-/// a process that never asks for a payload never pays to build one. Materializing
-/// all 40 variants eagerly at startup would regress every binary, including the
-/// TUI.
-static PAYLOAD_CACHE: LazyLock<rustc_hash::FxHashMap<PayloadType, Vec<Payload>>> =
-    LazyLock::new(|| {
-        let mut map = rustc_hash::FxHashMap::default();
-        for pt in PayloadType::all_variants() {
-            map.insert(*pt, get_payloads(*pt));
-        }
-        map
-    });
-
-static ALL_PAYLOADS_CACHE: LazyLock<Vec<Payload>> =
-    LazyLock::new(|| PAYLOAD_CACHE.values().flatten().cloned().collect());
-
-/// Build the payloads for one [`PayloadType`].
-///
-/// Dispatches the 6 advanced types to the engine-owned live-probe modules and
-/// everything else to `eggsec-payloads`. All 40 variants resolve to real
-/// payloads here; none return an empty vector by omission.
-pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
-    match payload_type {
-        // Engine-owned live-probe modules.
-        PayloadType::GraphQL => graphql::get_payloads(),
-        PayloadType::OAuth => oauth::get_payloads(),
-        PayloadType::Jwt => jwt::get_payloads(),
-        PayloadType::Idor => idor::get_payloads(),
-        PayloadType::Ssti => ssti::get_payloads(),
-        PayloadType::Grpc => grpc::get_payloads(),
-        // Everything else is corpus data.
-        other => eggsec_payloads::get_payloads(other),
-    }
-}
-
-pub fn get_payloads_cached(payload_type: PayloadType) -> &'static Vec<Payload> {
-    PAYLOAD_CACHE.get(&payload_type).unwrap_or_else(|| {
-        static EMPTY: LazyLock<Vec<Payload>> = LazyLock::new(Vec::new);
-        &EMPTY
-    })
-}
-
-pub fn get_all_payloads_cached() -> &'static Vec<Payload> {
-    &ALL_PAYLOADS_CACHE
-}

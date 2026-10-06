@@ -35,7 +35,7 @@ have now closed, so all three corpus crates exist, are internal, and are verifie
 |---|---|---|---|
 | `eggsec-service-db` | port→service tables, banner heuristics | 21 | none |
 | `eggsec-secrets` | 25 credential patterns, entropy gate | 11 | `eggsec-core` |
-| `eggsec-payloads` | 34 payload modules, `PayloadType` (40 variants) | 233 | `eggsec-core` |
+| `eggsec-payloads` | 40 payload modules, `PayloadType` (40 variants) | 252 | `eggsec-core` |
 
 This ADR records whether they should be published as general-purpose crates for
 third-party consumption. The deliverable is a decision with evidence, not a release.
@@ -104,6 +104,14 @@ nmap-services. None of that has been tested against a real integration.
 
 ### 4. `eggsec-payloads` has a public API that would be wrong for a library
 
+> **Superseded 2026-10-06 — this rationale rested on a false premise, and reopening
+> condition 4 is now satisfied.** The claim below that the 6 advanced types are "generated
+> by live `reqwest` probing" is wrong. Their probers do probe; their `get_payloads()`
+> functions are pure static data. The payload sets have since moved into
+> `eggsec-payloads`, which resolves all 40 variants and no longer panics. The remaining
+> opening (conditions 1–3: a named external consumer, a stable release cycle, a corpus
+> update policy) is untouched, so the ADR's **defer** decision still stands.
+
 This emerged from M004 and is specific enough to be decisive.
 
 The corpus crate owns all 40 `PayloadType` arms, but the 6 advanced types are generated
@@ -148,8 +156,10 @@ This decision should be revisited when **all** of the following hold:
    version window.
 3. **A corpus update policy exists** — a stated cadence and an owner, since a published
    corpus otherwise drifts from upstream vulnerability research.
-4. **`eggsec-payloads`'s API is library-appropriate** — the 6 advanced types are
-   handled without a panic on the public path (see Rationale §4).
+4. ~~**`eggsec-payloads`'s API is library-appropriate** — the 6 advanced types are
+   handled without a panic on the public path.~~ **MET 2026-10-06:** the 6 static payload
+   sets moved into the corpus crate; `get_payloads` resolves all 40 variants and no public
+   path panics (see Rationale §4).
 
 ### Per-crate readiness
 
@@ -159,7 +169,7 @@ The crates are **not** equally ready, and this is worth recording:
 |---|---|---|
 | `eggsec-service-db` | **Closest.** Zero workspace deps, 9 public items, no engine types, no panic paths. | Would be the first to publish, and needs the least design work. Still needs a consumer (condition 1) and a version/namespace decision. |
 | `eggsec-secrets` | Plausible. One `eggsec-core` dep for `Severity`; would require publishing `eggsec-core` on the same version line. | The 10 `SecretType` variants without patterns are a coverage gap a consumer would notice. |
-| `eggsec-payloads` | **Least ready.** The panic contract (§4) is a genuine blocker, and it is the largest surface (80 top-level public items, 35 public modules). | Requires API design before publication, not just qualification. |
+| `eggsec-payloads` | **Was least ready**; the panic contract (§4) is resolved as of 2026-10-06. Still the largest surface (41 public modules, 252 tests), so it needs the most qualification. | Largest surface of the three, but no longer blocked on API design. |
 
 ### If publication is later approved
 

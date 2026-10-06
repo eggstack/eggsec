@@ -30,7 +30,7 @@ Key capabilities:
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `payloads/` | 6 | **Live-probe payload modules only** (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`) + the engine dispatch and cross-variant caches. The 34 pure-data modules and the `PayloadType` enum moved to the `eggsec-payloads` crate in Phase G. |
+| `payloads/` | 6 | **Probers only** (`graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti`): each holds a `reqwest::Client` and drives live requests, so these cannot move. All 40 payload modules, the `PayloadType` enum, the dispatch and the cross-variant caches moved to the `eggsec-payloads` crate in Phase G; each prober module re-exports its corpus builder of the same name. |
 | `engine/` | 7 | Core `FuzzEngine`, execution modes, session building, advanced dispatch |
 | `detection/` | 4 | Aho-Corasick leak matcher, IQR timing analyzer, raw patterns |
 | `targets/` | 6 | Per-target profiles: api, apache, php, nginx, generic |
@@ -54,7 +54,7 @@ for the extraction:
 
 | Side | Contents | Owner |
 |---|---|---|
-| **Corpus** (34 modules, 7,084 lines) | injection, traversal, deserialization, protocol-abuse payload data | `eggsec-payloads` crate |
+| **Corpus** (40 modules) | injection, traversal, deserialization, protocol-abuse payload data | `eggsec-payloads` crate |
 | **Probe** (6 modules, 4,354 lines) | `graphql`, `grpc`, `idor`, `jwt`, `oauth`, `ssti` — each takes a `&reqwest::Client` and probes live | engine `fuzzer/payloads/` |
 | **Union** | dispatch across all 40 variants, `PAYLOAD_CACHE`, `ALL_PAYLOADS_CACHE`, `get_payloads_cached`, `get_all_payloads_cached` | engine `fuzzer/payloads/mod.rs` |
 
@@ -119,9 +119,9 @@ Exact variant list in declaration order:
 | 39 | `XsLeak` | XS-Leak | Client-Side |
 | 40 | `Latex` | LaTeX Injection | Injection |
 
-**Count verified:** 40 variants in `crates/eggsec-payloads/src/lib.rs`. Each variant has a `get_payloads()` dispatch arm in the corpus crate's `get_payloads`; the engine's `fuzzer/payloads/mod.rs` dispatches the 6 advanced types locally and delegates the other 34, so all 40 resolve.
+**Count verified:** 40 variants in `crates/eggsec-payloads/src/lib.rs`. Every variant has a `get_payloads()` dispatch arm there, so the corpus crate alone resolves all 40 — no engine delegation, no panic path. `PayloadType::is_advanced()` marks the six the engine *executes* through a live prober, not the six whose payloads live in the engine; both the corpus `lib` tests and `tests/fuzzer_payload_corpus_seam.rs` assert the set.
 
-**Advanced check** (in `crates/eggsec-payloads/src/lib.rs`): `is_advanced()` returns `true` for exactly **6** variants: `GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc`. Note: `Websocket` has a dedicated fuzzer implementation (`advanced.rs:416-612`) but is **excluded** from `is_advanced()`.
+**Advanced check** (in `crates/eggsec-payloads/src/lib.rs`): `is_advanced()` returns `true` for exactly **6** variants — `GraphQL`, `OAuth`, `Jwt`, `Idor`, `Ssti`, `Grpc` — and the engine's fuzzer branches on it to choose a live-probe strategy instead of the generic payload-batch runner. It says nothing about where the payloads live; all 40 resolve in the corpus crate. Note: `Websocket` has a dedicated fuzzer implementation (`advanced.rs:416-612`) but is **excluded** from `is_advanced()`.
 
 ### Payload Structure
 
