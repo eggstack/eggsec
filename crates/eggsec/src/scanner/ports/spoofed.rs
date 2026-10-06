@@ -6,6 +6,8 @@
 #[cfg(all(feature = "stress-testing", unix))]
 use super::get_service_name;
 use super::PortScanResults;
+#[cfg(all(feature = "stress-testing", unix))]
+use super::{PortProtocol, PortResult, PortStatus};
 use crate::error::{EggsecError, Result};
 use crate::scanner::spoof::SpoofConfig;
 #[cfg(all(feature = "stress-testing", unix))]
@@ -13,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 #[cfg(all(feature = "stress-testing", unix))]
-fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
+fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, PortStatus)> {
     if packet.len() < 20 {
         return None;
     }
@@ -45,9 +47,9 @@ fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
     let rst = (flags & 0x04) == 0x04;
 
     if syn_ack {
-        Some((src_ip, dst_port, "open".to_string()))
+        Some((src_ip, dst_port, PortStatus::Open))
     } else if rst {
-        Some((src_ip, dst_port, "closed".to_string()))
+        Some((src_ip, dst_port, PortStatus::Closed))
     } else {
         None
     }
@@ -160,7 +162,7 @@ pub(crate) async fn scan_ports_spoofed(
     let local_ip_u32: u32 = u32::from(local_ip);
 
     let sent_packets: Arc<DashMap<u16, u32>> = Arc::new(DashMap::new());
-    let responses: Arc<DashMap<u16, String>> = Arc::new(DashMap::new());
+    let responses: Arc<DashMap<u16, PortStatus>> = Arc::new(DashMap::new());
     let stop_receiver = Arc::new(AtomicBool::new(false));
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(AtomicU64::new(0));
@@ -507,7 +509,7 @@ pub(crate) async fn scan_ports_spoofed(
                 let status = {
                     let wait_start = std::time::Instant::now();
                     let timeout_ms = timeout_duration.as_millis() as u64;
-                    let mut status = "filtered".to_string();
+                    let mut status = PortStatus::Filtered;
                     let mut backoff_ms = 1u64;
                     let max_backoff_ms = 50u64;
 
@@ -540,7 +542,8 @@ pub(crate) async fn scan_ports_spoofed(
                     port,
                     PortResult {
                         port,
-                        status: status.to_string(),
+                        status,
+                        protocol: PortProtocol::Tcp,
                         service: get_service_name(port).to_string(),
                     },
                 );
@@ -581,7 +584,7 @@ pub(crate) async fn scan_ports_spoofed(
     let mut results: Vec<PortResult> = results_map
         .into_iter()
         .map(|(_, v)| v)
-        .filter(|p| p.status == "open")
+        .filter(|p| p.status == PortStatus::Open)
         .collect();
     results.sort_by_key(|p| p.port);
 
@@ -624,6 +627,14 @@ pub(crate) async fn scan_ports_spoofed(
         results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats,
+        // A spoofed scan is TCP-only, so there is never UDP evidence to
+        // report. These fields are feature-gated on `PortScanResults`; without
+        // them this constructor stops compiling in a build that has both
+        // `stress-testing` and `udp-scan` enabled.
+        #[cfg(feature = "udp-scan")]
+        udp_host_state: None,
+        #[cfg(feature = "udp-scan")]
+        udp_evidence: None,
     })
 }
 
@@ -648,14 +659,18 @@ pub(crate) async fn scan_ports_spoofed(
 mod tests {
     use super::*;
 
+    /// A `TempDir` rather than a fixed file under the shared system temp: two
+    /// concurrent runs would otherwise both open the same trace file, and one
+    /// run's cleanup would delete the other's.
     #[test]
     fn test_init_packet_trace_creates_file() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test_packet_trace.csv");
-        let path_str = path.to_str().unwrap();
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("test_packet_trace.csv");
+        let path_str = path.to_str().expect("temp path is valid UTF-8");
 
         let result = init_packet_trace(path_str, true);
         assert!(result.is_ok());
+        assert!(path.exists(), "init_packet_trace must create the file");
 
         // Clean up
         if let Err(e) = std::fs::remove_file(&path) {

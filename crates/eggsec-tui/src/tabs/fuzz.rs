@@ -301,6 +301,16 @@ impl FuzzTab {
         }
     }
 
+    /// Close the focused selector's dropdown before leaving the focus area.
+    /// Left/Right are global shortcuts that bypass the
+    /// `has_any_tab_selector_open()` guard, so an open dropdown would
+    /// otherwise stay open on the next area and be drawn on top of it.
+    fn collapse_focused_selector(&mut self) {
+        if let Some(sel) = self.focused_selector_mut() {
+            sel.collapse();
+        }
+    }
+
     /// Common selector enter logic: if open, confirm; if closed, open.
     fn selector_enter(&mut self) {
         if let Some(sel) = self.focused_selector_mut() {
@@ -348,6 +358,11 @@ impl Default for FuzzTab {
 }
 
 impl TabState for FuzzTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.core.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.core.state.clone()
     }
@@ -544,7 +559,16 @@ impl TabRender for FuzzTab {
 }
 
 impl TabInput for FuzzTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == FuzzFocusArea::Inputs {
             if self.core.inputs.is_focused() {
                 let at_last = self
@@ -568,6 +592,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == FuzzFocusArea::Inputs {
             if self.core.inputs.is_focused() {
                 let at_first = self.core.inputs.focused.map(|i| i == 0).unwrap_or(true);
@@ -692,6 +719,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if let Some(sel) = self.focused_selector_mut() {
             if sel.is_open() {
                 sel.move_prev();
@@ -702,6 +732,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if let Some(sel) = self.focused_selector_mut() {
             if sel.is_open() {
                 sel.move_next();
@@ -718,6 +751,7 @@ impl TabInput for FuzzTab {
         if self.focus_area == FuzzFocusArea::Inputs {
             self.core.inputs.move_left()
         } else {
+            self.collapse_focused_selector();
             // Navigate to previous focus area
             self.focus_area = core::focus_prev_n(&mut self.core, self.focus_area, &FUZZ_AREAS);
             true
@@ -731,6 +765,7 @@ impl TabInput for FuzzTab {
         if self.focus_area == FuzzFocusArea::Inputs {
             self.core.inputs.move_right()
         } else {
+            self.collapse_focused_selector();
             // Navigate to next focus area
             self.focus_area = core::focus_next_n(&mut self.core, self.focus_area, &FUZZ_AREAS);
             true
@@ -858,6 +893,36 @@ mod tests {
         let result = tab.handle_left();
         assert!(result);
         assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+    }
+
+    #[test]
+    fn test_right_closes_open_dropdown_before_moving_focus() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FuzzFocusArea::PayloadSelector;
+        tab.payload_selector.open();
+        assert!(tab.payload_selector.is_open());
+
+        assert!(tab.handle_right());
+
+        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+        // Left/Right bypass the open-selector guard, so the dropdown must be
+        // collapsed here or it would stay open over the next area.
+        assert!(!tab.payload_selector.is_open());
+        assert!(!tab.mode_selector.is_open());
+    }
+
+    #[test]
+    fn test_left_closes_open_dropdown_before_moving_focus() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FuzzFocusArea::ModeSelector;
+        tab.mode_selector.open();
+        assert!(tab.mode_selector.is_open());
+
+        assert!(tab.handle_left());
+
+        assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
+        assert!(!tab.mode_selector.is_open());
+        assert!(!tab.payload_selector.is_open());
     }
 
     #[test]

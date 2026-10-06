@@ -6,6 +6,8 @@ Centralized constants for the Eggsec workspace. Canonical definitions live in `c
 
 Related: [types.md](types.md), [error.md](error.md), [overview.md](overview.md).
 
+> **Corrections (verified against source 2026-10-06):** every constant value, type, and line cite re-verified **unchanged** — all 33 top-level constants, the 4 nested modules (`http`, `scan`, `cache`, `waf`) and their 20 nested constants, the re-export cite `crates/eggsec/src/constants.rs:12`, and the WAF-count test cite. Independently confirmed `SUPPORTED_WAF_COUNT = 34` against 34 `.insert(...)` calls in `crates/eggsec/src/waf/data/patterns.rs`. No factual changes were required.
+
 ---
 
 ## Location & Feature Gating
@@ -189,4 +191,4 @@ This ensures the constant stays in sync with the actual WAF signature registry (
 
 ---
 
-*Last verified against source: 2026-08-25; all values and line cites re-verified, no changes 2026-09-25 (systematic review)*
+*Last verified against source: 2026-08-25; all values and line cites re-verified, no changes 2026-09-25 (systematic review); full re-verification of all values, types, and line cites, no changes 2026-10-06 (systematic review)*

@@ -260,6 +260,7 @@ pub enum CanonicalOperationRequest {
     LoadTest(crate::operation_request::LoadTestRequest),
     Recon(crate::operation_request::ReconRequest),
     Pipeline(crate::operation_request::PipelineRequest),
+    Resume(crate::operation_request::ResumeRequest),
     GraphQl(crate::operation_request::GraphQlRequest),
     OAuth(crate::operation_request::OAuthRequest),
     AuthTest(crate::operation_request::AuthTestRequest),
@@ -303,6 +304,12 @@ impl CanonicalOperationRequest {
             Self::StressTest(_) => "stress-test",
             Self::PacketCapture(_) | Self::PacketTraceroute(_) | Self::PacketSend(_) => "packet",
             Self::Nse(_) => "nse",
+            // Resume runs the pipeline stage set from a saved checkpoint, so it
+            // shares the `pipeline` operation identity rather than declaring a
+            // new one. `route_for_command_id` already maps the `resume` command
+            // to ["pipeline"], and the CLI handler resolves enforcement the same
+            // way, so this keeps the TUI on the existing canonical operation.
+            Self::Resume(_) => "pipeline",
             Self::Hunt(_) => "hunt",
             Self::Browser(_) => "browser",
             Self::Compliance(_) => "compliance",
@@ -327,6 +334,12 @@ impl CanonicalOperationRequest {
             Self::LoadTest(r) => Some(r.target.clone()),
             Self::Recon(r) => Some(r.target.clone()),
             Self::Pipeline(r) => Some(r.target.clone()),
+            // The resumed target lives in the checkpoint, not in the request, so
+            // this is target-less by construction: validation against
+            // `OperationMetadata` target policy then fails explicitly rather
+            // than resuming an unbound operation. Manual surfaces supply the
+            // target from the selected session in their descriptor path.
+            Self::Resume(_) => None,
             Self::GraphQl(r) => Some(r.target.clone()),
             Self::OAuth(r) => Some(r.target.clone()),
             Self::AuthTest(r) => Some(r.target.clone()),
@@ -447,6 +460,12 @@ impl CanonicalOperationRequest {
                 }
                 Ok(())
             }
+            Self::Resume(p) => {
+                if p.session_path.trim().is_empty() {
+                    return Err(err("resume session path must not be empty"));
+                }
+                Ok(())
+            }
             Self::Hunt(p) => {
                 if p.target.trim().is_empty() {
                     return Err(err("hunt target must not be empty"));
@@ -504,6 +523,7 @@ impl CanonicalOperationRequest {
             K::Waf(p) => Self::WafDetect(adapters::waf_from_runtime(p)),
             K::WafStress(p) => Self::WafStress(adapters::waf_stress_from_runtime(p)),
             K::Pipeline(p) => Self::Pipeline(adapters::pipeline_from_runtime(p)),
+            K::Resume(p) => Self::Resume(adapters::resume_from_runtime(p)),
             K::Recon(p) => Self::Recon(adapters::recon_from_runtime(p)),
             K::PacketCapture(p) => Self::PacketCapture(p.clone()),
             K::PacketTraceroute(p) => Self::PacketTraceroute(p.clone()),
@@ -515,10 +535,7 @@ impl CanonicalOperationRequest {
             K::Hunt(p) => Self::Hunt(p.clone()),
             K::Browser(p) => Self::Browser(p.clone()),
             K::Compliance(p) => Self::Compliance(p.clone()),
-            K::Storage(p) => Self::Storage(crate::operation_request::StorageRequest {
-                storage_type: p.storage_type.clone(),
-                path: p.path.clone(),
-            }),
+            K::Storage(p) => Self::Storage(adapters::storage_from_runtime(p)),
             K::Integrations(p) => Self::Integrations(p.clone()),
             K::Workflow(p) => Self::Workflow(p.clone()),
             K::Vuln(p) => Self::Vuln(p.clone()),
@@ -1175,6 +1192,9 @@ async fn execute_canonical_inner(
             };
             super::network::run_load_test_with_scope(
                 n.target,
+                n.method,
+                n.body,
+                n.headers,
                 n.requests,
                 n.concurrency,
                 timeout,
@@ -1213,6 +1233,7 @@ async fn execute_canonical_inner(
                 n.ports,
                 n.concurrency,
                 timeout,
+                n.udp,
                 fanout_tx.clone(),
             )
             .await
@@ -1234,6 +1255,7 @@ async fn execute_canonical_inner(
                 n.concurrency,
                 timeout,
                 n.wordlist,
+                n.include_404,
                 fanout_tx.clone(),
             )
             .await
@@ -1354,7 +1376,80 @@ async fn execute_canonical_inner(
                     });
                 }
             };
-            super::recon::run_pipeline(n.target, profile, fanout_tx.clone())
+            // Output destination is resolved and containment-checked *before*
+            // the scan runs, so a bad path costs seconds rather than a full
+            // assessment. A wire-supplied path is relative to the configured
+            // export directory and may not escape it.
+            let output = match (n.output_file.as_deref(), n.output_format) {
+                (Some(raw_path), format) => {
+                    let format = match format {
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Pretty => {
+                            crate::types::OutputFormat::Pretty
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Json => {
+                            crate::types::OutputFormat::Json
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Compact => {
+                            crate::types::OutputFormat::Compact
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Html => {
+                            crate::types::OutputFormat::Html
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Csv => {
+                            crate::types::OutputFormat::Csv
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Sarif => {
+                            crate::types::OutputFormat::Sarif
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Junit => {
+                            crate::types::OutputFormat::Junit
+                        }
+                        eggsec_tool_core::operation_request::PipelineOutputFormat::Markdown => {
+                            crate::types::OutputFormat::Markdown
+                        }
+                    };
+                    let config = crate::config::load_config(None::<&str>)
+                        .inspect_err(|e| {
+                            tracing::warn!(
+                                error = %e,
+                                "Failed to load config for pipeline output base, using default"
+                            );
+                        })
+                        .unwrap_or_default();
+                    let base = config
+                        .paths
+                        .export_dir
+                        .as_deref()
+                        .unwrap_or(eggsec_core::constants::DEFAULT_EXPORT_DIR);
+                    match crate::utils::validation::validate_path_string(
+                        std::path::Path::new(base),
+                        raw_path,
+                    ) {
+                        Ok(path) => Some(super::recon::PipelineOutput { path, format }),
+                        Err(e) => {
+                            // Early return must still release the progress
+                            // bridge so the forwarder cannot outlive this call.
+                            drop(fanout_tx);
+                            forwarder.abort();
+                            return Err(ExecutionError::InvalidRequest {
+                                operation_id: operation_id.clone(),
+                                reason: format!("invalid pipeline output_file '{raw_path}': {e}"),
+                            });
+                        }
+                    }
+                }
+                // Format without a destination has nothing to render into.
+                (None, _) => None,
+            };
+            super::recon::run_pipeline(n.target, profile, output, n.session_path, fanout_tx.clone())
+                .await
+                .map_err(|e| ExecutionError::ExecutionFailed {
+                    operation_id: operation_id.clone(),
+                    message: e.to_string(),
+                })
+        }
+        CanonicalOperationRequest::Resume(p) => {
+            super::recon::run_pipeline_resume(p.session_path, fanout_tx.clone())
                 .await
                 .map_err(|e| ExecutionError::ExecutionFailed {
                     operation_id: operation_id.clone(),
@@ -1489,12 +1584,18 @@ async fn execute_canonical_inner(
         CanonicalOperationRequest::Nse(p) => {
             #[cfg(feature = "nse")]
             {
-                super::api::run_nse(p.target, p.script, p.args, None, fanout_tx.clone())
-                    .await
-                    .map_err(|e| ExecutionError::ExecutionFailed {
-                        operation_id: operation_id.clone(),
-                        message: e.to_string(),
-                    })
+                super::api::run_nse(
+                    p.target,
+                    p.script,
+                    p.args,
+                    p.custom_script,
+                    fanout_tx.clone(),
+                )
+                .await
+                .map_err(|e| ExecutionError::ExecutionFailed {
+                    operation_id: operation_id.clone(),
+                    message: e.to_string(),
+                })
             }
             #[cfg(not(feature = "nse"))]
             {
@@ -1575,19 +1676,30 @@ async fn execute_canonical_inner(
             }
         }
         CanonicalOperationRequest::Storage(raw) => {
-            raw.normalize()
+            let n = raw
+                .normalize()
                 .map_err(|e| ExecutionError::InvalidRequest {
                     operation_id: operation_id.clone(),
                     reason: e.to_string(),
                 })?;
             #[cfg(feature = "database")]
             {
+                // The password is resolved here, from the environment, and
+                // never travels on the wire or into a `TaskSnapshot`.
+                let config = crate::storage::resolve_config(
+                    n.host,
+                    n.port,
+                    n.database,
+                    n.username,
+                    n.password_env.as_deref(),
+                    n.max_connections,
+                );
                 super::security::run_storage_task(
-                    crate::storage::StorageConfig::default(),
-                    "read".to_string(),
-                    None,
-                    None,
-                    None,
+                    config,
+                    n.mode,
+                    n.scan_id,
+                    n.cve_id,
+                    n.severity_filter,
                     fanout_tx.clone(),
                 )
                 .await
@@ -1598,7 +1710,7 @@ async fn execute_canonical_inner(
             }
             #[cfg(not(feature = "database"))]
             {
-                let _ = &fanout_tx;
+                drop(n);
                 Err(ExecutionError::FeatureUnavailable {
                     operation_id: operation_id.clone(),
                     feature: "database".to_string(),
@@ -1713,12 +1825,12 @@ async fn execute_canonical_inner(
             {
                 super::security::run_wireless_active_task(
                     p.interface.unwrap_or_else(|| "wlan0".to_string()),
-                    "deauth".to_string(),
+                    p.attack_type,
                     p.target_bssid,
-                    None,
-                    100,
-                    10,
-                    true,
+                    p.client,
+                    p.frame_count,
+                    p.rate_limit,
+                    p.dry_run,
                     fanout_tx.clone(),
                 )
                 .await
@@ -1889,6 +2001,7 @@ mod tests {
             target: "10.0.0.1".into(),
             ports: None,
             scan_type: None,
+            udp: None,
             timeout_ms: None,
             concurrency: None,
         });
@@ -1907,6 +2020,9 @@ mod tests {
         let pipe = CanonicalOperationRequest::Pipeline(crate::operation_request::PipelineRequest {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
+            session_path: None,
         });
         assert_eq!(pipe.operation_id(), "pipeline");
     }
@@ -1976,6 +2092,9 @@ mod tests {
                 TaskKind::Pipeline(PipelineParams {
                     target: "https://example.com".into(),
                     profile: None,
+                    output_format: None,
+                    output_file: None,
+                    session_path: None,
                 }),
                 "pipeline",
             ),
@@ -2144,6 +2263,7 @@ mod tests {
                 target: "127.0.0.2".into(),
                 ports: Some("80".into()),
                 scan_type: None,
+                udp: None,
                 timeout_ms: None,
                 concurrency: None,
             });
@@ -2201,6 +2321,7 @@ mod tests {
             target: "127.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         });
         let (sink, _rx) = test_sink();
         let result = execute_approved(&approved, request, &sink).await;
@@ -2251,6 +2372,7 @@ mod tests {
             target: "127.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         });
         let (sink, _rx) = test_sink();
         let result = execute_approved_execution(&execution, request, &sink).await;

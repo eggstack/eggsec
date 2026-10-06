@@ -10,7 +10,7 @@
 > **Fail-closed contract**: Unknown feature names in policy checks return `false`.
 > The `feature_state()` function returns `FeatureState::Unknown` for unrecognized names.
 >
-> **Scope**: Covers the main `eggsec` crate (49 features) and domain crate features. Does not
+> **Scope**: Covers the main `eggsec` crate (50 features) and domain crate features. Does not
 > repeat domain crate internals (those are documented in their own Cargo.toml comments).
 
 ---
@@ -64,6 +64,7 @@ Categories:
 | `sbom` | Report/output | `cyclonedx-bom`, `spdx`, `walkdir` | eggsec | No | No | — | — |
 | `git-secrets` | Marker-only | — | eggsec | No | No | — | — |
 | `pdf` | Report/output | `printpdf` | eggsec | No | No | — | — |
+| `udp-scan` | Platform-sensitive/lab-only | `eggsec-udp-scan` (libc) | eggsec | No | No | — | — |
 | `wireless` | Marker-only | — | eggsec | No | Yes (MCP-exposed) | `wireless` | — |
 | `wireless-advanced` | Platform-sensitive/lab-only | `wireless` | eggsec | No | No | — | — |
 | `evasion` | Marker-only | — | eggsec | No | No | — | — |
@@ -147,7 +148,7 @@ usage, or `--no-default-features --features daemon-client` for daemon client mod
 
 | Pattern | Convention | Examples |
 |---------|-----------|----------|
-| Base domain feature | `<domain>` | `db-pentest`, `mobile`, `wireless`, `web-proxy`, `nse` |
+| Base domain feature | `<domain>` | `db-pentest`, `mobile`, `wireless`, `web-proxy`, `nse`, `udp-scan` |
 | Protocol exposure marker | `<domain>-mcp` | `db-pentest-mcp`, `web-proxy-mcp`, `c2-mcp` |
 | Backend driver | `<domain>-<backend>` | `db-pentest-mongodb`, `db-pentest-redis` |
 | Advanced extension | `<domain>-advanced` | `wireless-advanced` |

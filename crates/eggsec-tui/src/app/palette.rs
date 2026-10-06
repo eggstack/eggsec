@@ -63,8 +63,12 @@ pub fn global_action_for(command: &str) -> Option<UiAction> {
         "help" | "help-current" => UiAction::ToggleHelp,
         "palette" => UiAction::ToggleCommandPalette,
         "quick-switch" | "open-quick" => UiAction::ToggleQuickSwitch,
-        "search" | "open-search" => UiAction::ToggleSearch { global: true },
-        "global-search" => UiAction::ToggleSearch { global: false },
+        // `search`/`open-search` mirror the `/` key, which opens local search;
+        // `global-search` mirrors Ctrl+F, which opens global search. These were
+        // inverted, so the palette's own commands contradicted both their names,
+        // their help entries, and the keys they claim to mirror.
+        "search" | "open-search" => UiAction::ToggleSearch { global: false },
+        "global-search" => UiAction::ToggleSearch { global: true },
         "theme" => UiAction::ToggleTheme,
         "export" => UiAction::ExportResults,
         "cycle-export" => UiAction::CycleExportFormat,

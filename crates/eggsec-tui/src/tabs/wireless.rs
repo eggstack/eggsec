@@ -337,7 +337,7 @@ impl WirelessTab {
         {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(vec![Span::styled(
-                "Tip: Active attacks (deauth, disassoc) are also available from this tab.",
+                "Tip: An active deauth attack is also available from this tab.",
                 Style::default().fg(tc!(info)),
             )]));
             self.results_view.add_line(Line::from(vec![Span::styled(
@@ -402,6 +402,11 @@ impl Default for WirelessTab {
 }
 
 impl TabState for WirelessTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -564,11 +569,20 @@ impl TabRender for WirelessTab {
 }
 
 impl TabInput for WirelessTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == WirelessFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.inputs);
+        }
+    }
+
     fn stop(&mut self) {
         WirelessTab::stop(self);
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
@@ -597,6 +611,9 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             WirelessFocusArea::Inputs => {
                 self.inputs.blur();
@@ -719,12 +736,18 @@ impl TabInput for WirelessTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WirelessFocusArea::Results {
             self.scroll_results_down();
         }

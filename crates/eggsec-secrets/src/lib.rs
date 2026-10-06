@@ -1,3 +1,31 @@
+//! Credential detection (extracted from `eggsec::recon::secrets` in Phase G).
+//!
+//! Secret patterns, typed findings, confidence tiers, and an entropy gate.
+//! This is the canonical single owner of credential-*detection* knowledge.
+//!
+//! # What this crate is
+//!
+//! Pure matching over strings. It opens no socket, spawns no process, resolves
+//! nothing, and authorizes nothing. The only engine type it needs is `Severity`,
+//! which `eggsec-core` already owns — that is the single reason it has a
+//! workspace dependency at all, and guard 148 forbids any other.
+//!
+//! Note the split from evidence redaction, which was deleted in Phase G:
+//! *detecting* a credential is this crate's job; *masking* one is the report
+//! model's declarative `RedactionState` plus `SecretFinding::value_preview`,
+//! which truncates to 20 characters. Neither job implies the other.
+//!
+//! # The entropy gate is detection semantics, not a tuning knob
+//!
+//! `secret_entropy(value) < 3.5` is applied **only** to
+//! `SecretType::AwsSecretKey` candidates, so that ordinary 40-character matches
+//! do not fire on low-entropy noise. It is deliberately not a global threshold.
+//! Widening it to every pattern type, or changing the constant, changes what
+//! the scanner detects — a capability change, not a refactor.
+//!
+//! Patterns compile behind `LazyLock`, so a process that never scans for
+//! credentials never pays to build them.
+
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -53,7 +81,7 @@ pub enum Confidence {
     Low,
 }
 
-pub use crate::types::Severity;
+pub use eggsec_core::types::Severity;
 
 impl std::fmt::Display for SecretType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

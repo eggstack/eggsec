@@ -158,6 +158,7 @@ pub struct Cli {
     // These are ignored or rejected under --strict-scope, CI, MCP, and agent paths.
     #[arg(
         long,
+        short = 'y',
         global = true,
         help = "Assume yes to low-risk manual confirmation prompts (out-of-scope, target-expansion only). Does not authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects. Use specific --allow-* flags for those classes. Manual-only."
     )]
@@ -390,11 +391,12 @@ pub enum Commands {
     #[cfg(feature = "rest-api")]
     #[command(about = "Start REST API server for external tool integration")]
     Serve(ServeArgs),
+    // No explicit alias: clap derives the name `mcp-serve` from the
+    // `McpServe` variant, so declaring an alias equal to the name trips
+    // clap's duplicate-name assert and panics on every parse in debug
+    // builds. Pin by `no_subcommand_declares_alias_equal_to_own_name`.
     #[cfg(feature = "rest-api")]
-    #[command(
-        about = "Start MCP server for AI assistant integration",
-        alias = "mcp-serve"
-    )]
+    #[command(about = "Start MCP server for AI assistant integration")]
     McpServe(McpServeArgs),
     #[cfg(feature = "rest-api")]
     #[command(
@@ -404,11 +406,11 @@ pub enum Commands {
     CodeggMcp(CodeggMcpArgs),
 
     // --- Agent orchestration ---
+    // No explicit `agent` alias — see the `McpServe` note above.
     #[cfg(feature = "rest-api")]
     #[command(
         about = "Run security agent for scheduled assessments",
-        long_about = AGENT_ABOUT,
-        alias = "agent"
+        long_about = AGENT_ABOUT
     )]
     Agent(AgentArgs),
 
@@ -509,8 +511,12 @@ impl Commands {
             Self::Serve(_) => "serve",
             #[cfg(feature = "rest-api")]
             Self::McpServe(_) => "mcp-serve",
+            // `codegg-mcp` is a distinct subcommand (alias `mcp-codegg`), not
+            // an alias of `mcp-serve`; it only shares the registry entry.
+            // Reporting the invoked spelling keeps trace/denial diagnostics
+            // truthful about which surface actually ran.
             #[cfg(feature = "rest-api")]
-            Self::CodeggMcp(_) => "mcp-serve",
+            Self::CodeggMcp(_) => "codegg-mcp",
             #[cfg(feature = "rest-api")]
             Self::Agent(_) => "agent",
             #[cfg(feature = "ai-integration")]
@@ -674,6 +680,179 @@ pub struct GrpcServerArgs {
 mod tests {
     use super::*;
     use crate::probe::ProbeRisk;
+    use clap::CommandFactory;
+
+    /// Regression: `McpServe` and `Agent` each declared an `alias` equal to
+    /// the name clap already derives from the variant name. clap's
+    /// duplicate-name assert is `#[cfg(debug_assertions)]` and runs inside
+    /// `_build_self`, i.e. only once a command is actually *parsed* — so
+    /// tree-reflection tests (`Cli::command()`) cannot see it, and the whole
+    /// binary panicked on every invocation in debug builds.
+    ///
+    /// This structural check is profile-independent: it still holds in
+    /// release builds, where the assert is compiled out.
+    #[test]
+    fn no_subcommand_declares_alias_equal_to_own_name() {
+        for sub in Cli::command().get_subcommands() {
+            let name = sub.get_name();
+            for alias in sub.get_all_aliases() {
+                assert_ne!(
+                    name, alias,
+                    "subcommand `{name}` declares an alias identical to its own name; \
+                     clap derives that name from the variant, so the duplicate panics \
+                     every parse in debug builds"
+                );
+            }
+        }
+    }
+
+    /// Parses real argv. This is the only kind of test that exercises
+    /// clap's `_build_self` asserts, so keep at least one: without it the
+    /// class of bug above is invisible to `make test` (`--lib`).
+    #[test]
+    fn cli_tree_builds_and_parses_without_panicking() {
+        // `Cli` is not `Debug`, so use `err()` rather than `expect_err()`,
+        // which would require a `Debug` bound on the success type.
+        let outcome = Cli::try_parse_from(["eggsec", "--help"]).err();
+        let err = outcome.expect("--help must produce a DisplayHelp error");
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::DisplayHelp,
+            "expected a clean --help parse, got: {err}"
+        );
+    }
+
+    /// Global `--yes`/`-y` must reach every subcommand, including the ones
+    /// that previously declared a dead local `--yes` (auth-test, stress,
+    /// remote, exec) whose help text promised "Skip confirmation prompt".
+    #[test]
+    fn global_yes_flag_is_reachable_on_a_subcommand() {
+        let parsed = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1", "-y"])
+            .expect("-y must reach the scan-ports subcommand via the global arg");
+        assert!(
+            parsed.yes,
+            "global --yes must be set from a subcommand position"
+        );
+    }
+
+    /// `eggsec storage` used to hardcode `StorageConfig::default()` in all
+    /// four handlers, so it could only ever reach localhost:5432. Every
+    /// subcommand must accept and actually apply a connection.
+    #[test]
+    fn storage_subcommands_accept_a_connection() {
+        for sub in ["query", "export", "stats", "init"] {
+            let parsed = Cli::try_parse_from([
+                "eggsec",
+                "storage",
+                sub,
+                "--host",
+                "db.internal",
+                "--port",
+                "6543",
+                "--database",
+                "eggsec_test",
+                "--username",
+                "scanner",
+            ])
+            .unwrap_or_else(|e| panic!("storage {sub} must accept connection flags: {e}"));
+
+            let args = match parsed.command {
+                Some(Commands::Storage(a)) => a,
+                Some(other) => {
+                    panic!("expected Storage, got {}", other.command_id())
+                }
+                None => panic!("expected Storage, got none"),
+            };
+            let conn = match args.command {
+                crate::cli::storage::StorageCommand::Query(a) => a.conn,
+                crate::cli::storage::StorageCommand::Export(a) => a.conn,
+                crate::cli::storage::StorageCommand::Stats(a) => a.conn,
+                crate::cli::storage::StorageCommand::Init(a) => a.conn,
+            };
+            assert_eq!(conn.host, "db.internal", "subcommand {sub}");
+            assert_eq!(conn.port, 6543, "subcommand {sub}");
+            assert_eq!(conn.database, "eggsec_test", "subcommand {sub}");
+            assert_eq!(conn.username, "scanner", "subcommand {sub}");
+
+            let config = conn.resolve();
+            assert_eq!(config.host, "db.internal", "subcommand {sub}");
+            assert_eq!(config.port, 6543, "subcommand {sub}");
+            assert_eq!(config.database, "eggsec_test", "subcommand {sub}");
+            assert_eq!(config.username, "scanner", "subcommand {sub}");
+        }
+    }
+
+    /// The password is supplied by environment-variable *name*, never a flag
+    /// value, and the resolved config must not print it.
+    #[test]
+    fn storage_password_comes_from_env_and_is_redacted() {
+        let var = "EGGSEC_TEST_STORAGE_PASSWORD_ROUNDTRIP";
+        // A variable name, not a secret, is what travels.
+        let parsed = Cli::try_parse_from(["eggsec", "storage", "stats", "--password-env", var])
+            .expect("--password-env must parse");
+        let Some(Commands::Storage(args)) = parsed.command else {
+            panic!("expected Storage");
+        };
+        let crate::cli::storage::StorageCommand::Stats(mut a) = args.command else {
+            panic!("expected Stats");
+        };
+        assert_eq!(a.conn.password_env, var);
+
+        // Unique per test so a concurrent run cannot race this variable.
+        let unique = format!("{var}_{}", std::process::id());
+        a.conn.password_env = unique.clone();
+        std::env::set_var(&unique, "hunter2");
+        let config = a.conn.resolve();
+        std::env::remove_var(&unique);
+
+        assert_eq!(config.password.expose_secret(), "hunter2");
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains("hunter2"),
+            "Debug must not leak the password: {debug}"
+        );
+        assert!(debug.contains("[REDACTED]"), "got: {debug}");
+    }
+
+    /// `scan-ports --udp` must exist in the real Clap tree and be a sibling of
+    /// `--scan-type`, not one of its values.
+    #[test]
+    fn scan_ports_udp_flag_parses_independently_of_scan_type() {
+        let tcp = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1"])
+            .expect("bare scan-ports must parse");
+        let Some(Commands::ScanPorts(tcp_args)) = tcp.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(!tcp_args.udp, "--udp must default to off");
+        assert!(tcp_args.scan_type.is_none());
+
+        let udp = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1", "--udp"])
+            .expect("--udp must parse");
+        let Some(Commands::ScanPorts(udp_args)) = udp.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(udp_args.udp);
+        assert!(
+            udp_args.scan_type.is_none(),
+            "--udp must not imply a TCP scan type"
+        );
+
+        // Both together parse; the engine decides precedence, not Clap.
+        let both = Cli::try_parse_from([
+            "eggsec",
+            "scan-ports",
+            "127.0.0.1",
+            "--udp",
+            "--scan-type",
+            "syn",
+        ])
+        .expect("--udp with --scan-type must parse");
+        let Some(Commands::ScanPorts(both_args)) = both.command else {
+            panic!("expected ScanPorts");
+        };
+        assert!(both_args.udp);
+        assert_eq!(both_args.scan_type.as_deref(), Some("syn"));
+    }
 
     #[test]
     fn quick_profile_allows_safe_active() {

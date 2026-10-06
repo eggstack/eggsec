@@ -6,6 +6,8 @@ Read-only environment detection for platform-sensitive domains, so tests and `eg
 
 Parent overview: [overview.md](overview.md). Related: [mobile.md](mobile.md), [networking.md](networking.md), [wireless.md](wireless.md).
 
+> **Corrections (verified against source 2026-10-06):** re-verified unchanged — file sizes (`platform/mod.rs` 18 lines, `platform/prereqs.rs` 818 lines), `PrereqStatus` (4 variants) at `prereqs.rs:12`, `Prerequisite` at `:32`, `DomainPrerequisites` at `:99`, `PlatformReport` at `:126`, and the full public function list. Fixed one cite: facade re-export range `mod.rs:13-17` → `:13-18`.
+
 ## Role & Responsibilities
 
 - **Single prerequisite matrix**: per-domain `DomainPrerequisites` plus fixture-vs-hardware guidance for `mobile-dynamic`, `packet-inspection`, `wireless`, and other hardware/privilege-gated domains.
@@ -48,7 +50,7 @@ Defined at `platform/prereqs.rs:12`:
 
 ### Public functions (facade)
 
-Re-exported from `platform/mod.rs:13-17`:
+Re-exported from `platform/mod.rs:13-18`:
 
 - `all_domain_ids()`, `capabilities_summary()`, `report_for(domain)`
 - `current_os()`, `current_arch()`, `current_kernel()`
@@ -106,4 +108,4 @@ Live scripts (`setup_packet_netns.sh`, `setup_android_emulator.sh`) SKIP on miss
 
 ---
 
-*Last verified against source: 2026-09-11; line counts refreshed (mod.rs 18 + prereqs.rs 818) 2026-09-25 (systematic review)*
+*Last verified against source: 2026-09-11; line counts refreshed (mod.rs 18 + prereqs.rs 818) 2026-09-25 (systematic review); all counts and line cites re-verified, 1 range cite fixed 2026-10-06 (systematic review)*

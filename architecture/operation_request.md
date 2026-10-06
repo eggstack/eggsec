@@ -2,22 +2,24 @@
 
 ## Overview
 
-Canonical, dependency-light execution-parameter contracts shared across every frontend. Defaults, validation, and normalization live once in `eggsec-tool-core::operation_request`; the engine facade at `crates/eggsec/src/operation_request.rs` (589 lines) only adapts frontend parse shapes (Clap args, runtime `TaskKind` params, `ToolRequest` JSON, Python DTOs) into those canonical types.
+Canonical, dependency-light execution-parameter contracts shared across every frontend. Defaults, validation, and normalization live once in `eggsec-tool-core::operation_request`; the engine facade at `crates/eggsec/src/operation_request.rs` (679 lines) only adapts frontend parse shapes (Clap args, runtime `TaskKind` params, `ToolRequest` JSON, Python DTOs) into those canonical types.
 
 The module is **policy-free** — it produces a normalized request but never authorizes it. Callers must still build an `OperationDescriptor` via `OperationMetadata::try_descriptor_for_target` and evaluate through `EnforcementContext` before execution. See [config.md](config.md) and [overview.md](overview.md).
+
+> **Corrections (verified against source 2026-10-06):** stale size/count cites fixed — engine facade `589 lines` → `679 lines`; canonical tool-core file `~1260 lines` → `2108 lines`; `DbPentestRequest` `tool-core:938` → `:1272`; `StorageRequest` `tool-core:1006` → `:1340`. Exhaustiveness-invariant doc cite `:12-17` → `:14-17`. Timeout list was missing the fingerprint default — added `fingerprint 5s`. All concurrency/bounds values, the `cli`-gated `cli_adapters`/`runtime_adapters` modules, and the re-export cite `:19` re-verified unchanged.
 
 ## Role & Responsibilities
 
 - **Single owner for defaults**: `DEFAULT_*` consts (ports, concurrency, timeouts, fuzz/GraphQL/OAuth settings) live in `eggsec-tool-core`, not in CLI/TUI/runtime duplicates.
 - **Pure normalization**: `parse_port_spec`, `resolve_load_test_counts`, `parse_scan_type`, `normalize_timeout_*`, `normalize_concurrency`, `parse_scan_profile`, `normalize_target_value` — pure functions with bounds enforcement.
-- **Typed requests per family**: `PortScanRequest`, `EndpointScanRequest`, `FingerprintRequest`, `FuzzRequest`, `WafDetectRequest`, `WafStressRequest`, `LoadTestRequest`, `ReconRequest`, `GraphQlRequest`, `OAuthRequest`, `AuthTestRequest`, `PipelineRequest`, `DbPentestRequest` (`tool-core:938`), `StorageRequest` (`tool-core:1006`), … each with serde support and a `normalize()` returning a validated `Normalized*` value.
+- **Typed requests per family**: `PortScanRequest`, `EndpointScanRequest`, `FingerprintRequest`, `FuzzRequest`, `WafDetectRequest`, `WafStressRequest`, `LoadTestRequest`, `ReconRequest`, `GraphQlRequest`, `OAuthRequest`, `AuthTestRequest`, `PipelineRequest`, `DbPentestRequest` (`tool-core:1272`), `StorageRequest` (`tool-core:1340`), … each with serde support and a `normalize()` returning a validated `Normalized*` value.
 - **Shallow frontend adapters**: `operation_request::cli_adapters` (Clap args → canonical), `operation_request::runtime_adapters` (`TaskKind` params → canonical), plus `ToolRequest`/Python adapters — no policy logic, no defaults re-declared.
 
 ## Location & Feature Gating
 
 | Component | Path | Feature Gate |
 |-----------|------|-------------|
-| Canonical contracts + defaults | `crates/eggsec-tool-core/src/operation_request.rs` (~1260 lines) | Always |
+| Canonical contracts + defaults | `crates/eggsec-tool-core/src/operation_request.rs` (2108 lines) | Always |
 | Engine facade + re-export | `crates/eggsec/src/operation_request.rs` | Always |
 | `cli_adapters` | `operation_request.rs:cli_adapters` | `cli` |
 | `runtime_adapters` | `operation_request.rs:runtime_adapters` | `cli` |
@@ -32,7 +34,7 @@ No authorization, no I/O, no network in this layer.
 
 - Ports: `DEFAULT_PORT_SCAN_PORTS = "1-1024"`, `DEFAULT_FINGERPRINT_PORTS = "80,443,22,…"`, `MAX_PORT_COUNT = 65_535`.
 - Concurrency per family: port-scan 100, endpoint/fingerprint 20, fuzz/GraphQL/OAuth/WAF 10, WAF-stress 20, load 10, auth 1.
-- Timeouts: port-scan 2s, endpoint/fuzz/auth 10s, WAF/GraphQL/OAuth 15s, load 30s, hunt 30s; bounds `1–600s`, `100–600_000ms`, concurrency `1–1000`.
+- Timeouts: port-scan 2s, endpoint/fuzz/auth 10s, fingerprint 5s, WAF/GraphQL/OAuth 15s, load 30s, hunt 30s; bounds `1–600s`, `100–600_000ms`, concurrency `1–1000`.
 - Load: `DEFAULT_LOAD_REQUESTS = 100`. Fuzz: payload `all`, mode `sequential`, method `GET`, mutations 3. GraphQL introspection/depth-bypass/alias-overload default `true`.
 
 Mirrors CLI `timeout.rs`/arg defaults by design — CLI must not re-declare these.
@@ -45,7 +47,7 @@ Mirrors CLI `timeout.rs`/arg defaults by design — CLI must not re-declare thes
 
 ### Exhaustiveness invariant
 
-Every conversion is exhaustive: adding a new `TaskKind` variant or canonical operation without updating the mapping is a compile error (no wildcard fallback for supported kinds). Documented at `operation_request.rs:12-17`.
+Every conversion is exhaustive: adding a new `TaskKind` variant or canonical operation without updating the mapping is a compile error (no wildcard fallback for supported kinds). Documented at `operation_request.rs:14-17`.
 
 ## Behavior / Flow
 
@@ -114,4 +116,4 @@ Canonical request structs expose `normalize()`; normalization helpers (`parse_po
 
 ---
 
-*Last verified against source: 2026-09-11; counts re-verified 2026-09-22 (systematic review); canonical cites (`DbPentestRequest:938`, `StorageRequest:1006`, re-export `:19`, `cli` gates) re-verified 2026-09-25*
+*Last verified against source: 2026-09-11; counts re-verified 2026-09-22 (systematic review); canonical cites (`DbPentestRequest:938`, `StorageRequest:1006`, re-export `:19`, `cli` gates) re-verified 2026-09-25; stale size/count cites corrected and timeout list completed 2026-10-06 (systematic review)*

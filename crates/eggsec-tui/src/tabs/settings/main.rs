@@ -1782,4 +1782,52 @@ mod tests {
              not the thread-local theme color"
         );
     }
+
+    #[test]
+    fn proxy_rotation_and_severity_dropdowns_are_drawn_when_expanded() {
+        use crate::tabs::TabRender;
+        use ratatui::{backend::TestBackend, Terminal};
+
+        fn draw(tab: &SettingsTab) -> String {
+            let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+            terminal
+                .draw(|f| {
+                    let area = f.area();
+                    tab.render(f, area, false);
+                })
+                .unwrap();
+            crate::test_utils::buffer_to_text(terminal.backend().buffer())
+        }
+
+        // Proxy section: the rotation selector renders through FormBuilder.
+        let mut proxy = SettingsTab::new();
+        proxy.current_section = SettingsSection::Proxy;
+        proxy.proxy_rotation_selector.open();
+        assert!(proxy.proxy_rotation_selector.is_open());
+        let text = draw(&proxy);
+        assert!(
+            text.contains("Round Robin") && text.contains("Least Connections"),
+            "expanded proxy rotation dropdown should be drawn"
+        );
+
+        // Notifications section: the severity selector renders through FormBuilder.
+        let mut notify = SettingsTab::new();
+        notify.current_section = SettingsSection::Notifications;
+        notify.severity_selector.open();
+        assert!(notify.severity_selector.is_open());
+        // 80x40: the severity row sits at the bottom of the form, so the
+        // dropdown needs the extra rows to open below its field.
+        let mut terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                notify.render(f, area, false);
+            })
+            .unwrap();
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        assert!(
+            text.contains("Critical") && text.contains("Low"),
+            "expanded min severity dropdown should be drawn"
+        );
+    }
 }

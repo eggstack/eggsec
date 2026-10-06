@@ -92,6 +92,12 @@ rest-api = ["eggsec/rest-api"]
 db-pentest = ["eggsec/db-pentest"]
 web-proxy = ["eggsec/web-proxy"]
 c2 = ["eggsec/c2"]
+# Engine-only forwarding (category 1). Not part of `full` here for the same
+# reason it is not part of the engine's curated `full`: UDP verdicts depend on
+# an ICMP receiver whose availability is OS- and privilege-dependent, so it is
+# opt-in rather than on by default. The scan-ports tab's UDP checkbox is
+# unconditional -- the engine reports a clear error when the feature is absent.
+udp-scan = ["eggsec/udp-scan"]
 full = [
     "nse",
     "headless-browser",

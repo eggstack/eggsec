@@ -132,11 +132,140 @@ pub fn port_scan_request_from_args(
 
 pub use spoofed::{init_packet_trace, shutdown_packet_trace};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Transport a port verdict was reached over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PortProtocol {
+    #[default]
+    Tcp,
+    Udp,
+}
+
+impl PortProtocol {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Tcp => "tcp",
+            Self::Udp => "udp",
+        }
+    }
+}
+
+impl std::fmt::Display for PortProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A per-port verdict.
+///
+/// Typed rather than a `String` because the set is closed and the differences
+/// carry real meaning: `closed` and `open` are *proofs* (an RST or an ICMP
+/// port-unreachable arrived), while `filtered` and `open|filtered` are the
+/// *absence* of a proof. A reader cannot tell those apart by string
+/// comparison, and collapsing `open|filtered` into `open` is exactly the
+/// over-claim the UDP path exists to avoid.
+///
+/// Deserialization rejects an unrecognized value instead of guessing. A
+/// payload from a different build should fail loudly rather than have its
+/// verdict silently coerced into a state this enum does not model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PortStatus {
+    /// A SYN/ACK arrived: proved listening.
+    Open,
+    /// An RST or ICMP port-unreachable arrived: proved not listening.
+    Closed,
+    /// No response for this port, but the host answered other probes. A
+    /// firewall drop fits; nothing else was proven either way.
+    Filtered,
+    /// No response for this port and the host proved nothing at all, so the
+    /// port is either open-and-filtered or closed-and-filtered. UDP cannot
+    /// tell which, so this scanner does not claim either.
+    #[serde(rename = "open|filtered")]
+    OpenFiltered,
+}
+
+impl PortStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Closed => "closed",
+            Self::Filtered => "filtered",
+            Self::OpenFiltered => "open|filtered",
+        }
+    }
+
+    /// Whether this verdict is a proof rather than an absence of one.
+    pub const fn is_proof(self) -> bool {
+        matches!(self, Self::Open | Self::Closed)
+    }
+}
+
+impl std::fmt::Display for PortStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortResult {
     pub port: u16,
-    pub status: String,
+    pub status: PortStatus,
+    /// Transport the verdict was reached over.
+    ///
+    /// `#[serde(default)]` = TCP, which is what every `PortResult` predating
+    /// UDP scanning was, so payloads written by an older build still load.
+    /// `PortResult` crosses the daemon protocol, the Python bindings and the
+    /// report model, so this field is wire-affecting.
+    #[serde(default)]
+    pub protocol: PortProtocol,
     pub service: String,
+}
+
+/// UDP host-liveness verdict, mirrored into the report envelope.
+///
+/// An engine-owned type rather than `eggsec_udp_scan::HostState` on purpose:
+/// `PortScanResults` crosses the daemon protocol, the Python bindings and the
+/// report model, so embedding a scanner-crate type would couple the wire
+/// contract to that crate's internals -- and would drag `serde` into a crate
+/// that deliberately has none.
+#[cfg(feature = "udp-scan")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UdpHostState {
+    /// At least one ICMP error was attributed to one of our probes.
+    Up,
+    /// The window elapsed with no attributable ICMP. Per-port results from
+    /// such a run describe nothing: a dead host and a fully-filtered host are
+    /// indistinguishable on the wire.
+    Unresponsive,
+    /// Errors arrived but none could be attributed.
+    Indeterminate,
+}
+
+#[cfg(feature = "udp-scan")]
+impl std::fmt::Display for UdpHostState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Up => "up",
+            Self::Unresponsive => "unresponsive (no port verdicts are meaningful)",
+            Self::Indeterminate => "indeterminate",
+        })
+    }
+}
+
+/// How much signal backed a UDP run's verdicts.
+///
+/// Reported so a caller can see evidence density rather than over-claiming: a
+/// run with zero correlated errors and a full port list is not a port list.
+#[cfg(feature = "udp-scan")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct UdpEvidenceSummary {
+    pub correlated: u64,
+    pub orphans: u64,
+    pub expired: u64,
+    pub unparseable: u64,
+    pub sweeps: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -149,6 +278,49 @@ pub struct PortScanResults {
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spoof_stats: Option<SpoofStats>,
+    /// UDP host-liveness verdict. `None` for TCP scans.
+    ///
+    /// `#[serde(default)]` so a payload written before this field existed still
+    /// deserializes -- `PortScanResults` crosses the daemon protocol, the
+    /// Python bindings and the report model.
+    #[cfg_attr(
+        feature = "udp-scan",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    #[cfg(feature = "udp-scan")]
+    pub udp_host_state: Option<UdpHostState>,
+    /// UDP ICMP evidence density. `None` for TCP scans.
+    #[cfg_attr(
+        feature = "udp-scan",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    #[cfg(feature = "udp-scan")]
+    pub udp_evidence: Option<UdpEvidenceSummary>,
+}
+
+impl PortScanResults {
+    /// Whether these results came from a UDP run.
+    ///
+    /// Derived from the port records themselves rather than from
+    /// `udp_host_state`, so it stays correct in a build without the
+    /// `udp-scan` feature and does not depend on a field a caller may have
+    /// dropped in transit.
+    pub fn is_udp(&self) -> bool {
+        self.open_ports
+            .iter()
+            .any(|p| p.protocol == PortProtocol::Udp)
+    }
+
+    /// Ports whose verdict actually proves something is listening.
+    ///
+    /// `open_ports` is a misnomer for a UDP run: it holds every probed port,
+    /// most of which are `open|filtered`. Count only the proofs.
+    pub fn proved_open_ports(&self) -> usize {
+        self.open_ports
+            .iter()
+            .filter(|p| p.status == PortStatus::Open)
+            .count()
+    }
 }
 
 impl std::fmt::Display for PortScanResults {
@@ -156,18 +328,92 @@ impl std::fmt::Display for PortScanResults {
         writeln!(f, "Port Scan Results")?;
         writeln!(f, "host: {}", strip_controls(&self.host, 60))?;
         writeln!(f, "scanned: {} ports", self.ports_scanned)?;
-        writeln!(f, "open: {} ports", self.open_ports.len())?;
+
+        // A UDP run lists a verdict for every probed port, so counting the
+        // list as "open" would undercount and imply the rest are closed.
+        if self.is_udp() {
+            writeln!(f, "verdicts: {} ports", self.open_ports.len())?;
+        } else {
+            writeln!(f, "open: {} ports", self.open_ports.len())?;
+        }
+
+        #[cfg(feature = "udp-scan")]
+        if let Some(state) = self.udp_host_state {
+            writeln!(f, "host state: {state}")?;
+        }
 
         if self.open_ports.is_empty() {
-            writeln!(f, "no open ports")?;
+            if self.is_udp() {
+                writeln!(f, "no port verdicts reported")?;
+            } else {
+                writeln!(f, "no open ports")?;
+            }
         } else {
-            writeln!(f, "open ports")?;
+            writeln!(f, "ports")?;
             for port in &self.open_ports {
-                writeln!(f, "\t{}/tcp\t{}\t{}", port.port, port.status, port.service)?;
+                writeln!(
+                    f,
+                    "\t{}/{}\t{}\t{}",
+                    port.port, port.protocol, port.status, port.service
+                )?;
             }
         }
 
         Ok(())
+    }
+}
+
+/// Run a `--udp` scan from the CLI.
+///
+/// Routes through the same `run_port_scan` entry point every other surface
+/// uses, so the CLI cannot drift from the TUI/daemon/REST behavior -- and so
+/// a build without the `udp-scan` feature fails closed here with the same
+/// message rather than quietly scanning TCP instead.
+#[cfg(feature = "cli")]
+async fn run_udp_scan_cli(args: &PortScanArgs, timeout_secs: u64) -> Result<PortScanResults> {
+    // Spoofing, decoys, fragmentation and dry-run are raw-TCP-SYN concepts.
+    // The UDP path sends from a real socket and correlates ICMP, so accepting
+    // these flags and ignoring them would be a lie; say so instead.
+    if args.source_ip.is_some()
+        || args.spoof_range.is_some()
+        || args.decoy.is_some()
+        || args.decoy_range.is_some()
+        || args.decoy_count.is_some()
+        || args.include_me
+        || args.source_port.is_some()
+        || args.random_source_port
+        || args.fragment
+        || args.packet_trace.is_some()
+        || args.max_rate.is_some()
+        || args.ttl.is_some()
+    {
+        eprintln!(
+            "Warning: source IP, decoy, source-port, fragment, packet-trace, max-rate and ttl \
+             options do not apply to a UDP scan and are ignored."
+        );
+    }
+    if args.scan_type.is_some() {
+        eprintln!("Warning: --scan-type selects a TCP technique and is ignored with --udp.");
+    }
+
+    // Kept alive for the duration so progress sends do not warn on a
+    // disconnected channel.
+    let (progress_tx, _progress_rx) = tokio::sync::mpsc::channel(16);
+
+    match crate::dispatch::run_port_scan(
+        args.host.clone(),
+        args.ports.clone(),
+        args.concurrency,
+        Duration::from_secs(timeout_secs),
+        true,
+        progress_tx,
+    )
+    .await?
+    {
+        crate::dispatch::TaskResult::PortScan(results) => Ok(results),
+        other => Err(crate::error::EggsecError::Internal(format!(
+            "UDP scan returned an unexpected result: {other:?}"
+        ))),
     }
 }
 
@@ -267,22 +513,26 @@ pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
     }
 
     let ports_count = ports.len();
-    let port_args = PortScanConfig {
-        ports,
-        concurrency: args.concurrency,
-        timeout_duration: Duration::from_secs(timeout_secs),
-        tui_mode: false,
-        spoof_config,
-        progress_tx: None,
-        max_results: None,
-    };
+    let results = if args.udp {
+        run_udp_scan_cli(&args, timeout_secs).await?
+    } else {
+        let port_args = PortScanConfig {
+            ports,
+            concurrency: args.concurrency,
+            timeout_duration: Duration::from_secs(timeout_secs),
+            tui_mode: false,
+            spoof_config,
+            progress_tx: None,
+            max_results: None,
+        };
 
-    let results = scan_ports(&args.host, port_args).await?;
+        scan_ports(&args.host, port_args).await?
+    };
 
     if args.verbose {
         eprintln!(
             "Scan complete: {} open ports found out of {} scanned",
-            results.open_ports.len(),
+            results.proved_open_ports(),
             ports_count
         );
     }
@@ -299,7 +549,11 @@ pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
             if i > 0 {
                 s.push_str(", ");
             }
-            write!(s, "{}/open/{}", port.port, port.service).unwrap();
+            // Nmap grepable form is `port/state/proto//service`. Hardcoding
+            // `/open/` would report every UDP port -- most of them
+            // `open|filtered` -- as open.
+            write!(s, "{}/{}/{}/", port.port, port.status, port.protocol).unwrap();
+            s.push_str(&port.service);
         }
         s.push('\n');
         s
@@ -312,8 +566,11 @@ pub async fn run_cli(args: PortScanArgs, config: &EggsecConfig) -> Result<()> {
         for port in &results.open_ports {
             write!(
                 s,
-                r#"    <port protocol="tcp" portid="{}"><state state="open"/><service name="{}"/></port>"#,
-                port.port, port.service
+                r#"    <port protocol="{}" portid="{}"><state state="{}"/><service name="{}"/></port>"#,
+                port.protocol,
+                port.port,
+                escape_xml(port.status.as_str()),
+                escape_xml(&port.service)
             )
             .unwrap();
             s.push('\n');
@@ -370,6 +627,10 @@ where
             results_truncated: false,
             duration_ms: 0,
             spoof_stats: None,
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         });
     }
 
@@ -605,7 +866,8 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
                     {
                         Some(PortResult {
                             port,
-                            status: "open".to_string(),
+                            status: PortStatus::Open,
+                            protocol: PortProtocol::Tcp,
                             service: get_service_name(port).to_string(),
                         })
                     } else {
@@ -665,7 +927,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
 
     let open_ports: Vec<PortResult> = open_results
         .into_iter()
-        .filter(|p| p.status == "open")
+        .filter(|p| p.status == PortStatus::Open)
         .collect();
 
     Ok(PortScanResults {
@@ -678,6 +940,10 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         results_truncated,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,
+        #[cfg(feature = "udp-scan")]
+        udp_host_state: None,
+        #[cfg(feature = "udp-scan")]
+        udp_evidence: None,
     })
 }
 
@@ -723,13 +989,14 @@ mod tests {
     fn test_port_result_serialization() {
         let result = PortResult {
             port: 80,
-            status: "open".to_string(),
+            status: PortStatus::Open,
+            protocol: PortProtocol::Tcp,
             service: "HTTP".to_string(),
         };
         let json = serde_json::to_string(&result).unwrap();
         let deserialized: PortResult = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.port, 80);
-        assert_eq!(deserialized.status, "open");
+        assert_eq!(deserialized.status, PortStatus::Open);
         assert_eq!(deserialized.service, "HTTP");
     }
 
@@ -743,6 +1010,11 @@ mod tests {
             results_truncated: false,
             duration_ms: 5000,
             spoof_stats: None,
+
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         };
         let output = format!("{}", results);
         assert!(output.contains("Port Scan Results"));
@@ -758,17 +1030,20 @@ mod tests {
             open_ports: vec![
                 PortResult {
                     port: 22,
-                    status: "open".to_string(),
+                    status: PortStatus::Open,
+                    protocol: PortProtocol::Tcp,
                     service: "SSH".to_string(),
                 },
                 PortResult {
                     port: 80,
-                    status: "open".to_string(),
+                    status: PortStatus::Open,
+                    protocol: PortProtocol::Tcp,
                     service: "HTTP".to_string(),
                 },
                 PortResult {
                     port: 443,
-                    status: "open".to_string(),
+                    status: PortStatus::Open,
+                    protocol: PortProtocol::Tcp,
                     service: "HTTPS".to_string(),
                 },
             ],
@@ -776,6 +1051,11 @@ mod tests {
             results_truncated: false,
             duration_ms: 3000,
             spoof_stats: None,
+
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         };
         let output = format!("{}", results);
         assert!(output.contains("scanned: 1000 ports"));

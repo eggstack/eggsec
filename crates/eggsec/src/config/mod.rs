@@ -140,6 +140,102 @@ verbosity = "Normal"
 # Uncomment to save reports
 # save_results = true
 # results_dir = "./reports"
+
+# Execution policy: which risk tiers the operator has enabled. Everything
+# below defaults to false, so only passive and safe-active operations run
+# until you opt in. Each flag still requires the matching --allow-* CLI flag
+# (or the matching --yes, for low-risk scope prompts) before it executes:
+# this section enables the tier, it does not authorize a specific run.
+[execution_policy]
+# Intrusive fuzzing (SQLi/RCE payloads, authenticated request replay).
+allow_intrusive_fuzzing = false
+# Load testing against an authorized target.
+allow_load_testing = false
+# Volumetric stress / flood testing.
+allow_stress_testing = false
+# Raw packet send/capture (requires elevated capabilities).
+allow_raw_packets = false
+# Credential / authentication testing.
+allow_credential_testing = false
+# Direct database pentesting (authorized lab instances only).
+allow_db_pentesting = false
+# Traffic interception (MITM proxy).
+allow_traffic_interception = false
+# Remote command execution against managed agents.
+allow_remote_execution = false
+# Evasive/detection-bypass testing.
+allow_evasion_testing = false
+# Post-exploitation actions.
+allow_post_exploitation = false
+# Exploit-adjacent (non-destructive) validation.
+allow_exploit_adjacent = false
+# Command-and-control infrastructure operations.
+allow_c2_operations = false
+# Autonomous agent operation without per-step confirmation.
+allow_agent_autonomous = false
 "#
     .to_string()
+}
+
+#[cfg(test)]
+mod default_config_template_tests {
+    use super::get_default_config;
+    use crate::config::EggsecConfig;
+
+    /// The template emitted by `eggsec --generate-config` is the only file the
+    /// operator is told to write, so it must actually deserialize. It also has
+    /// to name every `ExecutionPolicy` key: the entire enforcement surface was
+    /// previously absent from the template, leaving the only supported way to
+    /// enable a risk tier undiscoverable.
+    #[test]
+    fn generated_template_deserializes_into_config() {
+        let template = get_default_config();
+        let parsed: EggsecConfig = toml::from_str(&template).unwrap_or_else(|e| {
+            panic!("generated config template must parse: {e}\n---\n{template}")
+        });
+        // Every advertised tier must default to disabled, so shipping the
+        // template cannot silently widen the policy.
+        assert!(!parsed.execution_policy.allow_intrusive_fuzzing);
+        assert!(!parsed.execution_policy.allow_load_testing);
+        assert!(!parsed.execution_policy.allow_stress_testing);
+        assert!(!parsed.execution_policy.allow_raw_packets);
+        assert!(!parsed.execution_policy.allow_credential_testing);
+        assert!(!parsed.execution_policy.allow_db_pentesting);
+        assert!(!parsed.execution_policy.allow_traffic_interception);
+        assert!(!parsed.execution_policy.allow_remote_execution);
+        assert!(!parsed.execution_policy.allow_evasion_testing);
+        assert!(!parsed.execution_policy.allow_post_exploitation);
+        assert!(!parsed.execution_policy.allow_exploit_adjacent);
+        assert!(!parsed.execution_policy.allow_c2_operations);
+        assert!(!parsed.execution_policy.allow_agent_autonomous);
+    }
+
+    /// Guards against a key being added to `ExecutionPolicy` but forgotten in
+    /// the generated template, which would leave it undiscoverable again.
+    #[test]
+    fn generated_template_covers_every_execution_policy_key() {
+        let template = get_default_config();
+        for key in POLICY_TEMPLATE_KEYS {
+            assert!(
+                template.contains(&format!("{key} =")),
+                "[execution_policy] key `{key}` is missing from the generated config template"
+            );
+        }
+    }
+
+    const POLICY_TEMPLATE_KEYS: &[&str] = &[
+        "allow_intrusive_fuzzing",
+        "allow_load_testing",
+        "allow_stress_testing",
+        "allow_raw_packets",
+        "allow_credential_testing",
+        "allow_db_pentesting",
+        "allow_traffic_interception",
+        "allow_remote_execution",
+        "allow_evasion_testing",
+        "allow_post_exploitation",
+        "allow_exploit_adjacent",
+        "allow_c2_operations",
+        "allow_agent_autonomous",
+    ];
 }

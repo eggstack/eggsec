@@ -29,7 +29,6 @@ pub struct PacketTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub is_root: bool,
-    pub privileges_required: bool,
     pub error: Option<TabError>,
 }
 
@@ -50,11 +49,10 @@ impl PacketTab {
             .add(InputField::new("Max Packets (default: 100)").with_value("100"))
             .add(InputField::new("Output File (optional)"));
 
-        #[cfg(feature = "stress-testing")]
+        // Root detection is a plain euid probe in the engine, so it is safe to
+        // call in every build. Compiling it out made `can_run()` fail even
+        // under `sudo` for the privilege-free interface listing.
         let is_root = eggsec::platform::is_root();
-        #[cfg(not(feature = "stress-testing"))]
-        let is_root = false;
-        let privileges_required = true;
 
         Self {
             view_selector,
@@ -64,9 +62,15 @@ impl PacketTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             is_root,
-            privileges_required,
             error: None,
         }
+    }
+
+    /// Whether the selected view needs elevated privileges. Listing network
+    /// interfaces reads nothing privileged, so `Interfaces` stays runnable as
+    /// an unprivileged user.
+    pub fn privileges_required(&self) -> bool {
+        !matches!(self.current_view, PacketView::Interfaces)
     }
 
     pub fn target(&self) -> &str {
@@ -436,7 +440,7 @@ impl PacketTab {
     }
 
     pub fn can_run(&mut self) -> bool {
-        if self.privileges_required && !self.is_root {
+        if self.privileges_required() && !self.is_root {
             self.results_view.clear();
             self.results_view.add_line(Line::from(vec![
                 Span::styled("Error: ", Style::default().fg(tc!(error))),
@@ -458,6 +462,11 @@ impl Default for PacketTab {
 }
 
 impl TabState for PacketTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -552,7 +561,7 @@ impl TabRender for PacketTab {
 
         render_input_fields(f, &input_chunks, &self.inputs, false);
 
-        if !self.is_root {
+        if self.privileges_required() && !self.is_root {
             let warning = Paragraph::new("Warning: Root privileges required for packet operations")
                 .style(Style::default().fg(tc!(warning)));
             f.render_widget(
@@ -597,6 +606,15 @@ impl TabRender for PacketTab {
 }
 
 impl TabInput for PacketTab {
+    fn ensure_input_focus(&mut self) {
+        // This tab opens on its tool selector, not on the inputs. Without this
+        // the tab entry left *nothing* focused (neither the selector nor an
+        // input field), so no key could reach any control.
+        if !self.view_selector.is_focused() && !self.inputs.is_focused() {
+            self.view_selector.focus();
+        }
+    }
+
     fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;
@@ -604,6 +622,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             self.inputs.focus_next();
@@ -619,6 +640,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             self.inputs.focus_prev();
@@ -767,6 +791,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_prev();
@@ -779,6 +806,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_next();
@@ -902,5 +932,45 @@ mod tests {
         tab.handle_enter();
         assert!(!tab.view_selector.is_open());
         assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn test_interfaces_view_needs_no_privileges() {
+        let mut tab = create_test_tab();
+        tab.is_root = false;
+        tab.current_view = PacketView::Interfaces;
+        assert!(!tab.privileges_required());
+        assert!(tab.can_run());
+
+        tab.execute();
+        assert_ne!(
+            tab.state,
+            AppState::Error("Root privileges required".to_string())
+        );
+        assert!(matches!(tab.state, AppState::Completed));
+    }
+
+    #[test]
+    fn test_privileged_view_blocked_without_root() {
+        let mut tab = create_test_tab();
+        tab.is_root = false;
+        for view in [
+            PacketView::Capture,
+            PacketView::Send,
+            PacketView::Icmp,
+            PacketView::Traceroute,
+        ] {
+            tab.current_view = view;
+            assert!(tab.privileges_required());
+            assert!(!tab.can_run());
+        }
+    }
+
+    #[test]
+    fn test_privileged_view_allowed_as_root() {
+        let mut tab = create_test_tab();
+        tab.is_root = true;
+        tab.current_view = PacketView::Capture;
+        assert!(tab.can_run());
     }
 }

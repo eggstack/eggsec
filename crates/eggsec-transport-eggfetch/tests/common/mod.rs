@@ -705,3 +705,18 @@ impl NetworkAuthority for CidrAllow {
         Ok(())
     }
 }
+
+/// Whether a second loopback address (127.0.0.2) is bindable on this host.
+///
+/// Some qualification fixtures need two distinct loopback addresses to prove
+/// per-address connection isolation. Linux routes the whole of 127.0.0.0/8 to
+/// `lo`, so 127.0.0.2 binds without privileges. macOS assigns only 127.0.0.1 to
+/// `lo0`; additional addresses need a privileged `ifconfig lo0 alias`, so those
+/// fixtures cannot run there.
+///
+/// Callers skip loudly (and print why) instead of failing, because the missing
+/// address is a property of the host, not a defect in the transport. The
+/// assertions themselves are unchanged on hosts where the address exists.
+pub fn loopback_alias_available() -> bool {
+    std::net::TcpListener::bind(("127.0.0.2", 0)).is_ok()
+}

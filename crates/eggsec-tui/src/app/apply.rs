@@ -90,7 +90,8 @@ impl App {
             | UiAction::ConfirmPolicyAction
             | UiAction::CancelPolicyAction
             | UiAction::PolicyReasonChar(_)
-            | UiAction::PolicyReasonBackspace => self.apply_confirm_action(action),
+            | UiAction::PolicyReasonBackspace
+            | UiAction::PolicyConfirmScroll(_) => self.apply_confirm_action(action),
 
             // --- Command palette sub-input ---
             UiAction::CommandPaletteInput(_) => self.apply_palette_action(action),
@@ -293,11 +294,39 @@ impl App {
     /// Copy current tab's copyable text to the system clipboard.
     fn clipboard_copy_from_tab(&mut self) {
         use crate::utils::Clipboard;
-        if let Some(text) = self.dispatcher_mut().handle_copy() {
-            if !Clipboard::set(&text) {
+        let copied = self
+            .dispatcher_mut()
+            .handle_copy()
+            .map(|text| Clipboard::set(&text));
+        match copied {
+            Some(true) => {}
+            Some(false) => {
                 tracing::warn!("Clipboard write failed");
+                self.notify_clipboard_failure("copy");
             }
+            // Nothing copyable on this tab: not a clipboard failure, so no
+            // notification (an error here would be a false alarm).
+            None => {}
         }
+    }
+
+    /// Surface a clipboard failure in-frame.
+    ///
+    /// A silent no-op on an explicit user action is worse than an error: with
+    /// no display or over SSH the copy did nothing and the status bar gave no
+    /// indication that anything went wrong.
+    pub(crate) fn notify_clipboard_failure(&mut self, action: &str) {
+        if let Some(message) = self.clipboard_failure_message(action) {
+            self.overlay.notification = Some(crate::app::notifications::Notification::new(
+                message,
+                crate::app::notifications::NotificationSeverity::Error,
+            ));
+        }
+    }
+
+    /// The user-facing reason a clipboard action cannot work, if it is known.
+    pub(crate) fn clipboard_failure_message(&self, action: &str) -> Option<String> {
+        crate::utils::Clipboard::unavailable_message(action)
     }
 
     pub(crate) fn apply_clipboard_action(&mut self, action: UiAction) {
@@ -317,6 +346,7 @@ impl App {
                     self.dispatcher_mut().handle_paste(&text);
                 } else {
                     tracing::debug!("Clipboard read failed or clipboard is empty");
+                    self.notify_clipboard_failure("paste");
                 }
                 self.needs_redraw = true;
             }
@@ -432,6 +462,21 @@ impl App {
             UiAction::PolicyReasonBackspace => {
                 if let Some(p) = &mut self.overlay.pending_policy {
                     p.reason_input.pop();
+                    self.needs_redraw = true;
+                }
+            }
+            UiAction::PolicyConfirmScroll(delta) => {
+                if let Some(p) = &mut self.overlay.pending_policy {
+                    let total = p.message().1.len();
+                    let next = if delta >= 0 {
+                        p.scroll_offset.saturating_add(delta as usize)
+                    } else {
+                        p.scroll_offset
+                            .saturating_sub(delta.unsigned_abs() as usize)
+                    };
+                    // Never scroll past the last row; `saturating_sub(1)` keeps
+                    // the offset addressable while the popup is empty.
+                    p.scroll_offset = next.min(total.saturating_sub(1));
                     self.needs_redraw = true;
                 }
             }
@@ -554,6 +599,7 @@ impl App {
                 if !results.is_empty() && self.quick_switch.selected < results.len() {
                     if let Some(tab) = results.get(self.quick_switch.selected) {
                         self.current_tab = **tab;
+                        self.sync_input_focus_for_current_tab();
                         self.adjust_tab_scroll();
                     }
                 }

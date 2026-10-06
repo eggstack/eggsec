@@ -19,6 +19,10 @@ members = [
     "crates/eggsec-transport",
     "crates/eggsec-transport-eggfetch",
     "crates/eggsec-policy",
+    "crates/eggsec-service-db",
+    "crates/eggsec-secrets",
+    "crates/eggsec-payloads",
+    "crates/eggsec-udp-scan",
 ]
 resolver = "2"
 
@@ -70,6 +74,7 @@ bytes = "1"
 http = "1"
 eggsec-transport = { path = "crates/eggsec-transport", version = "0.1.0" }
 eggsec-transport-eggfetch = { path = "crates/eggsec-transport-eggfetch", version = "0.1.0" }
+eggsec-udp-scan = { path = "crates/eggsec-udp-scan", version = "0.1.0" }
 
 [profile.release]
 lto = true

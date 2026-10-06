@@ -1,4 +1,3 @@
-use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, InputField, Selector, SelectorItem};
 use crate::tabs::core::TabCore;
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
@@ -36,6 +35,45 @@ pub enum VulnMode {
     Prioritize,
     Triage,
     Remediation,
+}
+
+impl VulnTab {
+    /// Input field indices that are actually rendered for the current mode.
+    /// Traversal must be constrained to these: walking every field moved focus
+    /// (and the typed text that follows it) into fields this mode never draws,
+    /// so the operator typed into an invisible field with no focus marker.
+    fn field_indices(&self) -> Vec<usize> {
+        match self.current_mode {
+            VulnMode::CvssCalc => vec![3],
+            VulnMode::ExploitCheck => vec![0],
+            VulnMode::AssetAssess => vec![4],
+            VulnMode::Prioritize => vec![1, 5],
+            VulnMode::Triage => vec![0, 1, 2, 3, 5],
+            VulnMode::Remediation => vec![1, 5],
+        }
+    }
+
+    /// Move input focus to the previous/next *rendered* field for this mode.
+    fn focus_rendered_field(&mut self, forward: bool) {
+        let indices = self.field_indices();
+        if indices.is_empty() {
+            return;
+        }
+        let current = self.core.inputs.focused;
+        let position = current
+            .and_then(|cur| indices.iter().position(|i| *i == cur))
+            .map(|p| {
+                if forward {
+                    (p + 1) % indices.len()
+                } else {
+                    (p + indices.len() - 1) % indices.len()
+                }
+            })
+            .unwrap_or(0);
+        if let Some(next) = indices.get(position) {
+            self.core.inputs.focus(*next);
+        }
+    }
 }
 
 impl VulnTab {
@@ -364,14 +402,7 @@ impl TabRender for VulnTab {
             ..input_inner
         };
 
-        let field_indices: Vec<usize> = match self.current_mode {
-            VulnMode::CvssCalc => vec![3],
-            VulnMode::ExploitCheck => vec![0],
-            VulnMode::AssetAssess => vec![4],
-            VulnMode::Prioritize => vec![1, 5],
-            VulnMode::Triage => vec![0, 1, 2, 3, 5],
-            VulnMode::Remediation => vec![1, 5],
-        };
+        let field_indices = self.field_indices();
 
         if !field_indices.is_empty() {
             let field_chunks = Layout::default()
@@ -411,9 +442,44 @@ impl TabRender for VulnTab {
             f.render_widget(placeholder, *results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let input_height = match self.current_mode {
+            VulnMode::CvssCalc => 9,
+            VulnMode::ExploitCheck => 6,
+            VulnMode::AssetAssess => 12,
+            VulnMode::Prioritize => 9,
+            VulnMode::Triage => 15,
+            VulnMode::Remediation => 9,
+        };
+
+        // Mirrors the configuration block layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(input_height), Constraint::Min(0)])
+            .split(area);
+
+        let Some(input_area) = chunks.first().copied() else {
+            return;
+        };
+        let input_inner = Block::default().borders(Borders::ALL).inner(input_area);
+
+        if let Some(dropdown) = self
+            .mode_selector
+            .dropdown_info(input_inner, f.area().height)
+        {
+            dropdown.render(f);
+        }
+    }
 }
 
 impl TabInput for VulnTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     tab_input_custom!(
         VulnTab,
         core: core,
@@ -423,6 +489,9 @@ impl TabInput for VulnTab {
     );
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -441,6 +510,9 @@ impl TabInput for VulnTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -518,18 +590,67 @@ impl TabInput for VulnTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() && self.focus_area != VulnFocusArea::Results {
+            return;
+        }
         match self.focus_area {
             VulnFocusArea::Mode => self.mode_selector.handle_up(),
-            VulnFocusArea::Inputs => self.core.inputs.focus_prev(),
+            VulnFocusArea::Inputs => self.focus_rendered_field(false),
             VulnFocusArea::Results => self.core.results_view.scroll_up(1),
         }
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() && self.focus_area != VulnFocusArea::Results {
+            return;
+        }
         match self.focus_area {
             VulnFocusArea::Mode => self.mode_selector.handle_down(),
-            VulnFocusArea::Inputs => self.core.inputs.focus_next(),
+            VulnFocusArea::Inputs => self.focus_rendered_field(true),
             VulnFocusArea::Results => self.core.results_view.scroll_down(1),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = VulnTab::new();
+        // Default focus is Mode; Enter opens the mode dropdown.
+        tab.handle_enter();
+        assert!(tab.mode_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the whole configuration inner area.
+        let input_inner = Rect::new(1, 1, 78, 7);
+        let info = tab
+            .mode_selector
+            .dropdown_info(input_inner, 24)
+            .expect("expanded mode selector must yield a dropdown");
+        assert_eq!(info.area.y, input_inner.y + input_inner.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 2 && label == "Asset Assessment"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected modes.
+        assert!(
+            text.contains("Asset Assessment") && text.contains("Remediation Plan"),
+            "expanded mode dropdown should be drawn"
+        );
     }
 }

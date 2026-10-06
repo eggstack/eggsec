@@ -312,6 +312,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_next_3area(
             &mut self.core,
             self.focus_area,
@@ -322,6 +325,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_prev_3area(
             &mut self.core,
             self.focus_area,
@@ -332,6 +338,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         crate::tabs::core::handle_up_3area(
             &mut self.core,
             self.focus_area,
@@ -341,6 +350,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         crate::tabs::core::handle_down_3area(
             &mut self.core,
             self.focus_area,

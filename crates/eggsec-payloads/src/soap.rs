@@ -1,4 +1,4 @@
-use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use crate::{Payload, PayloadType, Severity};
 
 pub fn get_payloads() -> Vec<Payload> {
     vec![

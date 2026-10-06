@@ -46,21 +46,9 @@ impl AuthTab {
                     .with_width(50)
                     .with_value("https://target.lab"),
             )
-            .add(
-                InputField::new("Username / Userlist")
-                    .with_width(40)
-                    .with_value("admin or users.txt"),
-            )
-            .add(
-                InputField::new("Password List / Wordlist")
-                    .with_width(45)
-                    .with_value("passwords.txt or rockyou.txt"),
-            )
-            .add(
-                InputField::new("Credential File (optional)")
-                    .with_width(45)
-                    .with_value("user:pass file"),
-            )
+            .add(InputField::new("Username / Userlist").with_width(40))
+            .add(InputField::new("Password List / Wordlist").with_width(45))
+            .add(InputField::new("Credential File (optional)").with_width(45))
             .add(
                 InputField::new("Max Attempts")
                     .with_width(12)
@@ -220,6 +208,10 @@ impl TabState for AuthTab {
     fn reset(&mut self) {
         self.core.reset_all();
         self.core.inputs.clear_all_fields();
+        // `clear_all_fields` empties the values but keeps each field's focus
+        // marker, so without this a stale field keeps its `>` and swallows
+        // typed characters while the breadcrumb says "Target".
+        self.core.inputs.blur();
         self.focus_area = AuthFocusArea::Target;
     }
 }
@@ -304,6 +296,9 @@ impl TabInput for AuthTab {
     );
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_next_indexed(
             self.focus_area,
             AUTH_INPUT_AREAS,
@@ -313,6 +308,9 @@ impl TabInput for AuthTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_prev_indexed(
             self.focus_area,
             AUTH_INPUT_AREAS,
@@ -357,6 +355,9 @@ impl TabInput for AuthTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_up_indexed(
             self.focus_area,
             AUTH_INPUT_AREAS,
@@ -366,6 +367,9 @@ impl TabInput for AuthTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = crate::tabs::core::focus_down_indexed(
             self.focus_area,
             AUTH_INPUT_AREAS,

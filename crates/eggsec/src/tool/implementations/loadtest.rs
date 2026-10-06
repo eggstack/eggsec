@@ -74,14 +74,40 @@ impl SecurityTool for LoadTestTool {
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as usize;
 
+        // Method/body/headers go through the same canonical normalizers as
+        // every other surface, so a wire client cannot bypass the header
+        // deny-rules by driving this tool directly.
+        let method = eggsec_tool_core::operation_request::normalize_http_method(
+            params.get("method").and_then(|v| v.as_str()),
+        )
+        .map_err(|e| EggsecError::Validation(e.to_string()))?;
+        let body = eggsec_tool_core::operation_request::normalize_load_test_body(
+            &method,
+            params.get("body").and_then(|v| v.as_str()),
+        )
+        .map_err(|e| EggsecError::Validation(e.to_string()))?;
+        let raw_headers: Vec<String> = params
+            .get("headers")
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let headers =
+            eggsec_tool_core::operation_request::normalize_load_test_headers(&raw_headers)
+                .map_err(|e| EggsecError::Validation(e.to_string()))?;
+
         let run_cfg = crate::loadtest::LoadTestRunConfig {
             url: target.clone(),
             requests,
             concurrency,
             timeout: std::time::Duration::from_secs(30),
-            method: "GET".to_string(),
-            body: None,
-            headers: vec![],
+            method,
+            body,
+            headers,
             common: crate::types::CommonHttpArgs::default(),
             tui_mode: false,
         };
@@ -167,6 +193,30 @@ impl SecurityTool for LoadTestTool {
                         required: false,
                         default: Some(serde_json::json!(10)),
                         description: "Number of concurrent connections".to_string(),
+                    },
+                    ParameterDef {
+                        name: "method".to_string(),
+                        param_type: ParameterType::String,
+                        required: false,
+                        default: Some(serde_json::json!("GET")),
+                        description: "HTTP method (GET, POST, PUT, PATCH, DELETE)".to_string(),
+                    },
+                    ParameterDef {
+                        name: "body".to_string(),
+                        param_type: ParameterType::String,
+                        required: false,
+                        default: None,
+                        description: "Request body. Rejected for bodyless methods (GET, HEAD)"
+                            .to_string(),
+                    },
+                    ParameterDef {
+                        name: "headers".to_string(),
+                        param_type: ParameterType::String,
+                        required: false,
+                        default: None,
+                        description: "Request headers as an array of \"Name: Value\" entries. \
+                                      Host, Content-Length and hop-by-hop headers are not settable"
+                            .to_string(),
                     },
                 ],
                 examples: vec![CapabilityExample {

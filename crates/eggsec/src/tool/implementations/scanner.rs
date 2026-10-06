@@ -175,12 +175,17 @@ impl SecurityTool for ScannerTool {
                     ),
                     None => None,
                 };
+                let include_404 = request
+                    .params
+                    .get("include_404")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let request = crate::scanner::endpoints::EndpointScanRequest {
                     url: target.clone(),
                     wordlist,
                     concurrency,
                     timeout: timeout.div_ceil(1000).max(1),
-                    include_404: false,
+                    include_404,
                     spoof_config: crate::scanner::spoof::SpoofConfig::default(),
                 };
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
@@ -371,6 +376,13 @@ impl SecurityTool for ScannerTool {
                             required: false,
                             default: None,
                             description: "Path to wordlist file".to_string(),
+                        },
+                        ParameterDef {
+                            name: "include_404".to_string(),
+                            param_type: ParameterType::Boolean,
+                            required: false,
+                            default: Some(serde_json::json!(false)),
+                            description: "Keep 404 responses in the result set".to_string(),
                         },
                     ],
                     examples: vec![CapabilityExample {

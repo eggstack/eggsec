@@ -3,7 +3,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 
-/// A single open port from a scan result.
+/// A single port verdict from a scan result.
+///
+/// Named `OpenPort` for API compatibility, but a UDP run puts *every* probed
+/// port here -- most of them `open|filtered`. Read `state` to tell an
+/// `open` from an `open|filtered`; do not assume membership means listening.
 #[pyclass(frozen)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OpenPort {
@@ -11,6 +15,10 @@ pub struct OpenPort {
     pub port: u16,
     #[pyo3(get)]
     pub protocol: String,
+    /// `"open"`, `"closed"`, `"filtered"` or `"open|filtered"`. Only `open`
+    /// and `closed` are proofs; the other two are an absence of one.
+    #[pyo3(get)]
+    pub state: String,
     #[pyo3(get)]
     pub service: String,
     #[pyo3(get)]
@@ -22,11 +30,17 @@ pub struct OpenPort {
 #[pymethods]
 impl OpenPort {
     fn __repr__(&self) -> String {
-        format!("OpenPort(port={}, service={})", self.port, self.service)
+        format!(
+            "OpenPort(port={}, protocol={}, state={}, service={})",
+            self.port, self.protocol, self.state, self.service
+        )
     }
 
     fn __str__(&self) -> String {
-        format!("{}/tcp - {}", self.port, self.service)
+        format!(
+            "{}/{} {} {}",
+            self.port, self.protocol, self.state, self.service
+        )
     }
 }
 
@@ -171,7 +185,10 @@ impl PortScanResult {
             .into_iter()
             .map(|p| OpenPort {
                 port: p.port,
-                protocol: "tcp".to_string(),
+                // From the record, not a literal: a UDP run would otherwise
+                // be reported to Python as 1024 TCP ports.
+                protocol: p.protocol.as_str().to_string(),
+                state: p.status.as_str().to_string(),
                 service: p.service,
                 banner: None,
                 confidence: 1.0,

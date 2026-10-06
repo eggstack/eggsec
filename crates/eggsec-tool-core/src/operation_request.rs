@@ -75,6 +75,41 @@ pub const DEFAULT_FUZZ_MODE: &str = "sequential";
 pub const DEFAULT_FUZZ_METHOD: &str = "GET";
 pub const DEFAULT_FUZZ_MUTATION_COUNT: usize = 3;
 
+/// Default load-test request body cap. Bodies are operator-supplied request
+/// payloads; an unbounded body is a wire-exposure amplifier for daemon/agent
+/// clients, so it is capped rather than trusted.
+pub const MAX_LOAD_BODY_BYTES: usize = 64 * 1024;
+/// Maximum request headers accepted on a load-test run.
+pub const MAX_LOAD_HEADERS: usize = 32;
+/// Maximum length of a single header field name.
+pub const MAX_LOAD_HEADER_NAME_BYTES: usize = 64;
+/// Maximum length of a single header field value.
+pub const MAX_LOAD_HEADER_VALUE_BYTES: usize = 4096;
+
+/// Methods whose semantics forbid a request body (RFC 9110 §9.3.1/§9.3.2).
+pub const BODYLESS_HTTP_METHODS: &[&str] = &["GET", "HEAD"];
+
+/// Header field names a load-test caller may not set (case-insensitive).
+///
+/// * `Host` — belongs to the transport, which derives it from the authorized
+///   scope target; letting a request override it would retarget the traffic.
+/// * Hop-by-hop headers (RFC 9110 §7.6.1) — connection-scoped, not forwarded
+///   by intermediaries, and `Connection`/`Transfer-Encoding` in particular can
+///   desync framing.
+/// * `Content-Length` — computed by the transport from the body it sends.
+pub const DENIED_LOAD_HEADERS: &[&str] = &[
+    "host",
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "content-length",
+];
+
 /// Default GraphQL introspection flags (canonical owner; matches CLI defaults
 /// of `true` for introspection/depth-bypass/alias-overload).
 pub const DEFAULT_GRAPHQL_INTROSPECTION: bool = true;
@@ -352,6 +387,137 @@ pub fn resolve_load_test_counts(
     Ok((total, concurrency))
 }
 
+/// Is `s` a valid RFC 9110 `token` (header field name / method grammar)?
+pub fn is_http_token(s: &str) -> bool {
+    !s.is_empty()
+        && s.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
+        })
+}
+
+/// Normalize an HTTP method to canonical uppercase form.
+///
+/// Blank input falls back to [`DEFAULT_FUZZ_METHOD`]. The value must be an RFC
+/// 9110 token: methods are case-sensitive on the wire, but every method in
+/// general use is uppercase, so `post` and `POST` are the same operator intent
+/// and canonicalizing here keeps the TUI, CLI, REST and MCP surfaces from
+/// diverging on casing alone.
+pub fn normalize_http_method(raw: Option<&str>) -> Result<String, NormalizationError> {
+    let method = raw
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(DEFAULT_FUZZ_METHOD)
+        .to_ascii_uppercase();
+    if !is_http_token(&method) {
+        return Err(err(format!(
+            "load-test method {method:?} is not a valid HTTP token"
+        )));
+    }
+    Ok(method)
+}
+
+/// Validate a load-test request body against the resolved method.
+///
+/// Bodies are rejected for bodyless methods rather than silently dropped, so a
+/// caller that expects its payload to be sent learns that it is not.
+pub fn normalize_load_test_body(
+    method: &str,
+    body: Option<&str>,
+) -> Result<Option<String>, NormalizationError> {
+    let Some(body) = body.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    if BODYLESS_HTTP_METHODS.contains(&method) {
+        return Err(err(format!(
+            "load-test body is not allowed with method {method}: \
+             use POST, PUT, PATCH or DELETE"
+        )));
+    }
+    if body.len() > MAX_LOAD_BODY_BYTES {
+        return Err(err(format!(
+            "load-test body {} bytes above maximum {MAX_LOAD_BODY_BYTES}",
+            body.len()
+        )));
+    }
+    Ok(Some(body.to_string()))
+}
+
+/// Validate and canonicalize load-test request headers to `Name: Value` form.
+///
+/// Each entry must be a single `Name: Value` header. Names that would retarget
+/// the request, break connection framing, or are connection-scoped are
+/// refused — these arrive over the wire, so a daemon/agent client must not be
+/// able to inject them. CR/LF in a value is refused because it is the header
+/// injection primitive.
+pub fn normalize_load_test_headers(raw: &[String]) -> Result<Vec<String>, NormalizationError> {
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    if raw.len() > MAX_LOAD_HEADERS {
+        return Err(err(format!(
+            "load-test headers {} above maximum {MAX_LOAD_HEADERS}",
+            raw.len()
+        )));
+    }
+    let mut out = Vec::with_capacity(raw.len());
+    for entry in raw {
+        let (name, value) = entry.split_once(':').ok_or_else(|| {
+            err(format!(
+                "load-test header {entry:?} is missing ':' (expected \"Name: Value\")"
+            ))
+        })?;
+        let name = name.trim();
+        let value = value.trim();
+        if !is_http_token(name) {
+            return Err(err(format!(
+                "load-test header name {name:?} is not a valid HTTP token"
+            )));
+        }
+        if name.len() > MAX_LOAD_HEADER_NAME_BYTES {
+            return Err(err(format!(
+                "load-test header name {} bytes above maximum {MAX_LOAD_HEADER_NAME_BYTES}",
+                name.len()
+            )));
+        }
+        if DENIED_LOAD_HEADERS.contains(&name.to_ascii_lowercase().as_str()) {
+            return Err(err(format!(
+                "load-test header {name} is not settable by callers"
+            )));
+        }
+        if value.len() > MAX_LOAD_HEADER_VALUE_BYTES {
+            return Err(err(format!(
+                "load-test header {name} value {} bytes above maximum \
+                 {MAX_LOAD_HEADER_VALUE_BYTES}",
+                value.len()
+            )));
+        }
+        if value.contains(['\r', '\n']) {
+            return Err(err(format!(
+                "load-test header {name} value must not contain CR or LF"
+            )));
+        }
+        out.push(format!("{name}:{value}"));
+    }
+    Ok(out)
+}
+
 // ── Canonical typed requests ──
 
 /// Canonical port-scan request.
@@ -360,12 +526,19 @@ pub struct PortScanRequest {
     pub target: String,
     #[serde(default)]
     pub ports: Option<String>,
+    /// TCP technique. A sibling of `udp`, not a value of it: `syn`/`null`/
+    /// `fin`/`xmas` describe how a TCP handshake is attempted, so folding
+    /// `udp` in here would let a scan type bypass technique validation and be
+    /// silently swallowed by the engine's `_ => Syn` fallback.
     #[serde(default)]
     pub scan_type: Option<String>,
     #[serde(default)]
     pub timeout_ms: Option<u64>,
     #[serde(default)]
     pub concurrency: Option<usize>,
+    /// Scan with UDP instead of TCP.
+    #[serde(default)]
+    pub udp: Option<bool>,
 }
 
 /// Normalized port-scan request (validated, defaults applied).
@@ -377,6 +550,13 @@ pub struct NormalizedPortScan {
     pub scan_type: ScanType,
     pub timeout_ms: u64,
     pub concurrency: usize,
+    /// Whether to scan UDP instead of TCP.
+    ///
+    /// UDP cannot prove a port is open: silence is ambiguous between open,
+    /// filtered, rate-limited-closed and host-down. A UDP result is therefore
+    /// `closed`/`filtered`/`open|filtered` with a host-liveness verdict, and
+    /// never a bare "open".
+    pub udp: bool,
 }
 
 impl PortScanRequest {
@@ -394,6 +574,7 @@ impl PortScanRequest {
             scan_type,
             timeout_ms,
             concurrency,
+            udp: self.udp.unwrap_or(false),
         })
     }
 
@@ -412,6 +593,10 @@ pub struct EndpointScanRequest {
     pub timeout_secs: Option<u64>,
     #[serde(default)]
     pub wordlist: Option<String>,
+    /// Keep 404 responses in the result set. Absent means the engine default
+    /// (exclude), preserving the CLI's opt-in `--include-404` semantics.
+    #[serde(default)]
+    pub include_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -420,6 +605,7 @@ pub struct NormalizedEndpointScan {
     pub concurrency: usize,
     pub timeout_secs: u64,
     pub wordlist: Option<String>,
+    pub include_404: bool,
 }
 
 impl EndpointScanRequest {
@@ -429,6 +615,7 @@ impl EndpointScanRequest {
             concurrency: normalize_concurrency(self.concurrency, DEFAULT_ENDPOINT_CONCURRENCY)?,
             timeout_secs: normalize_timeout_secs(self.timeout_secs, DEFAULT_ENDPOINT_TIMEOUT_SECS)?,
             wordlist: self.wordlist.clone().filter(|s| !s.trim().is_empty()),
+            include_404: self.include_404.unwrap_or(false),
         })
     }
 
@@ -673,6 +860,12 @@ pub struct LoadTestRequest {
     pub duration_secs: Option<u32>,
     #[serde(default)]
     pub rate_limit: Option<u32>,
+    /// Optional request body. Rejected for bodyless methods by `normalize()`.
+    #[serde(default)]
+    pub body: Option<String>,
+    /// Request headers as `Name: Value` entries. Validated by `normalize()`.
+    #[serde(default)]
+    pub headers: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -683,6 +876,8 @@ pub struct NormalizedLoadTest {
     pub concurrency: usize,
     pub duration_secs: u64,
     pub rate_limit: Option<u32>,
+    pub body: Option<String>,
+    pub headers: Vec<String>,
 }
 
 impl LoadTestRequest {
@@ -693,11 +888,9 @@ impl LoadTestRequest {
             self.duration_secs.map(u64::from),
             DEFAULT_LOAD_DURATION_SECS,
         )?;
-        let method = self
-            .method
-            .clone()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| DEFAULT_FUZZ_METHOD.to_string());
+        let method = normalize_http_method(self.method.as_deref())?;
+        let body = normalize_load_test_body(&method, self.body.as_deref())?;
+        let headers = normalize_load_test_headers(&self.headers)?;
         Ok(NormalizedLoadTest {
             target,
             method,
@@ -705,6 +898,8 @@ impl LoadTestRequest {
             concurrency,
             duration_secs,
             rate_limit: self.rate_limit,
+            body,
+            headers,
         })
     }
 
@@ -746,22 +941,161 @@ pub struct PipelineRequest {
     pub target: String,
     #[serde(default)]
     pub profile: Option<String>,
+    /// Report format for `output_file`. `None` means the engine default.
+    #[serde(default)]
+    pub output_format: Option<String>,
+    /// Destination path for the rendered report, relative to the engine's
+    /// configured export directory.
+    #[serde(default)]
+    pub output_file: Option<String>,
+    /// Absolute path to write a resumable scan checkpoint to. `None` (the
+    /// default) writes no checkpoint, so an ordinary scan leaves nothing
+    /// behind on disk. Unlike `output_file` this is NOT relative to the export
+    /// directory: a checkpoint is engine state, not a rendered artifact, and
+    /// resolving it against an operator-chosen report directory would make the
+    /// resume list undiscoverable.
+    #[serde(default)]
+    pub session_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedPipeline {
     pub target: String,
     pub profile: ScanProfileName,
+    /// Always concrete: the writer never re-picks a default. Dispatch writes
+    /// only when `output_file` is present; a format without a destination is
+    /// not an error, just a no-op.
+    pub output_format: PipelineOutputFormat,
+    pub output_file: Option<String>,
+    /// Carried through verbatim; `None` means "write no checkpoint".
+    pub session_path: Option<String>,
+}
+
+/// Canonical pipeline report format.
+///
+/// This is the tool-core owner of the format contract. The engine's
+/// `crate::types::OutputFormat` and `eggsec_output::OutputFormat` each declare
+/// the same eight variants; this enum is what the wire speaks, and the engine
+/// maps it to whichever of those the selected writer needs. Adding a variant
+/// here requires adding it to both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum PipelineOutputFormat {
+    #[default]
+    Pretty,
+    Json,
+    Compact,
+    Html,
+    Csv,
+    Sarif,
+    Junit,
+    Markdown,
+}
+
+impl PipelineOutputFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pretty => "pretty",
+            Self::Json => "json",
+            Self::Compact => "compact",
+            Self::Html => "html",
+            Self::Csv => "csv",
+            Self::Sarif => "sarif",
+            Self::Junit => "junit",
+            Self::Markdown => "markdown",
+        }
+    }
+}
+
+/// Parse a pipeline output format (case-insensitive). `None`/empty means the
+/// engine default, which is HTML.
+pub fn parse_pipeline_output_format(
+    raw: Option<&str>,
+) -> Result<PipelineOutputFormat, NormalizationError> {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(PipelineOutputFormat::Html),
+        Some(s) => match s.to_ascii_lowercase().as_str() {
+            "pretty" => Ok(PipelineOutputFormat::Pretty),
+            "json" => Ok(PipelineOutputFormat::Json),
+            "compact" => Ok(PipelineOutputFormat::Compact),
+            "html" => Ok(PipelineOutputFormat::Html),
+            "csv" => Ok(PipelineOutputFormat::Csv),
+            "sarif" => Ok(PipelineOutputFormat::Sarif),
+            "junit" => Ok(PipelineOutputFormat::Junit),
+            "markdown" | "md" => Ok(PipelineOutputFormat::Markdown),
+            other => Err(err(format!(
+                "unknown output format '{other}' (expected pretty|json|compact|html|csv|sarif|junit|markdown)"
+            ))),
+        },
+    }
+}
+
+/// Lexically reject output paths that must never reach the filesystem.
+///
+/// This is the transport-side guard only: it catches the obvious abuse
+/// (NUL truncation, `..` traversal, absurd length) without touching the
+/// filesystem, which a DTO crate must not do. Containment within the engine's
+/// export directory is enforced separately at dispatch by
+/// `crate::utils::validation::validate_path`, which does resolve the real path.
+pub fn normalize_output_path(raw: &str) -> Result<String, NormalizationError> {
+    const MAX_OUTPUT_PATH_BYTES: usize = 4096;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(err("output_file must not be empty"));
+    }
+    if trimmed.len() > MAX_OUTPUT_PATH_BYTES {
+        return Err(err(format!(
+            "output_file {} bytes above maximum {MAX_OUTPUT_PATH_BYTES}",
+            trimmed.len()
+        )));
+    }
+    if trimmed.contains('\0') {
+        return Err(err("output_file must not contain NUL"));
+    }
+    // A bare `..` is the traversal primitive; reject it anywhere in the path
+    // rather than only at the head, so `a/../../b` cannot slip through.
+    if std::path::Path::new(trimmed)
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(err("output_file must not contain '..' path components"));
+    }
+    Ok(trimmed.to_string())
 }
 
 impl PipelineRequest {
     pub fn normalize(&self) -> Result<NormalizedPipeline, NormalizationError> {
+        let output_file = self
+            .output_file
+            .as_deref()
+            .map(normalize_output_path)
+            .transpose()?;
         Ok(NormalizedPipeline {
             target: normalize_target_value(&self.target)?,
             profile: parse_scan_profile(self.profile.as_deref())?,
+            output_format: parse_pipeline_output_format(self.output_format.as_deref())?,
+            output_file,
+            session_path: self.session_path.clone(),
         })
     }
 
+    pub fn operation_id(&self) -> &'static str {
+        "pipeline"
+    }
+}
+
+/// Canonical resume request.
+///
+/// Resumes a saved scan checkpoint. It declares the `pipeline` operation id
+/// because it runs the same stage set, which is also how the `resume` CLI
+/// command is routed and how its enforcement is resolved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeRequest {
+    /// Path to the checkpoint to resume. The target is read from the
+    /// checkpoint itself, not carried here.
+    pub session_path: String,
+}
+
+impl ResumeRequest {
     pub fn operation_id(&self) -> &'static str {
         "pipeline"
     }
@@ -1007,12 +1341,98 @@ pub struct StorageRequest {
     pub storage_type: String,
     #[serde(default)]
     pub path: Option<String>,
+    /// Database host. Defaults to `localhost`.
+    #[serde(default)]
+    pub host: Option<String>,
+    /// Database port. Defaults to 5432.
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// Database name. Defaults to `eggsec`.
+    #[serde(default)]
+    pub database: Option<String>,
+    /// Database user. Defaults to `postgres`.
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub max_connections: Option<u32>,
+    /// Storage operation. Must be one of [`KNOWN_STORAGE_MODES`].
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Scan to scope `list_findings` to.
+    #[serde(default)]
+    pub scan_id: Option<String>,
+    /// CVE identifier for `search_cve`.
+    #[serde(default)]
+    pub cve_id: Option<String>,
+    /// Minimum severity filter for `list_findings`.
+    #[serde(default)]
+    pub severity_filter: Option<String>,
+    /// Name of the environment variable holding the database password.
+    ///
+    /// The password itself is never a wire field: see
+    /// [`NormalizedStorage::password_env`].
+    #[serde(default)]
+    pub password_env: Option<String>,
 }
+
+/// Storage operations the engine actually implements.
+pub const KNOWN_STORAGE_MODES: &[&str] = &["connect", "list_scans", "list_findings", "search_cve"];
+
+/// Default storage mode when the caller does not choose one.
+pub const DEFAULT_STORAGE_MODE: &str = "list_scans";
+
+/// Storage connection defaults (canonical owner; matches
+/// `crate::storage::StorageConfig::default()`).
+pub const DEFAULT_STORAGE_HOST: &str = "localhost";
+pub const DEFAULT_STORAGE_PORT: u16 = 5432;
+pub const DEFAULT_STORAGE_DATABASE: &str = "eggsec";
+pub const DEFAULT_STORAGE_USERNAME: &str = "postgres";
+pub const DEFAULT_STORAGE_MAX_CONNECTIONS: u32 = 10;
+pub const MAX_STORAGE_MAX_CONNECTIONS: u32 = 256;
+
+/// Severity names accepted by `severity_filter` (lowercase wire form of
+/// `eggsec_core::types::Severity`).
+pub const KNOWN_SEVERITIES: &[&str] = &["critical", "high", "medium", "low", "info"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedStorage {
     pub storage_type: String,
     pub path: Option<String>,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub max_connections: u32,
+    pub mode: String,
+    pub scan_id: Option<String>,
+    pub cve_id: Option<String>,
+    pub severity_filter: Option<String>,
+    /// Environment-variable *name* carrying the password, never the secret.
+    pub password_env: Option<String>,
+}
+
+/// Validate a `password_env` name: a portable POSIX environment-variable name.
+///
+/// Rejecting anything else keeps a caller from smuggling a value through a
+/// field that only ever names an environment variable.
+fn normalize_password_env(raw: &str) -> Result<String, NormalizationError> {
+    let name = raw.trim();
+    if name.is_empty() {
+        return Err(err("password_env must not be empty"));
+    }
+    let mut chars = name.chars();
+    let first = chars.next().unwrap_or('\0');
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return Err(err(format!(
+            "password_env {name:?} must start with a letter or underscore"
+        )));
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(err(format!(
+            "password_env {name:?} may only contain letters, digits and underscores"
+        )));
+    }
+    Ok(name.to_string())
 }
 
 impl StorageRequest {
@@ -1021,9 +1441,103 @@ impl StorageRequest {
         if storage_type.is_empty() {
             return Err(err("storage_type must not be empty"));
         }
+
+        // Fail closed on an unknown mode: the executor turns an unknown mode
+        // into a runtime error *after* dialling the database, so validating
+        // here is what stops a typo from opening a connection at all.
+        let mode = self
+            .mode
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(DEFAULT_STORAGE_MODE)
+            .to_ascii_lowercase();
+        if !KNOWN_STORAGE_MODES.contains(&mode.as_str()) {
+            return Err(err(format!(
+                "unknown storage mode '{mode}' (expected {})",
+                KNOWN_STORAGE_MODES.join("|")
+            )));
+        }
+
+        let port = self.port.unwrap_or(DEFAULT_STORAGE_PORT);
+        if port == 0 {
+            return Err(err("storage port must be greater than 0"));
+        }
+
+        let max_connections = self
+            .max_connections
+            .unwrap_or(DEFAULT_STORAGE_MAX_CONNECTIONS);
+        if max_connections == 0 || max_connections > MAX_STORAGE_MAX_CONNECTIONS {
+            return Err(err(format!(
+                "storage max_connections {max_connections} must be between 1 and \
+                 {MAX_STORAGE_MAX_CONNECTIONS}"
+            )));
+        }
+
+        let severity_filter = self
+            .severity_filter
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_ascii_lowercase);
+        if let Some(ref sev) = severity_filter {
+            if !KNOWN_SEVERITIES.contains(&sev.as_str()) {
+                return Err(err(format!(
+                    "unknown severity_filter '{sev}' (expected {})",
+                    KNOWN_SEVERITIES.join("|")
+                )));
+            }
+        }
+
+        let cve_id = self
+            .cve_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        if mode == "search_cve" && cve_id.is_none() {
+            return Err(err("storage mode 'search_cve' requires cve_id"));
+        }
+
+        let password_env = self
+            .password_env
+            .as_deref()
+            .map(normalize_password_env)
+            .transpose()?;
+
         Ok(NormalizedStorage {
             storage_type: storage_type.to_string(),
             path: self.path.clone().filter(|s| !s.trim().is_empty()),
+            host: self
+                .host
+                .clone()
+                .map(|h| h.trim().to_string())
+                .filter(|h| !h.is_empty())
+                .unwrap_or_else(|| DEFAULT_STORAGE_HOST.to_string()),
+            port,
+            database: self
+                .database
+                .clone()
+                .map(|d| d.trim().to_string())
+                .filter(|d| !d.is_empty())
+                .unwrap_or_else(|| DEFAULT_STORAGE_DATABASE.to_string()),
+            username: self
+                .username
+                .clone()
+                .map(|u| u.trim().to_string())
+                .filter(|u| !u.is_empty())
+                .unwrap_or_else(|| DEFAULT_STORAGE_USERNAME.to_string()),
+            max_connections,
+            mode,
+            scan_id: self
+                .scan_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+            cve_id,
+            severity_filter,
+            password_env,
         })
     }
 
@@ -1221,6 +1735,7 @@ mod tests {
             concurrency: None,
             timeout_secs: None,
             wordlist: None,
+            include_404: None,
         };
         let n = req.normalize().unwrap();
         assert_eq!(n.concurrency, DEFAULT_ENDPOINT_CONCURRENCY);
@@ -1257,5 +1772,337 @@ mod tests {
         let bad = serde_json::json!({"target": "   "});
         assert!(validate_tool_params("recon", &bad).is_err());
         assert!(validate_tool_params("bogus-op", &params).is_err());
+    }
+
+    // ── load-test request shape ──
+
+    fn load_test_req(
+        method: Option<&str>,
+        body: Option<&str>,
+        headers: &[&str],
+    ) -> LoadTestRequest {
+        LoadTestRequest {
+            target: "https://example.com".into(),
+            method: method.map(str::to_string),
+            requests: Some(10),
+            connections: Some(2),
+            duration_secs: None,
+            rate_limit: None,
+            body: body.map(str::to_string),
+            headers: headers.iter().map(|h| h.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn load_test_method_defaults_and_canonicalizes() {
+        assert_eq!(
+            load_test_req(None, None, &[]).normalize().unwrap().method,
+            "GET"
+        );
+        assert_eq!(
+            load_test_req(Some("  "), None, &[])
+                .normalize()
+                .unwrap()
+                .method,
+            "GET"
+        );
+        assert_eq!(
+            load_test_req(Some(" post "), None, &[])
+                .normalize()
+                .unwrap()
+                .method,
+            "POST"
+        );
+        // Not an RFC 9110 token.
+        assert!(load_test_req(Some("PO ST"), None, &[]).normalize().is_err());
+        assert!(load_test_req(Some("GET\r\nX: y"), None, &[])
+            .normalize()
+            .is_err());
+    }
+
+    #[test]
+    fn load_test_body_rejected_for_bodyless_methods() {
+        // Rejected, not silently dropped: a caller expecting its payload to be
+        // sent must learn that it is not.
+        for method in ["GET", "head", "Head"] {
+            let err = load_test_req(Some(method), Some("payload"), &[])
+                .normalize()
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("not allowed with method"),
+                "unexpected error for {method}: {err}"
+            );
+        }
+        assert_eq!(
+            load_test_req(Some("POST"), Some("payload"), &[])
+                .normalize()
+                .unwrap()
+                .body
+                .as_deref(),
+            Some("payload")
+        );
+        // Blank body is absent, not an empty payload.
+        assert!(load_test_req(Some("GET"), Some("   "), &[])
+            .normalize()
+            .unwrap()
+            .body
+            .is_none());
+        assert!(load_test_req(Some("POST"), Some(""), &[])
+            .normalize()
+            .unwrap()
+            .body
+            .is_none());
+    }
+
+    #[test]
+    fn load_test_body_size_is_capped() {
+        let big = "x".repeat(MAX_LOAD_BODY_BYTES + 1);
+        let err = load_test_req(Some("POST"), Some(&big), &[])
+            .normalize()
+            .unwrap_err();
+        assert!(err.to_string().contains("above maximum"), "{err}");
+
+        let ok = "x".repeat(MAX_LOAD_BODY_BYTES);
+        assert!(load_test_req(Some("POST"), Some(&ok), &[])
+            .normalize()
+            .is_ok());
+    }
+
+    #[test]
+    fn load_test_headers_canonicalize_to_name_colon_value() {
+        let n = load_test_req(
+            Some("POST"),
+            None,
+            &["X-Probe: eggsec", "  Accept  :  application/json  "],
+        )
+        .normalize()
+        .unwrap();
+        assert_eq!(
+            n.headers,
+            vec![
+                "X-Probe:eggsec".to_string(),
+                "Accept:application/json".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn load_test_headers_reject_malformed_and_injected_entries() {
+        // Missing colon.
+        assert!(load_test_req(Some("POST"), None, &["X-Probe"])
+            .normalize()
+            .is_err());
+        // Empty name.
+        assert!(load_test_req(Some("POST"), None, &[":value"])
+            .normalize()
+            .is_err());
+        // Non-token name.
+        assert!(load_test_req(Some("POST"), None, &["X Probe: v"])
+            .normalize()
+            .is_err());
+        // CR/LF in value — the header-injection primitive.
+        assert!(
+            load_test_req(Some("POST"), None, &["X-Probe: a\r\nX-Evil: b"])
+                .normalize()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn load_test_headers_reject_retargeting_and_framing_headers() {
+        // Deny-list is matched case-insensitively.
+        for name in [
+            "Host",
+            "host",
+            "Connection",
+            "Transfer-Encoding",
+            "content-length",
+            "TE",
+            "Upgrade",
+        ] {
+            let entry = format!("{name}: x");
+            let err = load_test_req(Some("POST"), None, &[entry.as_str()])
+                .normalize()
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("not settable by callers"),
+                "unexpected error for {name}: {err}"
+            );
+        }
+        // An unrelated header is unaffected.
+        assert!(load_test_req(Some("POST"), None, &["X-Host: x"])
+            .normalize()
+            .is_ok());
+    }
+
+    #[test]
+    fn load_test_headers_count_and_size_are_capped() {
+        let too_many: Vec<String> = (0..=MAX_LOAD_HEADERS)
+            .map(|i| format!("X-H{i}: v"))
+            .collect();
+        let refs: Vec<&str> = too_many.iter().map(String::as_str).collect();
+        let err = load_test_req(Some("POST"), None, &refs)
+            .normalize()
+            .unwrap_err();
+        assert!(err.to_string().contains("above maximum"), "{err}");
+
+        let long_name = format!("{}: v", "x".repeat(MAX_LOAD_HEADER_NAME_BYTES + 1));
+        assert!(load_test_req(Some("POST"), None, &[long_name.as_str()])
+            .normalize()
+            .is_err());
+
+        let long_value = format!("X-Probe: {}", "v".repeat(MAX_LOAD_HEADER_VALUE_BYTES + 1));
+        assert!(load_test_req(Some("POST"), None, &[long_value.as_str()])
+            .normalize()
+            .is_err());
+    }
+
+    // ── storage ──
+
+    fn storage_req() -> StorageRequest {
+        StorageRequest {
+            storage_type: "postgres".into(),
+            path: None,
+            host: None,
+            port: None,
+            database: None,
+            username: None,
+            max_connections: None,
+            mode: None,
+            scan_id: None,
+            cve_id: None,
+            severity_filter: None,
+            password_env: None,
+        }
+    }
+
+    #[test]
+    fn storage_defaults_match_engine_storage_config() {
+        let n = storage_req().normalize().unwrap();
+        assert_eq!(n.mode, DEFAULT_STORAGE_MODE);
+        assert_eq!(n.host, DEFAULT_STORAGE_HOST);
+        assert_eq!(n.port, DEFAULT_STORAGE_PORT);
+        assert_eq!(n.database, DEFAULT_STORAGE_DATABASE);
+        assert_eq!(n.username, DEFAULT_STORAGE_USERNAME);
+        assert_eq!(n.max_connections, DEFAULT_STORAGE_MAX_CONNECTIONS);
+    }
+
+    #[test]
+    fn storage_mode_fails_closed_on_unknown() {
+        // The executor turns an unknown mode into an error only *after*
+        // dialling the database, so this must reject before any I/O.
+        // Blank is "unset", not a mode name, so it falls back to the default.
+        for mode in ["", "  "] {
+            let mut req = storage_req();
+            req.mode = Some(mode.to_string());
+            let n = req.normalize().unwrap();
+            assert_eq!(n.mode, DEFAULT_STORAGE_MODE, "mode {mode:?}");
+        }
+        // Unknown modes are rejected regardless of casing.
+        for mode in ["read", "READ", "delete", "drop", "list scans"] {
+            let mut req = storage_req();
+            req.mode = Some(mode.to_string());
+            assert!(
+                req.normalize().is_err(),
+                "unknown mode {mode:?} was accepted"
+            );
+        }
+        // Known modes, case-insensitively.
+        for mode in KNOWN_STORAGE_MODES {
+            let mut req = storage_req();
+            req.mode = Some(mode.to_ascii_uppercase());
+            // `search_cve` has its own required-argument rule, asserted above.
+            if *mode == "search_cve" {
+                req.cve_id = Some("CVE-2021-44228".into());
+            }
+            assert_eq!(req.normalize().unwrap().mode, *mode);
+        }
+    }
+
+    #[test]
+    fn storage_search_cve_requires_a_cve_id() {
+        let mut req = storage_req();
+        req.mode = Some("search_cve".into());
+        let err = req.normalize().unwrap_err();
+        assert!(err.to_string().contains("requires cve_id"), "{err}");
+
+        req.cve_id = Some("CVE-2021-44228".into());
+        let n = req.normalize().unwrap();
+        assert_eq!(n.cve_id.as_deref(), Some("CVE-2021-44228"));
+    }
+
+    #[test]
+    fn storage_severity_filter_is_validated() {
+        let mut req = storage_req();
+        req.severity_filter = Some("HIGH".into());
+        assert_eq!(
+            req.normalize().unwrap().severity_filter.as_deref(),
+            Some("high")
+        );
+        req.severity_filter = Some("bogus".into());
+        assert!(req.normalize().is_err());
+        // Blank is absent, not a literal empty filter.
+        req.severity_filter = Some("   ".into());
+        assert!(req.normalize().unwrap().severity_filter.is_none());
+    }
+
+    #[test]
+    fn storage_port_and_pool_are_bounded() {
+        let mut req = storage_req();
+        req.port = Some(0);
+        assert!(req.normalize().is_err());
+        req.port = Some(5432);
+        req.max_connections = Some(0);
+        assert!(req.normalize().is_err());
+        req.max_connections = Some(MAX_STORAGE_MAX_CONNECTIONS + 1);
+        assert!(req.normalize().is_err());
+        req.max_connections = Some(1);
+        assert_eq!(req.normalize().unwrap().max_connections, 1);
+    }
+
+    #[test]
+    fn storage_password_is_a_variable_name_never_a_value() {
+        let mut req = storage_req();
+        req.password_env = Some("EGGSEC_PG_PASSWORD".into());
+        assert_eq!(
+            req.normalize().unwrap().password_env.as_deref(),
+            Some("EGGSEC_PG_PASSWORD")
+        );
+        // A value cannot masquerade as a variable name.
+        for bad in ["", "  ", "1BAD", "has space", "has-dash", "a.b"] {
+            req.password_env = Some(bad.to_string());
+            assert!(
+                req.normalize().is_err(),
+                "password_env {bad:?} was accepted as a variable name"
+            );
+        }
+    }
+
+    #[test]
+    fn storage_absent_optional_fields_deserialize_for_older_wire_clients() {
+        // `runtime.request.StorageParams` is embedded in `TaskKind` and is
+        // persisted into the daemon's snapshot JSON, so every added field must
+        // carry `#[serde(default)]` or older payloads stop parsing.
+        let legacy = serde_json::json!({"storage_type": "postgres"});
+        let req: StorageRequest = serde_json::from_value(legacy).unwrap();
+        let n = req.normalize().unwrap();
+        assert_eq!(n.mode, DEFAULT_STORAGE_MODE);
+        assert!(n.password_env.is_none());
+        assert!(n.severity_filter.is_none());
+    }
+
+    #[test]
+    fn load_test_absent_headers_deserialize_for_older_wire_clients() {
+        // `body`/`headers` are `#[serde(default)]`, so a payload written before
+        // they existed still parses (a missing `Option` is not defaulted by
+        // serde without the attribute).
+        let legacy = serde_json::json!({
+            "target": "https://example.com",
+            "method": "POST",
+        });
+        let req: LoadTestRequest = serde_json::from_value(legacy).unwrap();
+        let n = req.normalize().unwrap();
+        assert!(n.body.is_none());
+        assert!(n.headers.is_empty());
     }
 }

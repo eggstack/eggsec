@@ -10,6 +10,8 @@ Defense-lab mode provides local, controlled testing against Synvoid-like defensi
 
 Defense-lab mode is distinct from general assessment mode. It assumes a local or private-lab environment where you control both the target and the traffic.
 
+> **Corrections (verified against source 2026-10-06):** this doc still cited the **old** `config/policy.rs` / `config/policy_decision.rs` ownership for `OperationMode`, `OperationRisk`, `IntendedUse`, `PolicyDecision`, `ConfirmationClass`, and `ManualOverride`. Those types moved to `eggsec-policy`; all such cites were repointed (`config/policy_decision.rs:NNN` → `eggsec-policy/src/decision.rs:NNN`, and the trailing "See …" pointers now name `eggsec-policy/src/policy.rs` / `decision.rs` / `address.rs`). Also fixed: `ScanProfile` cite `cli/mod.rs:334-352` → `types.rs:123-142` (it moved out of `cli/mod.rs`); pipeline wiring range `pipeline/stage.rs:96-111` → `:104-140`; `default_max_risk` cite `policy.rs:102-` → `:199-207`; `ScopeSource::GeneratedPreset` `config/scope.rs:209` → `eggsec-policy/src/scope.rs:38`; `LoadedScope::is_explicit_manifest()` `scope.rs:226` → `eggsec-policy/src/scope.rs:55`; preset test `presets.rs:216` → `:214` (and `:216-223` → `:214-222`); `classify_address()` now `eggsec-policy/src/address.rs:71`. Re-verified **unchanged**: 7 built-in presets and their names/values, the 5-variant `DomainCategory` taxonomy, all 8 `ConfirmationClass` variants and their CLI flags, the evasion `16 techniques / 6 categories` claim, `DomainDescriptor` db-pentest `requires_explicit_scope` at `domain/mod.rs:465`, and the `RunManifest` / `DiffSummary` / `BaselineComparison` output locations.
+
 ## Core Workflow
 
 ```
@@ -55,9 +57,9 @@ The `DomainCategory` enum (`crates/eggsec/src/domain/mod.rs:27-38`) classifies d
 
 ### DefenseLab vs. HazardousLab Semantics
 
-`DefenseLab` (`OperationMode::DefenseLab`, `eggsec-policy/src/policy.rs`) provides a local/private/scope-constrained environment for WAF and distributed-system validation. Its default max risk is `OperationRisk::Intrusive` (`eggsec-policy/src/policy.rs:102-`), meaning Intrusive operations are allowed by default without explicit policy approval.
+`DefenseLab` (`OperationMode::DefenseLab`, `eggsec-policy/src/policy.rs`) provides a local/private/scope-constrained environment for WAF and distributed-system validation. Its default max risk is `OperationRisk::Intrusive` (`eggsec-policy/src/policy.rs:199-207`, `default_max_risk()`), meaning Intrusive operations are allowed by default without explicit policy approval.
 
-`HazardousLab` (`OperationMode::HazardousLab`) covers raw packet operations, flood-style stress tests, proxy rotation, low-level protocol edge cases, and other aggressive tests. Its default max risk is the highest risk tier (see `eggsec-policy/src/policy.rs:102-`).
+`HazardousLab` (`OperationMode::HazardousLab`) covers raw packet operations, flood-style stress tests, proxy rotation, low-level protocol edge cases, and other aggressive tests. Its default max risk is `OperationRisk::AgentAutonomous` — the highest risk tier (`eggsec-policy/src/policy.rs:199-207`).
 
 Both modes require explicit scope and are distinct from `StandardAssessment` (which defaults to `SafeActive`). The enforcement engine (`eggsec-policy/src/decision.rs`, `ConfirmationClass` at `decision.rs:347`) treats them differently: DefenseLab operations can proceed with `Intrusive` risk under default policy, while HazardousLab operations require explicit `allow_*` flags in `ExecutionPolicy`.
 
@@ -118,17 +120,17 @@ Defense-lab profiles target these categories:
 | `waf-regression-safe` | DefenseLab | SafeActive | WafRegression | 5 | 120s | 5,000 | No |
 | `waf-regression-intrusive` | DefenseLab | Intrusive | WafRegression | 20 | 600s | 50,000 | No |
 
-All presets enforce `localhost_or_private_required: true` (verified by test at `presets.rs:216`). `distributed-system-stress` is the only HazardousLab preset; it enables `raw_sockets_allowed: true` and `dns_resolution_allowed: true`.
+All presets enforce `localhost_or_private_required: true` (verified by test `presets.rs:214`). `distributed-system-stress` is the only HazardousLab preset; it enables `raw_sockets_allowed: true` and `dns_resolution_allowed: true`.
 
 ### GeneratedPreset ScopeSource
 
-`ScopeSource::GeneratedPreset` (`config/scope.rs:209`) is one of four scope provenance values. When a scope is generated from a preset, it carries this source tag, enabling strict execution profiles to distinguish it from user-provided config or CLI scope files. `LoadedScope::is_explicit_manifest()` (`scope.rs:226`) returns `true` for `GeneratedPreset`, satisfying the explicit-manifest requirement for automated surfaces.
+`ScopeSource::GeneratedPreset` (`eggsec-policy/src/scope.rs:38`, re-exported by the `config/scope.rs` facade) is one of four scope provenance values. When a scope is generated from a preset, it carries this source tag, enabling strict execution profiles to distinguish it from user-provided config or CLI scope files. `LoadedScope::is_explicit_manifest()` (`eggsec-policy/src/scope.rs:55`) returns `true` for `GeneratedPreset`, satisfying the explicit-manifest requirement for automated surfaces.
 
 ## Approval / Confirmation Flow
 
 ### ConfirmationClass
 
-`ConfirmationClass` (`config/policy_decision.rs:402`) defines 8 categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`:
+`ConfirmationClass` (`eggsec-policy/src/decision.rs:347`) defines 8 categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`:
 
 | Class | CLI Flag | Semantics |
 |-------|----------|-----------|
@@ -143,7 +145,7 @@ All presets enforce `localhost_or_private_required: true` (verified by test at `
 
 ### How Lab Ops Map to ConfirmationClass
 
-- **db-pentest** (real, `OperationRisk::DbPentest`): triggers `HighRisk` confirmation (`policy_decision.rs:1422`). `ManualOverride.allow_db_pentest` permits `HighRisk` (`policy_decision.rs:460`).
+- **db-pentest** (real, `OperationRisk::DbPentest`): triggers `HighRisk` confirmation (`eggsec-policy/src/decision.rs:1418-1421`). `ManualOverride.allow_db_pentest` permits `HighRisk` (`eggsec-policy/src/decision.rs:408`).
 - **wireless-active** (live, `OperationRisk::Intrusive`): triggers `HighRisk`.
 - **mobile-dynamic** (real + Frida, `OperationRisk::Intrusive`): triggers `HighRisk`.
 - **web-proxy** (real interception, `OperationRisk::TrafficInterception`): triggers `TrafficInterception` confirmation.
@@ -152,16 +154,16 @@ All presets enforce `localhost_or_private_required: true` (verified by test at `
 
 ### ManualOverride
 
-`ManualOverride` (`policy_decision.rs:433`) is honored only for `ExecutionProfile::ManualPermissive`. Key behaviors:
+`ManualOverride` (`eggsec-policy/src/decision.rs:381`) is honored only for `ExecutionProfile::ManualPermissive`. Key behaviors:
 
-- `assume_yes` only permits `OutOfScope` and `TargetExpansion` (low-risk scope confirmations). It does NOT authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects (`policy_decision.rs:449-452`).
-- `allow_db_pentest` specifically permits `HighRisk` confirmation class (`policy_decision.rs:460`).
-- `allow_web_proxy` specifically permits `TrafficInterception` (`policy_decision.rs:461`).
+- `assume_yes` only permits `OutOfScope` and `TargetExpansion` (low-risk scope confirmations). It does NOT authorize high-risk, explicit exclusions, non-baseline capabilities, private-resolution, or cross-host redirects (`eggsec-policy/src/decision.rs:402-411`).
+- `allow_db_pentest` specifically permits `HighRisk` confirmation class (`eggsec-policy/src/decision.rs:408`).
+- `allow_web_proxy` specifically permits `TrafficInterception` (`eggsec-policy/src/decision.rs:409`).
 - Strict profiles (McpStrict, AgentStrict, CiStrict) never honor manual overrides — `RequireConfirmation` becomes a hard `Deny`.
 
 ### EnforcementOutcome Flow
 
-`evaluate_enforcement()` (`policy_decision.rs:1171`) produces one of four outcomes:
+`evaluate_enforcement()` (`eggsec-policy/src/decision.rs:1158`) produces one of four outcomes:
 
 1. **Allow**: operation proceeds (no warnings, no confirmations needed).
 2. **Warn**: operation proceeds with recorded warnings (ManualPermissive only, for safe ambiguity cases).
@@ -169,9 +171,9 @@ All presets enforce `localhost_or_private_required: true` (verified by test at `
 4. **Deny**: operation must not proceed (hard denial).
 
 For DefenseLab operations, the flow is:
-- `evaluate_operation_policy()` checks features, scope, risk against `ExecutionPolicy`.
+- `evaluate_operation_policy()` (`eggsec-policy/src/decision.rs:895`) checks features, scope, risk against `ExecutionPolicy`.
 - `evaluate_enforcement()` maps the decision to an outcome based on the `ExecutionProfile`.
-- `confirmation_classes_for()` (`policy_decision.rs:1365`) determines which `ConfirmationClass` values apply.
+- `confirmation_classes_for()` (`eggsec-policy/src/decision.rs:1353`) determines which `ConfirmationClass` values apply.
 - `approve_manual()` or `approve()` produces an `ApprovedOperation` token if the outcome permits dispatch.
 
 ## Dry-Run Support Contract
@@ -194,16 +196,16 @@ The db-pentest dry-run (`utils::populate_dry_run_findings` + `simulate_advanced_
 
 All DefenseLab operations require explicit scope for strict automated surfaces (MCP, Agent, CI). The `DomainDescriptor` for db-pentest (`domain/mod.rs:465`) sets `requires_explicit_scope: true`.
 
-`DefenseLabPreset` enforces `localhost_or_private_required: true` for all built-in presets (`presets.rs:216-223`). The scope system (`scope.rs`) classifies addresses via `classify_address()` into `AddressClass` variants (Loopback, Private, Public, etc.) and evaluates targets against `Scope` rules (allowed/excluded CIDR patterns).
+`DefenseLabPreset` enforces `localhost_or_private_required: true` for all built-in presets (`presets.rs:214-222`, test `all_presets_require_private_scope`). The scope system classifies addresses via `classify_address()` (`eggsec-policy/src/address.rs:71`) into `AddressClass` variants (Loopback, Private, Public, etc.) and evaluates targets against `Scope` rules (allowed/excluded CIDR patterns).
 
-For ManualPermissive profiles, missing scope for safe low-risk operations may downgrade to `Warn` (`policy_decision.rs:1214-1262`). For DefenseLab operations (Intrusive+ risk), scope misses produce `RequireConfirmation` or `Deny`.
+For ManualPermissive profiles, missing scope for safe low-risk operations may downgrade to `Warn` (`may_downgrade_to_warning`, `eggsec-policy/src/decision.rs:1115`). For DefenseLab operations (Intrusive+ risk), scope misses produce `RequireConfirmation` or `Deny`.
 
 ## Invariants
 
-1. **DefenseLab is local/private**: All DefenseLab profiles reject public targets by default. `DefenseLabPreset.localhost_or_private_required` is always `true` (verified by test `presets.rs:216`).
+1. **DefenseLab is local/private**: All DefenseLab profiles reject public targets by default. `DefenseLabPreset.localhost_or_private_required` is always `true` (verified by test `presets.rs:214`).
 2. **Dry-run is safe**: Every lab-gated module produces a complete report without network interaction when dry-run is active.
 3. **Explicit scope required**: Strict surfaces (MCP/Agent/CI) always require explicit scope for DefenseLab operations (`requires_explicit_scope: true` in `DomainDescriptor`).
-4. **Confirmation required for high-risk**: `HighRisk` confirmation class is triggered for Intrusive/DbPentest/StressTest/CredentialTesting/ExploitAdjacent/RemoteExecution risk tiers under ManualPermissive (`policy_decision.rs:1415-1432`).
+4. **Confirmation required for high-risk**: `HighRisk` confirmation class is triggered for Intrusive/DbPentest/StressTest/CredentialTesting/ExploitAdjacent/RemoteExecution risk tiers under ManualPermissive (`eggsec-policy/src/decision.rs:1418-1421`).
 5. **Manual overrides are narrow**: `--yes` only covers low-risk scope confirmations (OutOfScope, TargetExpansion). High-risk and capability confirmations require dedicated `--allow-*` flags.
 6. **HazardousLab is strictly gated**: Only `distributed-system-stress` uses HazardousLab mode. It requires explicit feature flags (`stress-testing`), raw sockets, and policy approval.
 7. **No dangerous defaults**: No profile enables raw sockets, IP spoofing, or SYN flood by default (except `distributed-system-stress` and `synvoid-protocol-edge`).
@@ -220,8 +222,8 @@ Defense-lab profiles integrate with the unified operation taxonomy:
 - Policy decisions are emitted for every operation with structured metadata
 - Budgets enforce finite limits on all defense-lab runs
 
-See `config/policy.rs` for `OperationMode`, `OperationRisk`, and `IntendedUse`.
-See `config/policy_decision.rs` for `PolicyDecision` and `ConfirmationClass`.
+See `eggsec-policy/src/policy.rs` for `OperationMode`, `OperationRisk`, and `IntendedUse`.
+See `eggsec-policy/src/decision.rs` for `PolicyDecision` and `ConfirmationClass`.
 See `config/budget.rs` for `ExecutionBudget`.
 See `config/presets.rs` for built-in defense-lab presets.
 
@@ -256,7 +258,7 @@ Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined 
 
 ## Defense-Lab Profiles
 
-All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-352`) and wired into the stage runner (`pipeline/stage.rs:96-111`).
+All profiles are fully implemented in the `ScanProfile` enum (`types.rs:123-142`, re-exported at `cli/mod.rs:584`) and wired into the stage runner (`pipeline/stage.rs:104-140`).
 
 | Profile | Semantics | Stages | Feature Requirements |
 |---------|-----------|--------|---------------------|
@@ -286,4 +288,4 @@ All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:334-35
 
 Lightweight opt-in reporting unification only. Auto-bridge lives in `commands/handlers/report.rs`. See also the short shared "Output Models" block in `docs/USAGE.md` (Report Management → Convert Reports) as the canonical cross-reference for the three-surface distinction.
 
-*Last verified against source: 2026-09-25 (policy paths corrected to eggsec-policy/src/policy.rs + decision.rs:347; presets/names re-verified)*
+*Last verified against source: 2026-09-25 (policy paths corrected to eggsec-policy/src/policy.rs + decision.rs:347; presets/names re-verified); stale policy_decision.rs ownership + 7 shifted cites corrected 2026-10-06 (systematic review)*

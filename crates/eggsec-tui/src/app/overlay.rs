@@ -28,6 +28,13 @@ use super::{CommandPaletteInput, QuickSwitchInput, UiAction};
 use crate::OverlayType;
 use crossterm::event::{KeyCode, KeyModifiers};
 
+/// True for the one key that must never be swallowed by an overlay: Ctrl-C,
+/// which bubbles out to the global quit / stop-task binding. Both the overlay
+/// decoder and its caller test this so the two layers cannot drift apart.
+pub(crate) fn is_ctrl_c(key: &crossterm::event::KeyEvent) -> bool {
+    key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c')
+}
+
 pub(crate) struct OverlayController;
 
 impl OverlayController {
@@ -41,8 +48,13 @@ impl OverlayController {
     ///
     /// If an overlay is active but the key has no binding, returns a single
     /// Noop (signals "handled at overlay layer" to prevent leak).
+    ///
+    /// Ctrl-C is the one exception: it returns an empty vec so it bubbles out
+    /// to the global shortcuts (quit / stop task). Callers must not translate
+    /// that empty result into a Noop, or Ctrl-C becomes a no-op whenever any
+    /// overlay is open.
     pub(crate) fn decode(&self, app: &App, key: &crossterm::event::KeyEvent) -> Vec<UiAction> {
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
+        if is_ctrl_c(key) {
             // Ctrl-C is always allowed to bubble out of overlays (historical).
             return vec![];
         }
@@ -65,6 +77,17 @@ impl OverlayController {
                 (KeyModifiers::NONE, KeyCode::Delete) => {
                     vec![UiAction::PolicyReasonBackspace]
                 }
+                // The confirmation body can exceed the popup on a short terminal.
+                // Scrolling is part of the gate: an operator must be able to read
+                // the risk, target and reasons before confirming.
+                (KeyModifiers::NONE, KeyCode::Up) => vec![UiAction::PolicyConfirmScroll(-1)],
+                (KeyModifiers::NONE, KeyCode::Down) => vec![UiAction::PolicyConfirmScroll(1)],
+                (KeyModifiers::SHIFT, KeyCode::Up) => vec![UiAction::PolicyConfirmScroll(-3)],
+                (KeyModifiers::SHIFT, KeyCode::Down) => vec![UiAction::PolicyConfirmScroll(3)],
+                (KeyModifiers::NONE, KeyCode::PageUp) => vec![UiAction::PolicyConfirmScroll(-8)],
+                (KeyModifiers::NONE, KeyCode::PageDown) => vec![UiAction::PolicyConfirmScroll(8)],
+                (KeyModifiers::NONE, KeyCode::Home) => vec![UiAction::PolicyConfirmScroll(-1024)],
+                (KeyModifiers::NONE, KeyCode::End) => vec![UiAction::PolicyConfirmScroll(1024)],
                 _ => vec![UiAction::Noop],
             },
             OverlayType::ConfirmPopup => match (key.modifiers, key.code) {
@@ -315,8 +338,14 @@ mod tests {
         );
         app.request_policy_confirmation(desc, decision, None);
 
-        // Down arrow is unbound for PolicyConfirm — should return Noop
+        // Down arrow scrolls the confirmation body: an operator must be able to
+        // read the risk, target and reasons before confirming.
         let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        let actions = OverlayController::new().decode(&app, &key);
+        assert_eq!(actions, vec![UiAction::PolicyConfirmScroll(1)]);
+
+        // A genuinely unhandled key is still swallowed as Noop.
+        let key = KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE);
         let actions = OverlayController::new().decode(&app, &key);
         assert_eq!(actions, vec![UiAction::Noop]);
     }

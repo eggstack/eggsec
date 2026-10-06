@@ -41,6 +41,11 @@ impl OperationExecutor for ScannerExecutor {
                         "1-1024".to_string(),
                         100,
                         timeout,
+                        // TCP: this executor receives only an
+                        // `OperationDescriptor`, with no request params, so
+                        // there is no caller transport to honour. The
+                        // canonical `scan-ports` arm carries the real flag.
+                        false,
                         progress_tx,
                     )
                     .await
@@ -52,6 +57,12 @@ impl OperationExecutor for ScannerExecutor {
                         10,
                         timeout,
                         None,
+                        // This adapter receives only an `OperationDescriptor`,
+                        // with no params map, so it has nothing to read
+                        // `include_404` from. Keep the previous behaviour
+                        // rather than guessing; the canonical and TUI paths
+                        // carry the real value.
+                        false,
                         progress_tx,
                     )
                     .await

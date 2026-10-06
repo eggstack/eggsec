@@ -1,236 +1,39 @@
-pub mod cache;
-pub mod compression;
-pub mod csv;
-pub mod deser;
-pub mod expression;
+//! Payload corpora — engine-side seam.
+//!
+//! The 40 payload modules live in the leaf crate `eggsec-payloads`, which owns
+//! every [`PayloadType`] variant and resolves all of them through its
+//! `get_payloads`. The cross-variant caches live there too, for the same
+//! reason: they span all 40 variants, and the corpus now owns all 40.
+//!
+//! What stays here are the six **probers** — [`graphql`], [`grpc`], [`idor`],
+//! [`jwt`], [`oauth`], [`ssti`] — modules holding a `reqwest::Client` that make
+//! live requests. They cannot move into a crate with no network surface.
+//!
+//! The seam is **execution, not payload data**. Each prober module re-exports
+//! the static payload builder of the same name from `eggsec-payloads`, so
+//! `GraphQLFuzzer` (here) and the GraphQL payload strings (there) are separate
+//! things that happen to share a name.
+//!
+//! Everything is re-exported below, so `eggsec::fuzzer::payloads::*` and
+//! `eggsec::fuzzer::{PayloadType, Payload, get_payloads, …}` keep resolving
+//! exactly as before. The re-exports are a **permanent** facade, not
+//! transitional scaffolding.
+
+// The six live-probe modules: the probers, not the payloads. Each also
+// re-exports its corpus module's `get_payloads` (and, for ssti, `TemplateEngine`).
 pub mod graphql;
 pub mod grpc;
-pub mod headers;
-pub mod host;
 pub mod idor;
 pub mod jwt;
-pub mod ldap;
-#[macro_use]
-pub mod macros;
-pub mod cmd;
-pub mod css_inject;
-pub mod dep_confusion;
-pub mod dom_clobber;
-pub mod html_inject;
-pub mod latex;
-pub mod mass_assign;
-pub mod nosql;
-pub mod oast;
 pub mod oauth;
-pub mod prototype;
-pub mod race;
-pub mod redirect;
-pub mod redos;
-pub mod saml;
-pub mod soap;
-pub mod sqli;
-pub mod ssi;
-pub mod ssrf;
 pub mod ssti;
-pub mod traversal;
-pub mod viewstate;
-pub mod websocket;
-pub mod xpath;
-pub mod xs_leak;
-pub mod xslt;
-pub mod xss;
-pub mod xxe;
 
-use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
-use strum::{EnumIter, IntoEnumIterator};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
-pub enum PayloadType {
-    Sqli,
-    Xss,
-    Traversal,
-    Ssrf,
-    Redirect,
-    Redos,
-    Headers,
-    Compression,
-    GraphQL,
-    OAuth,
-    Jwt,
-    Idor,
-    Ssti,
-    Grpc,
-    Xxe,
-    Ldap,
-    Cmd,
-    Deser,
-    Host,
-    Cache,
-    Csv,
-    Soap,
-    Websocket,
-    Nosql,
-    Xpath,
-    Expression,
-    Prototype,
-    Race,
-    MassAssign,
-    Oast,
-    Saml,
-    HtmlInject,
-    CssInject,
-    Ssi,
-    DomClobber,
-    Xslt,
-    Viewstate,
-    DepConfusion,
-    XsLeak,
-    Latex,
-}
-
-impl std::fmt::Display for PayloadType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PayloadType::Sqli => write!(f, "SQL Injection"),
-            PayloadType::Xss => write!(f, "XSS"),
-            PayloadType::Traversal => write!(f, "Path Traversal"),
-            PayloadType::Ssrf => write!(f, "SSRF"),
-            PayloadType::Redirect => write!(f, "Open Redirect"),
-            PayloadType::Redos => write!(f, "ReDoS"),
-            PayloadType::Headers => write!(f, "Header Expansion"),
-            PayloadType::Compression => write!(f, "Compression Bomb"),
-            PayloadType::GraphQL => write!(f, "GraphQL"),
-            PayloadType::OAuth => write!(f, "OAuth/OIDC"),
-            PayloadType::Jwt => write!(f, "JWT"),
-            PayloadType::Idor => write!(f, "IDOR"),
-            PayloadType::Ssti => write!(f, "SSTI"),
-            PayloadType::Grpc => write!(f, "gRPC"),
-            PayloadType::Xxe => write!(f, "XXE"),
-            PayloadType::Ldap => write!(f, "LDAP Injection"),
-            PayloadType::Cmd => write!(f, "Command Injection"),
-            PayloadType::Deser => write!(f, "Deserialization"),
-            PayloadType::Host => write!(f, "Host Header Injection"),
-            PayloadType::Cache => write!(f, "Cache Poisoning"),
-            PayloadType::Csv => write!(f, "CSV Injection"),
-            PayloadType::Soap => write!(f, "SOAP/XML"),
-            PayloadType::Websocket => write!(f, "WebSocket"),
-            PayloadType::Nosql => write!(f, "NoSQL Injection"),
-            PayloadType::Xpath => write!(f, "XPath Injection"),
-            PayloadType::Expression => write!(f, "Expression Injection"),
-            PayloadType::Prototype => write!(f, "Prototype Pollution"),
-            PayloadType::Race => write!(f, "Race Condition"),
-            PayloadType::MassAssign => write!(f, "Mass Assignment"),
-            PayloadType::Oast => write!(f, "OAST"),
-            PayloadType::Saml => write!(f, "SAML"),
-            PayloadType::HtmlInject => write!(f, "HTML Injection"),
-            PayloadType::CssInject => write!(f, "CSS Injection"),
-            PayloadType::Ssi => write!(f, "SSI Injection"),
-            PayloadType::DomClobber => write!(f, "DOM Clobbering"),
-            PayloadType::Xslt => write!(f, "XSLT Injection"),
-            PayloadType::Viewstate => write!(f, "ViewState Deserialization"),
-            PayloadType::DepConfusion => write!(f, "Dependency Confusion"),
-            PayloadType::XsLeak => write!(f, "XS-Leak"),
-            PayloadType::Latex => write!(f, "LaTeX Injection"),
-        }
-    }
-}
-
-impl PayloadType {
-    pub fn is_advanced(&self) -> bool {
-        matches!(
-            self,
-            PayloadType::GraphQL
-                | PayloadType::OAuth
-                | PayloadType::Jwt
-                | PayloadType::Idor
-                | PayloadType::Ssti
-                | PayloadType::Grpc
-        )
-    }
-
-    pub fn all_variants() -> &'static [PayloadType] {
-        static VARIANTS: LazyLock<Vec<PayloadType>> =
-            LazyLock::new(|| PayloadType::iter().collect());
-        &VARIANTS
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Payload {
-    pub payload_type: PayloadType,
-    pub payload: String,
-    pub description: String,
-    pub severity: Severity,
-    pub tags: Vec<String>,
-}
-
-pub use crate::types::Severity;
-
-static PAYLOAD_CACHE: LazyLock<rustc_hash::FxHashMap<PayloadType, Vec<Payload>>> =
-    LazyLock::new(|| {
-        let mut map = rustc_hash::FxHashMap::default();
-        for pt in PayloadType::all_variants() {
-            map.insert(*pt, get_payloads(*pt));
-        }
-        map
-    });
-
-static ALL_PAYLOADS_CACHE: LazyLock<Vec<Payload>> =
-    LazyLock::new(|| PAYLOAD_CACHE.values().flatten().cloned().collect());
-
-pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
-    match payload_type {
-        PayloadType::Sqli => sqli::get_payloads(),
-        PayloadType::Xss => xss::get_payloads(),
-        PayloadType::Traversal => traversal::get_payloads(),
-        PayloadType::Ssrf => ssrf::get_payloads(),
-        PayloadType::Redirect => redirect::get_payloads(),
-        PayloadType::Redos => redos::get_payloads(),
-        PayloadType::Headers => headers::get_payloads(),
-        PayloadType::Compression => compression::get_payloads(),
-        PayloadType::GraphQL => graphql::get_payloads(),
-        PayloadType::OAuth => oauth::get_payloads(),
-        PayloadType::Jwt => jwt::get_payloads(),
-        PayloadType::Idor => idor::get_payloads(),
-        PayloadType::Ssti => ssti::get_payloads(),
-        PayloadType::Grpc => grpc::get_payloads(),
-        PayloadType::Xxe => xxe::get_payloads(),
-        PayloadType::Ldap => ldap::get_payloads(),
-        PayloadType::Cmd => cmd::get_payloads(),
-        PayloadType::Deser => deser::get_payloads(),
-        PayloadType::Host => host::get_payloads(),
-        PayloadType::Cache => cache::get_payloads(),
-        PayloadType::Csv => csv::get_payloads(),
-        PayloadType::Soap => soap::get_payloads(),
-        PayloadType::Websocket => websocket::get_payloads(),
-        PayloadType::Nosql => nosql::get_payloads(),
-        PayloadType::Xpath => xpath::get_payloads(),
-        PayloadType::Expression => expression::get_payloads(),
-        PayloadType::Prototype => prototype::get_payloads(),
-        PayloadType::Race => race::get_payloads(),
-        PayloadType::MassAssign => mass_assign::get_payloads(),
-        PayloadType::Oast => oast::get_oast_payloads(),
-        PayloadType::Saml => saml::get_payloads(),
-        PayloadType::HtmlInject => html_inject::get_payloads(),
-        PayloadType::CssInject => css_inject::get_payloads(),
-        PayloadType::DomClobber => dom_clobber::get_payloads(),
-        PayloadType::Ssi => ssi::get_payloads(),
-        PayloadType::Xslt => xslt::get_payloads(),
-        PayloadType::Viewstate => viewstate::get_payloads(),
-        PayloadType::Latex => latex::get_payloads(),
-        PayloadType::DepConfusion => dep_confusion::get_payloads(),
-        PayloadType::XsLeak => xs_leak::get_payloads(),
-    }
-}
-
-pub fn get_payloads_cached(payload_type: PayloadType) -> &'static Vec<Payload> {
-    PAYLOAD_CACHE.get(&payload_type).unwrap_or_else(|| {
-        static EMPTY: LazyLock<Vec<Payload>> = LazyLock::new(Vec::new);
-        &EMPTY
-    })
-}
-
-pub fn get_all_payloads_cached() -> &'static Vec<Payload> {
-    &ALL_PAYLOADS_CACHE
-}
+// Everything from the corpus crate: the 40 payload modules, `macros`, the
+// `Payload` / `PayloadType` / `Severity` types, `PayloadType::all_variants`,
+// `is_advanced`, and the cross-variant `get_payloads*` caches.
+//
+// The six modules of the same name are shadowed by the prober modules declared
+// above; a glob import loses to an explicit item, so `payloads::graphql` is the
+// prober, not the payload strings. Consumers that want the payload strings ask
+// for them through `get_payloads`, which is why nothing needs that path.
+pub use eggsec_payloads::*;

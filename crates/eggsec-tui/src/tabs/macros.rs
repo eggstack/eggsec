@@ -88,6 +88,11 @@ macro_rules! tab_state_boilerplate {
         fn set_completed_message(&mut self, message: String) {
             $crate::tabs::core::tab_state_set_completed_message(&mut self.$core, message);
         }
+
+        #[cfg(test)]
+        fn set_state(&mut self, state: $crate::tabs::AppState) {
+            self.$core.state = state;
+        }
     };
 }
 
@@ -114,6 +119,12 @@ macro_rules! tab_input_boilerplate {
         Inputs: $inputs_variant:expr,
         Results: $results_variant:expr
     ) => {
+        fn ensure_input_focus(&mut self) {
+            if self.$focus == $inputs_variant {
+                $crate::tabs::core::ensure_first_field_focused(&mut self.$core);
+            }
+        }
+
         fn handle_copy(&mut self) -> Option<String> {
             let running = self.is_running();
             let inputs = self.$focus == $inputs_variant;
@@ -301,6 +312,9 @@ macro_rules! tab_input_3area {
         }
 
         fn handle_focus_next(&mut self) {
+            if self.is_running() {
+                return;
+            }
             self.$focus = $crate::tabs::core::focus_next_3area(
                 &mut self.$core,
                 self.$focus,
@@ -311,6 +325,9 @@ macro_rules! tab_input_3area {
         }
 
         fn handle_focus_prev(&mut self) {
+            if self.is_running() {
+                return;
+            }
             self.$focus = $crate::tabs::core::focus_prev_3area(
                 &mut self.$core,
                 self.$focus,
@@ -321,6 +338,9 @@ macro_rules! tab_input_3area {
         }
 
         fn handle_up(&mut self) {
+            if self.is_running() {
+                return;
+            }
             $crate::tabs::core::handle_up_3area(
                 &mut self.$core,
                 self.$focus,
@@ -330,6 +350,9 @@ macro_rules! tab_input_3area {
         }
 
         fn handle_down(&mut self) {
+            if self.is_running() {
+                return;
+            }
             $crate::tabs::core::handle_down_3area(
                 &mut self.$core,
                 self.$focus,
@@ -481,6 +504,9 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_focus_next(&mut self) {
+            if self.is_running() {
+                return;
+            }
             self.$focus = $crate::tabs::core::focus_next_2area(
                 &mut self.$core,
                 self.$focus,
@@ -490,6 +516,9 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_focus_prev(&mut self) {
+            if self.is_running() {
+                return;
+            }
             self.$focus = $crate::tabs::core::focus_prev_2area(
                 &mut self.$core,
                 self.$focus,
@@ -499,6 +528,9 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_up(&mut self) {
+            if self.is_running() {
+                return;
+            }
             $crate::tabs::core::handle_up_2area(
                 &mut self.$core,
                 self.$focus,
@@ -508,6 +540,9 @@ macro_rules! tab_input_2area {
         }
 
         fn handle_down(&mut self) {
+            if self.is_running() {
+                return;
+            }
             $crate::tabs::core::handle_down_2area(
                 &mut self.$core,
                 self.$focus,
@@ -594,6 +629,9 @@ macro_rules! tab_input_narea {
         }
 
         fn handle_focus_next(&mut self) {
+            if self.is_running() {
+                return;
+            }
             let areas = $crate::narea_slice!($($area),+);
             self.$focus = $crate::tabs::core::focus_next_n(
                 &mut self.$core,
@@ -603,6 +641,9 @@ macro_rules! tab_input_narea {
         }
 
         fn handle_focus_prev(&mut self) {
+            if self.is_running() {
+                return;
+            }
             let areas = $crate::narea_slice!($($area),+);
             self.$focus = $crate::tabs::core::focus_prev_n(
                 &mut self.$core,
@@ -612,6 +653,9 @@ macro_rules! tab_input_narea {
         }
 
         fn handle_up(&mut self) {
+            if self.is_running() {
+                return;
+            }
             let areas = $crate::narea_slice!($($area),+);
             $crate::tabs::core::handle_up_n(
                 &mut self.$core,
@@ -621,6 +665,9 @@ macro_rules! tab_input_narea {
         }
 
         fn handle_down(&mut self) {
+            if self.is_running() {
+                return;
+            }
             let areas = $crate::narea_slice!($($area),+);
             $crate::tabs::core::handle_down_n(
                 &mut self.$core,
@@ -687,6 +734,12 @@ macro_rules! tab_input_custom {
         Inputs: $inputs_variant:expr,
         Results: $results_variant:expr
     ) => {
+        fn ensure_input_focus(&mut self) {
+            if self.$focus == $inputs_variant {
+                $crate::tabs::core::ensure_first_field_focused(&mut self.$core);
+            }
+        }
+
         fn handle_char(&mut self, c: char) {
             let running = self.is_running();
             let inputs = self.$focus == $inputs_variant;
@@ -785,6 +838,12 @@ macro_rules! tab_input_indexed {
         InputAreas: $input_areas:expr,
         Results: $results_variant:expr
     ) => {
+        fn ensure_input_focus(&mut self) {
+            if $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas) {
+                $crate::tabs::core::ensure_first_field_focused(&mut self.$core);
+            }
+        }
+
         fn handle_char(&mut self, c: char) {
             let running = self.is_running();
             let inputs = $crate::tabs::core::is_indexed_input_area(self.$focus, $input_areas);

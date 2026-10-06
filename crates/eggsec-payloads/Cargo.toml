@@ -1,0 +1,30 @@
+[package]
+name = "eggsec-payloads"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Attack payload corpora for Eggsec: injection, traversal, deserialization, and protocol-abuse payload sets"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "payload", "fuzzing", "injection", "pentest"]
+categories = ["development-tools"]
+publish = false
+
+# Deliberately leaf. This crate is payload *data*: it builds strings and
+# returns them. It opens no socket and performs no live probing. The six
+# probers that drive these payloads over the network (GraphQL, OAuth, JWT,
+# IDOR, SSTI, gRPC) need `reqwest` and stay engine-side; the payload strings
+# they send are here. Guard 148 forbids any I/O, transport, frontend, or engine
+# dependency here, and any workspace dependency other than `eggsec-core`.
+[dependencies]
+eggsec-core = { path = "../eggsec-core", version = "0.1.0" }
+base64.workspace = true
+serde.workspace = true
+strum = { version = "0.28", default-features = false, features = ["derive"] }
+flate2.workspace = true
+rustc-hash.workspace = true
+tracing.workspace = true

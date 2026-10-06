@@ -85,12 +85,19 @@ pub mod endpoints;
 pub mod fingerprint;
 pub mod fingerprint_types;
 pub mod ports;
-pub mod service_data;
 pub mod spoof;
 pub mod templates;
 pub mod timing;
 pub mod udp_fingerprint;
 pub mod wordlist;
+
+/// Service fingerprint knowledge.
+///
+/// Phase G moved this out of the engine into the leaf crate
+/// `eggsec-service-db`. This re-export is a **permanent** facade, not
+/// transitional scaffolding: `eggsec::scanner::service_data::*` is the stable
+/// path and stays valid regardless of which crate owns the tables.
+pub use eggsec_service_db as service_data;
 
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;
@@ -100,7 +107,12 @@ pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerpri
 pub use fingerprint_types::{
     EnhancedFingerprint, EvidenceType, FingerprintConfidence, FingerprintEvidence, ServiceIdentity,
 };
-pub use ports::{scan_ports, PortResult, PortScanConfig, PortScanResults, MAX_SCAN_RESULTS};
+pub use ports::{
+    scan_ports, PortProtocol, PortResult, PortScanConfig, PortScanResults, PortStatus,
+    MAX_SCAN_RESULTS,
+};
+#[cfg(feature = "udp-scan")]
+pub use ports::{UdpEvidenceSummary, UdpHostState};
 pub use service_data::{
     get_service_by_port, get_service_name, guess_service, guess_service_from_banner, is_database,
     is_mail_service, is_web_service, COMMON_PORTS, PORT_SERVICE_MAP,

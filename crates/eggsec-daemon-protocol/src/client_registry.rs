@@ -393,6 +393,7 @@ mod tests {
                             scan_type: None,
                             timeout_ms: None,
                             concurrency: None,
+                            udp: None,
                         },
                     ),
                     requested_by: None,

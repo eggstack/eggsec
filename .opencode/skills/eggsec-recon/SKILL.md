@@ -30,11 +30,15 @@ Sequential dependencies:
 | Network | `dns_records.rs`, `reverse_dns.rs`, `whois.rs`, `geolocation.rs` | DNS, WHOIS, GeoIP |
 | Web | `techdetect.rs`, `content.rs`, `js.rs`, `cors.rs` | Tech detection, content discovery |
 | Subdomains | `subdomain.rs`, `wayback.rs`, `takeover.rs` | Enumeration, history, takeover |
-| Security | `cve.rs`, `secrets.rs`, `ssl.rs`, `threatintel.rs` | CVE, secrets, SSL, threat intel |
+| Security | `cve.rs`, `ssl.rs`, `threatintel.rs` | CVE, SSL, threat intel |
 | Cloud | `cloud/mod.rs`, `cloud/services.rs`, `cloud/iam.rs`, `cloud/metadata.rs` | AWS/GCP/Azure discovery |
 | Email | `email.rs`, `email_security.rs` | Discovery + SPF/DKIM/DMARC |
 | Dependency | (removed) | Package scanning |
 | Other | `api_schema.rs`, `containers.rs`, `git_secrets.rs` | Feature-gated modules |
+
+Secret detection (`secrets.rs`) moved to the leaf crate `eggsec-secrets` in Phase G and is
+re-exported at `eggsec::recon::secrets`; `git_secrets.rs` stays here because it is
+`std::process::Command` orchestration, not pattern matching.
 
 ### Key Types
 

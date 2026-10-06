@@ -760,12 +760,18 @@ class OpenPort:
     frozen = True
 ```
 
-A single open port from a scan result.
+A single port verdict from a scan result.
+
+For a TCP scan this holds only the ports that answered. For a UDP scan it holds
+*every* probed port, most of which are `open|filtered` -- read `state` to tell
+an `open` from an `open|filtered` rather than assuming membership means
+listening.
 
 | Property | Type | Description |
 |---|---|---|
 | `port` | `int` | Port number. |
-| `protocol` | `str` | Protocol (e.g. `"tcp"`). |
+| `protocol` | `str` | Protocol the verdict was reached over (`"tcp"` or `"udp"`). |
+| `state` | `str` | `"open"`, `"closed"`, `"filtered"` or `"open\|filtered"`. Only `open` and `closed` are proofs; the other two are an absence of one. |
 | `service` | `str` | Detected service name. |
 | `banner` | `str | None` | Service banner, if captured. |
 | `confidence` | `float` | Detection confidence (0.0--1.0). |

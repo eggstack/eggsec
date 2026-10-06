@@ -52,6 +52,42 @@ impl Debug for StorageConfig {
     }
 }
 
+/// Build a [`StorageConfig`] from connection fields plus the *name* of an
+/// environment variable holding the password.
+///
+/// Shared by the canonical executor and the `eggsec storage` CLI so the two
+/// cannot disagree about how a credential is supplied. `password_env` carries
+/// a variable name, never a secret: the value is read here, at the last
+/// moment, and never reaches a wire DTO, a `TaskSnapshot` or a log line.
+pub fn resolve_config(
+    host: String,
+    port: u16,
+    database: String,
+    username: String,
+    password_env: Option<&str>,
+    max_connections: u32,
+) -> StorageConfig {
+    let password = match password_env {
+        Some(var) => std::env::var(var).unwrap_or_else(|e| {
+            tracing::warn!(
+                env_var = var,
+                error = %e,
+                "storage password_env is unset; connecting without a password"
+            );
+            String::new()
+        }),
+        None => String::new(),
+    };
+    StorageConfig {
+        host,
+        port,
+        database,
+        username,
+        password: SensitiveString::new(password),
+        max_connections,
+    }
+}
+
 #[cfg(feature = "database")]
 pub async fn init_storage(config: &StorageConfig) -> Result<postgres::Database> {
     postgres::Database::new(config).await

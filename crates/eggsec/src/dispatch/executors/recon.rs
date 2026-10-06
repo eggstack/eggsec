@@ -42,7 +42,12 @@ impl OperationExecutor for ReconExecutor {
                 }
                 "pipeline" => {
                     let profile = crate::types::ScanProfile::Quick;
-                    crate::dispatch::recon::run_pipeline(target, profile, progress_tx).await
+                    // No report output: this executor receives only an
+                    // `OperationDescriptor` with no request params, so there
+                    // is no caller-supplied destination to honour. See the
+                    // canonical `pipeline` arm for the parameterized path.
+                    crate::dispatch::recon::run_pipeline(target, profile, None, None, progress_tx)
+                        .await
                 }
                 _ => {
                     return ExecutionOutput::Failed(format!(

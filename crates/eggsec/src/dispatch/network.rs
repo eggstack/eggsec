@@ -25,8 +25,19 @@ pub async fn run_load_test(
     )
 }
 
+/// Run a scoped load test.
+///
+/// The parameter list mirrors the load-test request shape (target, request
+/// options, pacing, progress sink, authorization scope) one-for-one on purpose:
+/// these are distinct, independently-typed concerns and bundling them behind a
+/// params struct here would obscure which values the scope-sensitive path
+/// actually consumes. Kept as a scoped allow rather than a global one.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_load_test_with_scope(
     target: String,
+    method: String,
+    body: Option<String>,
+    headers: Vec<String>,
     requests: u64,
     concurrency: usize,
     timeout: Duration,
@@ -35,9 +46,23 @@ pub async fn run_load_test_with_scope(
 ) -> anyhow::Result<TaskResult> {
     use crate::loadtest::{LoadTestRunner, ProgressSink};
 
-    let runner =
+    let mut runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?
             .with_scope(scope.clone());
+
+    // `method`/`body`/`headers` arrive already normalized by
+    // `LoadTestRequest::normalize()`; they are applied here because the
+    // canonical path owns the request shape. Headers are in canonical
+    // `Name:Value` form.
+    runner.set_method(method);
+    if let Some(body) = body {
+        runner.set_body(body);
+    }
+    for header in headers {
+        if let Some((name, value)) = header.split_once(':') {
+            runner.add_header(name.to_string(), value.to_string());
+        }
+    }
 
     send_progress(&progress_tx, 0, requests).await;
 

@@ -1469,17 +1469,41 @@ fi
 echo ""
 echo "--- Check 64: Python operation registry has exactly 22 operations ---"
 if [[ -f "crates/eggsec-python/src/operation_registry.rs" ]]; then
-  # Count enum variants in StableOperation
-  VARIANT_COUNT=$(rg -c '^\s+\w+,$' crates/eggsec-python/src/operation_registry.rs 2>/dev/null || echo 0)
-  # Count entries in ALL array
-  ALL_COUNT=$(rg -c 'Self::' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | head -1 || echo 0)
-  # More precise: count Self:: entries inside the ALL const array
-  ALL_ENTRIES=$(awk '/pub const ALL/,/^\s*\];/' crates/eggsec-python/src/operation_registry.rs 2>/dev/null | rg -c 'Self::' || echo 0)
+  # Count entries strictly inside the `ALL` array.
+  #
+  # The previous range form (`/pub const ALL/,/^\s*\];/`) never terminated on
+  # awk implementations without GNU `\s` support (including macOS /usr/bin/awk),
+  # so the range ran to end-of-file and counted every `Self::` in the file —
+  # reporting 130 instead of the real 22. Use a POSIX bracket expression and an
+  # explicit in-array flag so the count is correct everywhere.
+  ALL_ENTRIES=$(awk '
+    /pub const ALL/       { inside = 1; next }
+    inside && /Self::/    { n++ }
+    inside && /^[[:space:]]*\];/ { inside = 0 }
+    END                   { print n + 0 }
+  ' crates/eggsec-python/src/operation_registry.rs 2>/dev/null)
+  ALL_ENTRIES=${ALL_ENTRIES:-0}
+
+  # Count enum variants in StableOperation. Checking both keeps the guard
+  # meaningful: it now also fails when a variant is added without being
+  # registered in ALL, which the ALL-only count could not detect.
+  VARIANT_ENTRIES=$(awk '
+    /pub enum StableOperation/ { inside = 1; next }
+    inside && /^[[:space:]]*\}/ { inside = 0 }
+    inside && /^[[:space:]]*(#|\/\/|\/\/\/)/ { next }
+    inside && /^[[:space:]]*[A-Z][A-Za-z0-9_]*[[:space:]]*,[[:space:]]*$/ { n++ }
+    END { print n + 0 }
+  ' crates/eggsec-python/src/operation_registry.rs 2>/dev/null)
+  VARIANT_ENTRIES=${VARIANT_ENTRIES:-0}
+
   if [[ "$ALL_ENTRIES" -ne 22 ]]; then
     echo "FAIL: operation_registry.rs has $ALL_ENTRIES entries in ALL (expected 22)"
     FAIL=$((FAIL + 1))
+  elif [[ "$VARIANT_ENTRIES" -ne "$ALL_ENTRIES" ]]; then
+    echo "FAIL: operation_registry.rs has $VARIANT_ENTRIES StableOperation variants but $ALL_ENTRIES entries in ALL"
+    FAIL=$((FAIL + 1))
   else
-    echo "PASS: operation_registry.rs has exactly 22 entries in ALL."
+    echo "PASS: operation_registry.rs has exactly 22 entries in ALL, matching 22 variants."
   fi
 else
   echo "SKIP: operation_registry.rs not found."
@@ -2455,7 +2479,11 @@ else
   # Only the [dependencies] section is scanned (comments stripped):
   # dev-dependencies may carry fixture-only TLS/test tooling (rcgen,
   # tokio-rustls, ipnetwork).
-  DEPS_SECTION=$(sed -n '/^\[dependencies\]/,/^\[/p' crates/eggsec-transport-eggfetch/Cargo.toml | head -n -1 | rg -v '^\s*#')
+  # `head -n -1` is a GNU coreutils extension. BSD/macOS `head` rejects a
+  # negative line count, and under `set -euo pipefail` that aborted the entire
+  # script here, so no check after this point ever ran locally.
+  # `sed '$d'` is the portable "all but the last line" equivalent.
+  DEPS_SECTION=$(sed -n '/^\[dependencies\]/,/^\[/p' crates/eggsec-transport-eggfetch/Cargo.toml | sed '$d' | rg -v '^[[:space:]]*#')
   if echo "$DEPS_SECTION" | rg -q 'reqwest|hyper|rustls|tokio-rustls|hickory|eggress'; then
     # `tls-rustls` is the eggfetch feature name, not a direct dependency;
     # anything else matching here is a concrete-client leak.
@@ -2573,7 +2601,7 @@ if [[ ! -f "$NSE_CAP" ]]; then
   echo "FAIL: missing NSE script capability: $NSE_CAP"
   SECTION_FAIL=$((SECTION_FAIL + 1))
 else
-  NSE_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' "$NSE_CAP" | head -n -1)
+  NSE_CODE=$(sed -n '1,/^#\[cfg(test)\]/p' "$NSE_CAP" | sed '$d')
   for pat in 'reqwest::' 'eggfetch_core' 'eggfetch::' 'rustls::' 'tokio_rustls::' 'hickory_resolver::' 'RequestBuilder' 'Client::builder'; do
     if echo "$NSE_CODE" | grep -qF "$pat"; then
       echo "FAIL: $NSE_CAP code mentions concrete client pattern '$pat'."
@@ -3082,7 +3110,7 @@ echo ""
 echo "--- Check 114: service-detection stays scanner-owned ---"
 SECTION_FAIL=0
 if [[ -f "crates/eggsec/src/utils/service_detection.rs" ]]; then
-  echo "FAIL: crates/eggsec/src/utils/service_detection.rs reappeared (owner is scanner::service_data)."
+  echo "FAIL: crates/eggsec/src/utils/service_detection.rs reappeared (owner is the eggsec-service-db crate)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if rg -q '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null; then
@@ -3090,12 +3118,20 @@ if rg -q '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null; then
   rg -n '(use|mod) .*service_detection' crates/ --type rust 2>/dev/null || true
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if [[ ! -f "crates/eggsec/src/scanner/service_data.rs" ]]; then
-  echo "FAIL: crates/eggsec/src/scanner/service_data.rs missing (canonical owner)."
+if [[ ! -f "crates/eggsec-service-db/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-service-db/src/lib.rs missing (canonical owner; moved from scanner::service_data in Phase G)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ -f "crates/eggsec/src/scanner/service_data.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/scanner/service_data.rs reappeared (owner is the eggsec-service-db crate)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub use eggsec_service_db as service_data' crates/eggsec/src/scanner/mod.rs 2>/dev/null; then
+  echo "FAIL: scanner/mod.rs no longer re-exports eggsec-service-db as service_data (engine facade path broken)."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: service-detection stays scanner-owned."
+  echo "PASS: service-detection stays scanner-owned (eggsec-service-db)."
 else
   FAIL=$((FAIL + 1))
 fi
@@ -4083,6 +4119,249 @@ if [[ $SECTION_FAIL -gt 0 ]]; then
   FAIL=$((FAIL + 1))
 else
   echo "PASS: engine NSE dispatch/Python integration stays canonical and strict."
+fi
+
+# 147. Phase G: removed utils::redaction stays removed (zero-consumer dead code).
+echo ""
+echo "--- Check 147: removed utils::redaction stays removed ---"
+SECTION_FAIL=0
+if [[ -f "crates/eggsec/src/utils/redaction.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/utils/redaction.rs reappeared (Phase G removed it: zero production consumers)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'pub mod redaction' crates/eggsec/src/utils/mod.rs 2>/dev/null; then
+  echo "FAIL: utils/mod.rs re-exposes the redaction module."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'fn redact_sensitive|fn redact_json' crates/eggsec/src/ 2>/dev/null; then
+  echo "FAIL: engine-local redact_sensitive/redact_json reappeared under eggsec/src."
+  rg -n 'fn redact_sensitive|fn redact_json' crates/eggsec/src/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: removed utils::redaction stays removed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# Search Rust sources under $1 for regex $2 with string literals and comments
+# stripped FIRST, so that attack-payload *data* cannot trip a code-level guard.
+#
+# Filtering the rg output instead does not work: after blanking the literal the
+# line still exists, so a line-level `grep -q .` passes even though the only
+# match was inside the string. The OAuth corpus legitimately ships
+# `description: "Scope escalation to admin"` and
+# `description: "Client credentials exposed in URL query"` -- that is attack
+# data, not the crate reaching for Scope/Capability authority. Strip, then
+# search. Prints `path:line:content` for each surviving match.
+code_search() {
+  local dir="$1" pattern="$2" f m
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r f; do
+    m="$(sed -e 's/"[^"]*"/""/g' -e 's://.*::' -- "$f" | grep -nE "$pattern" || true)"
+    # `if`, not `[[ ... ]] && ...`: under `set -e` an AND-list that ends false
+    # aborts the loop at the FIRST non-matching file, so the search would stop
+    # early and report nothing. A guard that silently passes is worse than none.
+    if [[ -n "$m" ]]; then
+      printf '%s:%s\n' "$f" "$m"
+    fi
+  done < <(rg --files -g '*.rs' "$dir" 2>/dev/null)
+}
+
+# 148. Phase G: knowledge-corpus crates stay leaf (no engine/IO/authority reach).
+echo ""
+echo "--- Check 148: knowledge-corpus crates stay leaf ---"
+SECTION_FAIL=0
+for corpus in eggsec-service-db eggsec-secrets eggsec-payloads; do
+  MANIFEST="crates/${corpus}/Cargo.toml"
+  SRC_DIR="crates/${corpus}/src"
+  if [[ ! -d "$SRC_DIR" ]]; then
+    continue  # crate not extracted yet; nothing to police
+  fi
+  # `eggsec-core` is the ONLY permitted workspace dependency (it is a
+  # zero-internal-dependency leaf that owns `Severity`). Everything else
+  # reaches back into engine/domain territory and would break the corpus
+  # boundary. eggsec-service-db is held to the stricter bar of zero.
+  for dep in 'eggsec-policy' 'eggsec-runtime' 'eggsec-transport' 'eggsec-output' 'eggsec-report-model' 'eggsec-tool-core' 'eggsec-agent' 'eggsec-udp-scan' 'eggsec-daemon' 'eggsec ='; do
+    if rg -q "^${dep}([ =]|$)" "$MANIFEST" 2>/dev/null; then
+      echo "FAIL: ${MANIFEST} references forbidden workspace dep '$dep' (only eggsec-core is permitted)."
+      rg -n "$dep" "$MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # No runtime / network / TLS / frontend / persistence reach.
+  for dep in 'tokio' 'reqwest' 'hyper' 'rustls' 'axum' 'tonic' 'clap' 'ratatui' 'crossterm' 'rusqlite' 'sqlx' 'hickory-resolver' 'indicatif'; do
+    if rg -q "^${dep}([ =]|$)" "$MANIFEST" 2>/dev/null; then
+      echo "FAIL: ${MANIFEST} references forbidden dep '$dep'."
+      rg -n "$dep" "$MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # No authorization vocabulary in a corpus: it reports facts, never grants.
+  # Matched as whole identifiers so payload *text* does not trip this: the
+  # dependency-confusion corpus contains the words "scope"/"Scoped" in attack
+  # strings, and "Capability" could appear in any payload description.
+  # String literals are stripped first: a corpus payload may legitimately carry
+  # the word in its description text (the OAuth corpus ships "Scope escalation to
+  # admin"), and that is attack data, not the crate reaching for authority. What
+  # must never appear is the vocabulary in *code*.
+  if code_search "$SRC_DIR" '\b(Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability)\b' | grep -q .; then
+    echo "FAIL: ${SRC_DIR} references authorization vocabulary in code (corpus crates authorize nothing)."
+    code_search "$SRC_DIR" '\b(Scope|ApprovedOperation|ApprovedExecution|EnforcementContext|Capability)\b' || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# eggsec-service-db needs nothing at all from the workspace: it does not even
+# use Severity. Stricter bar than the other corpora, asserted separately.
+if [[ -f "crates/eggsec-service-db/Cargo.toml" ]] && rg -q '^eggsec-core([ =]|$)' crates/eggsec-service-db/Cargo.toml 2>/dev/null; then
+  echo "FAIL: crates/eggsec-service-db/Cargo.toml declares eggsec-core (this corpus needs no workspace edge)."
+  rg -n 'eggsec-core' crates/eggsec-service-db/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: knowledge-corpus crates stay leaf (eggsec-core only; no IO/frontend; no authority)."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 149. Phase G: secret detection has one owner, a permanent facade, and a frozen entropy gate.
+echo ""
+echo "--- Check 149: secret-detection owner, facade, and entropy gate ---"
+SECTION_FAIL=0
+if [[ ! -f "crates/eggsec-secrets/src/lib.rs" ]]; then
+  echo "FAIL: crates/eggsec-secrets/src/lib.rs missing (canonical secret-detection owner)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ -f "crates/eggsec/src/recon/secrets.rs" ]]; then
+  echo "FAIL: crates/eggsec/src/recon/secrets.rs reappeared (owner is the eggsec-secrets crate)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub use eggsec_secrets as secrets' crates/eggsec/src/recon/mod.rs 2>/dev/null; then
+  echo "FAIL: recon/mod.rs no longer re-exports eggsec-secrets as secrets (facade path broken)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The entropy gate is detection semantics, not a tuning knob. It must stay
+# scoped to AWS secret keys and stay at 3.5; widening or retuning it silently
+# changes what the scanner finds.
+if [[ -f "crates/eggsec-secrets/src/lib.rs" ]]; then
+  ENTROPY_HITS=$(rg -n 'secret_entropy\(value\) < [0-9.]+' crates/eggsec-secrets/src/ --glob '*.rs' 2>/dev/null | grep -v '^[[:space:]]*[^:]*:[0-9]*:[[:space:]]*//' || true)
+  if [[ -z "$ENTROPY_HITS" ]]; then
+    echo "FAIL: entropy gate 'secret_entropy(value) < N' not found in eggsec-secrets (detection semantics changed?)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  else
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      if ! printf '%s' "$line" | rg -q 'secret_entropy\(value\) < 3\.5 \{'; then
+        echo "FAIL: entropy gate threshold is not 3.5: $line"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done <<< "$ENTROPY_HITS"
+  fi
+  if ! rg -q 'secret_type == SecretType::AwsSecretKey &&' crates/eggsec-secrets/src/ --glob '*.rs' 2>/dev/null; then
+    echo "FAIL: entropy gate is no longer scoped to SecretType::AwsSecretKey (must not be widened)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: secret detection has one owner, a permanent facade, and an unchanged entropy gate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 150. Phase G: the corpus owns all 40 payload types; probers stay engine-side.
+echo ""
+echo "--- Check 150: payload corpus ownership + prober seam ---"
+SECTION_FAIL=0
+# The six probers need a reqwest::Client and stay in the engine. But their
+# payload *strings* are static data and live in the corpus, which is why
+# get_payloads resolves all 40 variants with no panic. An earlier cut of this
+# guard asserted the opposite (corpus must NOT have these 6 modules, and must
+# panic for them) -- that encoded the false premise that the payloads were
+# generated by probing. They never were.
+for m in graphql grpc idor jwt oauth ssti; do
+  CORPUS_MOD="crates/eggsec-payloads/src/${m}.rs"
+  ENGINE_MOD="crates/eggsec/src/fuzzer/payloads/${m}.rs"
+  # A. The corpus owns the static payloads for all six.
+  if [[ ! -f "$CORPUS_MOD" ]]; then
+    echo "FAIL: $CORPUS_MOD is missing; the corpus must own the ${m} payload set."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  elif ! rg -q 'pub fn get_payloads' "$CORPUS_MOD" 2>/dev/null; then
+    echo "FAIL: $CORPUS_MOD does not define pub fn get_payloads()."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # B. ...and that payload set is data: no client, no async, no runtime.
+  # E. The prober stays engine-side.
+  if [[ ! -f "$ENGINE_MOD" ]]; then
+    echo "FAIL: $ENGINE_MOD is missing; the ${m} prober needs reqwest and cannot live in eggsec-payloads."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # F. ...and re-exports the corpus builder, so probers and payloads share one
+  #    definition of the strings they send.
+  if [[ -f "$ENGINE_MOD" ]] && ! rg -q "pub use eggsec_payloads::${m}::" "$ENGINE_MOD" 2>/dev/null; then
+    echo "FAIL: $ENGINE_MOD no longer re-exports the corpus ${m} payload builder."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# B (all modules). A payload corpus builds strings; it never opens a socket.
+# Stricter than the per-file checks above and simpler: no module anywhere in the
+# crate may reach for a client, a runtime, or `.await`.
+if code_search "crates/eggsec-payloads/src" '\breqwest\b|\btokio\b|\bClient\b|\.await|block_on|TcpStream' | grep -q .; then
+  echo "FAIL: crates/eggsec-payloads/src reaches for the network; a payload corpus builds strings only."
+  code_search "crates/eggsec-payloads/src" '\breqwest\b|\btokio\b|\bClient\b|\.await|block_on|TcpStream' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+CORPUS_LIB="crates/eggsec-payloads/src/lib.rs"
+if [[ -f "$CORPUS_LIB" ]]; then
+  # C. No variant may panic or stub out. A silent empty Vec reads as "this type
+  #    has no payloads", which is false; a panic is worse -- it unwinds through
+  #    a library caller's frame. Both are capability regressions.
+  for pair in GraphQL:graphql OAuth:oauth Jwt:jwt Idor:idor Ssti:ssti Grpc:grpc; do
+    v="${pair%%:*}"
+    mod="${pair##*:}"
+    if ! rg -q "PayloadType::${v} => ${mod}::get_payloads\(\)" "$CORPUS_LIB" 2>/dev/null; then
+      echo "FAIL: $CORPUS_LIB does not dispatch PayloadType::${v} to its corpus module."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if rg -n 'PayloadType::[A-Za-z]+ => (unreachable!|Vec::new)' "$CORPUS_LIB" 2>/dev/null; then
+    echo "FAIL: $CORPUS_LIB panics or stubs a payload type (silent capability regression)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # G. The cross-variant caches now live here (they can: the corpus owns all 40
+  #    variants). They must stay lazy -- eager materialization regresses every
+  #    binary, including the TUI.
+  if ! rg -q 'static PAYLOAD_CACHE: LazyLock' "$CORPUS_LIB" 2>/dev/null; then
+    echo "FAIL: PAYLOAD_CACHE is missing or no longer a LazyLock (eager payload materialization is prohibited)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # A cache miss must not degrade to a shared empty Vec.
+  if rg -q 'static EMPTY: LazyLock<Vec<Payload>>' "$CORPUS_LIB" 2>/dev/null; then
+    echo "FAIL: get_payloads_cached still falls back to an empty Vec (silent capability regression)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # The all-40 invariant is pinned by tests in this crate, not by a grep.
+  if ! rg -q 'every_variant_resolves_to_non_empty_correctly_labelled_payloads' "$CORPUS_LIB" 2>/dev/null; then
+    echo "FAIL: $CORPUS_LIB lost the all-40-resolve test (the crate's shippability contract)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+# H. The engine facade is permanent: consumers keep resolving the corpus API.
+ENGINE_MOD="crates/eggsec/src/fuzzer/payloads/mod.rs"
+if [[ -f "$ENGINE_MOD" ]]; then
+  if ! rg -q 'pub use eggsec_payloads::\*;' "$ENGINE_MOD" 2>/dev/null; then
+    echo "FAIL: engine payloads/mod.rs no longer re-exports the corpus API (the facade is permanent)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if [[ -f "$ENGINE_MOD" ]] && rg -q 'static PAYLOAD_CACHE|static ALL_PAYLOADS_CACHE' "$ENGINE_MOD" 2>/dev/null; then
+    echo "FAIL: the engine still defines its own cross-variant caches (they belong to the corpus, which owns all 40 variants)."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: corpus owns all 40 payload types (no panic, no silent empty); 6 probers stay engine-side behind the permanent facade."
+else
+  FAIL=$((FAIL + 1))
 fi
 
 echo ""

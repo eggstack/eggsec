@@ -247,7 +247,7 @@ pub async fn run_storage_task(
             Err(e) => TaskResult::Error(format!("Failed to list scans: {}", e)),
         },
         "list_findings" => {
-            let findings = if let Some(ref scan) = scan_id {
+            let mut findings = if let Some(ref scan) = scan_id {
                 match db.list_findings(scan, 0, 1000).await {
                     Ok(f) => f,
                     Err(e) => {
@@ -264,6 +264,19 @@ pub async fn run_storage_task(
                     }
                 }
             };
+            // `severity_filter` is a minimum-severity floor, not an exact
+            // match: "high" returns critical and high findings.
+            if let Some(ref floor) = severity_filter {
+                let min = crate::types::Severity::parse_or_default(floor);
+                let before = findings.len();
+                findings.retain(|f| f.finding.severity >= min);
+                tracing::debug!(
+                    requested = floor.as_str(),
+                    kept = findings.len(),
+                    dropped = before - findings.len(),
+                    "applied storage severity filter"
+                );
+            }
             TaskResult::StorageListFindings { findings }
         }
         "search_cve" => {

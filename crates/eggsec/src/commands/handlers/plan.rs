@@ -247,11 +247,16 @@ pub async fn handle_plan(ctx: &CommandContext, args: PlanArgs) -> Result<()> {
         )
     })?;
 
-    let scope = args.scope.as_deref().and_then(|s| {
-        load_scope(Some(s))
-            .map_err(|e| tracing::debug!("Failed to load scope: {}", e))
-            .ok()
-    });
+    let scope = match args.scope.as_deref() {
+        Some(path) => {
+            // Fail closed: a scope file that cannot be read must not degrade
+            // to "no scope" and report an out-of-scope target as ALLOWED.
+            let scope = load_scope(Some(path))
+                .map_err(|e| anyhow::anyhow!("Failed to load scope file '{}': {}", path, e))?;
+            Some(scope)
+        }
+        None => None,
+    };
 
     let mode = profile.operation_mode();
     let risk = profile.max_risk_budget().to_operation_risk();

@@ -1,6 +1,16 @@
 # eggsec-ui-model Architecture
 
-Frontend-neutral view DTOs and renderer registry for session, task, result, artifact, permission, and event views. Provides a shared rendering contract between TUI, CLI, and any future frontend without importing the runtime or engine crates directly.
+> **Corrections (2026-10-06)** — verified against source: the Integration Points
+> list was wrong — only `eggsec-tui` and `eggsec-cli` depend on
+> `eggsec-ui-model`. Removed the **Daemon** ("`SessionSnapshot` → `SessionView`
+> for HTTP API responses") and **Python bindings** claims, neither of which is
+> supported: `crates/eggsec-daemon/Cargo.toml` and
+> `crates/eggsec-python/Cargo.toml` do not list the crate. Everything else
+> re-checked and confirmed accurate: 11 source files, all 14 view-DTO
+> `file:line` citations, 12 `EventView` handlers, and all 23
+> `RENDERER_REGISTRY` entries with exact titles/flags/summary fields.
+
+Frontend-neutral view DTOs and renderer registry for session, task, result, artifact, permission, and event views. Provides a shared rendering contract between TUI and CLI without importing the runtime or engine crates directly.
 
 ## Role & Responsibilities
 
@@ -125,10 +135,14 @@ View DTOs never depend on engine types. This ensures frontends can render withou
 
 ## Integration Points
 
+Consumers (verified via workspace `Cargo.toml`): only **`eggsec-tui`** and
+**`eggsec-cli`**.
+
 - **TUI**: consumes `SessionView`, `TaskView`, `OutcomeView`, `EventView`, `DashboardSummaryView`, `PermissionView` for rendering
-- **CLI headless mode**: consumes `SessionSummaryView`, `TaskView`, `OutcomeView` for JSON/text output
-- **Daemon**: `SessionSnapshot` → `SessionView` conversion for HTTP API responses
-- **Python bindings**: `SessionSnapshot` DTOs available for Python-side rendering
+- **CLI**: consumes `SessionSummaryView`, `TaskView`, `OutcomeView` for JSON/text output
+
+`eggsec-daemon` and `eggsec-python` do **not** depend on `eggsec-ui-model`;
+the daemon builds its own API responses from `SessionSnapshot` directly.
 
 ## Testing
 
@@ -155,4 +169,4 @@ View DTOs never depend on engine types. This ensures frontends can render withou
 - [overview.md](overview.md) — System-wide architecture
 - [cli_commands.md](cli_commands.md) — CLI headless output using view DTOs
 
-*Last verified against source: 2026-08-25; view lines, renderer flags (all 23 verified), and event coverage re-verified 2026-09-25*
+*Last verified against source: 2026-08-25; view lines, renderer flags (all 23 verified), and event coverage re-verified 2026-09-25; full re-verification 2026-10-06 (consumer list corrected)*

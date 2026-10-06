@@ -120,6 +120,12 @@ pub struct App {
     /// Pending event receiver from async runtime subscription.
     pub(crate) runtime_pending_event_rx:
         Option<std::sync::Arc<tokio::sync::Mutex<Option<eggsec_runtime::RuntimeEventReceiver>>>>,
+    /// Pending submission failure message from the async submit bridge.
+    ///
+    /// Drained by `update()` into the per-tab error surface so a failed submit
+    /// (or a submit that timed out) is visible in-frame instead of only in
+    /// `tracing` output the rich TUI never shows.
+    pub(crate) runtime_pending_error: Option<std::sync::Arc<std::sync::Mutex<Option<String>>>>,
 
     // -- Phase 3: executor context for dispatcher --
     /// Shared executor context holding per-task channel senders.
@@ -216,6 +222,7 @@ impl App {
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
+            runtime_pending_error: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
             runtime_mode: RuntimeMode::default(),
@@ -332,6 +339,7 @@ impl App {
             },
             runtime_pending_session_id: None,
             runtime_pending_event_rx: None,
+            runtime_pending_error: None,
             executor_context,
             runtime_adapter: runtime_adapter::TuiRuntimeAdapter::new(),
             runtime_mode: RuntimeMode::default(),
@@ -349,6 +357,10 @@ impl App {
                 app.theme_load.deferred_theme_name = Some(state.theme_name.clone());
             }
         }
+
+        // The restored tab becomes the first tab the user interacts with, so give
+        // its input area a focusable field before the first draw.
+        app.sync_input_focus_for_current_tab();
         crate::theme::sync_theme_to_thread_local(app.theme_manager.current());
 
         // Sync settings with current theme and built-in list before the background loader runs.
@@ -540,16 +552,86 @@ impl App {
         }
 
         if is_running {
-            if let Some(task_config) = self.build_current_task() {
-                if let Some(desc) = self.build_current_operation_descriptor() {
-                    self.evaluate_policy_and_dispatch(desc, Some(task_config));
-                } else {
-                    // No operation descriptor available; spawn without approval token
-                    self.spawn_task(Some(task_config), None);
+            self.publish_storage_password_env();
+            match self.build_current_task() {
+                Some(task_config) => {
+                    if let Some(desc) = self.build_current_operation_descriptor() {
+                        self.evaluate_policy_and_dispatch(desc, Some(task_config));
+                    } else {
+                        // Fail closed. Spawning without a descriptor would skip
+                        // `EnforcementContext::evaluate()` entirely, so a tab
+                        // that builds a request but declares no operation would
+                        // run with no scope or policy check at all. Today every
+                        // operation-less tab returns `None` above and never
+                        // reaches here, so this is a guard on the invariant
+                        // rather than a live path.
+                        self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                            "cannot start: no operation descriptor for this tab".to_string(),
+                        ));
+                        tracing::warn!(
+                            tab = ?self.current_tab,
+                            "refusing to spawn without an operation descriptor"
+                        );
+                    }
+                }
+                None => {
+                    // The tab entered its running state but produced no
+                    // dispatchable request (empty/unusable target, or a tab
+                    // with no wired run surface). Clear the running state so
+                    // the spinner does not stick and input is not left dead.
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(
+                        "nothing to run: check the target and required fields".to_string(),
+                    ));
                 }
             }
         }
     }
+
+    /// Publish the storage tab's password field into the process environment
+    /// under the name the request will reference.
+    ///
+    /// The password is kept off the wire on purpose: `RunRequest` is persisted
+    /// verbatim into the daemon's SQLite snapshot store, so a password field
+    /// would sit at rest in plaintext. Only `password_env` — the variable
+    /// *name* — crosses the wire, and the engine resolves it at execution.
+    ///
+    /// A blank field clears the variable so a previously typed password cannot
+    /// silently outlive the field that set it. When the TUI is attached to a
+    /// remote daemon the variable is set in the TUI process only, so the daemon
+    /// resolves nothing and logs a warning before connecting without it.
+    #[cfg(feature = "database")]
+    fn publish_storage_password_env(&self) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        static UNSAFE_ENV_WARNED: AtomicBool = AtomicBool::new(false);
+        if !matches!(self.current_tab, Tab::Storage) {
+            return;
+        }
+        let password = self.tabs.storage.password().to_string();
+        if password.is_empty() {
+            std::env::remove_var(crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV);
+            return;
+        }
+        // Safety: the rich TUI is single-threaded, and this is set immediately
+        // before the request is built in the same call, with no other thread
+        // reading storage credentials. Rust 2024 makes `set_var` unsafe for
+        // exactly this reason, so the justification is recorded here.
+        if !UNSAFE_ENV_WARNED.swap(true, Ordering::Relaxed) {
+            tracing::debug!(
+                env_var = crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV,
+                "publishing storage password to process environment for this dispatch"
+            );
+        }
+        unsafe {
+            std::env::set_var(
+                crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV,
+                password,
+            )
+        };
+    }
+
+    #[cfg(not(feature = "database"))]
+    fn publish_storage_password_env(&self) {}
 
     /// Central policy evaluation + dispatch. Uses the `ApprovedOperation` token
     /// to structurally gate `spawn_task()`. Handles `EnforcementError` variants
@@ -809,10 +891,32 @@ impl App {
     pub fn set_current_tab_if_available(&mut self, tab: Tab) -> bool {
         if Tab::all().contains(&tab) {
             self.current_tab = tab;
+            self.sync_input_focus_for_current_tab();
             true
         } else {
             false
         }
+    }
+
+    /// Make the active tab's first input field focusable when that tab's focus
+    /// area is its input area.
+    ///
+    /// Called on every tab-entry path. Tabs default their focus area to inputs
+    /// while `InputGroup::new()` leaves every field unfocused, so without this
+    /// the app opens a tab showing a focus ring on a field that cannot be typed
+    /// into: `i` flips the mode indicator to insert and every keystroke is
+    /// discarded. Idempotent, and it never steals a field the user already
+    /// focused or one the user deliberately blurred.
+    pub fn sync_input_focus_for_current_tab(&mut self) {
+        // Resume is the one tab whose content is read from outside its own
+        // state: the list of saved checkpoints must reflect the session store
+        // as it is *now*, not as it was when the tab was last built. Every
+        // tab-entry path funnels through here, so this is the single place
+        // that needs to know.
+        if self.current_tab == Tab::Resume {
+            self.tabs.resume.refresh();
+        }
+        self.dispatcher_mut().ensure_input_focus();
     }
 
     pub fn is_confirm_popup_visible(&self) -> bool {
@@ -851,6 +955,7 @@ impl App {
             reason_input: String::new(),
             captured_request,
             cli_flags,
+            scroll_offset: 0,
         });
         self.needs_redraw = true;
     }

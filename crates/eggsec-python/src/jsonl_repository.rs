@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::pagination::paginate;
 use crate::PyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -276,13 +277,7 @@ impl JsonlFindingRepository {
             .cloned()
             .collect();
 
-        let start = offset as usize;
-        let end = start + limit as usize;
-        if start >= results.len() {
-            return Ok(Vec::new());
-        }
-        results.drain(..start);
-        results.truncate((end - start) as usize);
+        paginate(&mut results, limit, offset);
 
         Ok(results)
     }
@@ -696,13 +691,7 @@ impl JsonlAssessmentRepository {
 
         let mut results: Vec<String> = assessments.values().cloned().collect();
 
-        let start = offset as usize;
-        let end = start + limit as usize;
-        if start >= results.len() {
-            return Ok(Vec::new());
-        }
-        results.drain(..start);
-        results.truncate((end - start) as usize);
+        paginate(&mut results, limit, offset);
 
         Ok(results)
     }

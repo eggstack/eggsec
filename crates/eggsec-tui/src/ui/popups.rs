@@ -21,7 +21,7 @@ fn constrained_popup_area(area: Rect, width: u16, height: u16, margin: u16) -> R
 
 /// Shared rendering for selectable-list popups (command palette, quick switch).
 ///
-/// Handles the common shell: popup area, clear, small terminal fallback, block
+/// Handles the common shell: popup area clamped to the viewport, clear, block
 /// with title/border, vertical split (query + status + list), empty state.
 /// The caller provides pre-built `items` and metadata.
 struct SelectableListPopup {
@@ -39,15 +39,12 @@ impl SelectableListPopup {
         let popup_area = constrained_popup_area(self.area, 60, 20, 2);
         f.render_widget(ratatui::widgets::Clear, popup_area);
 
-        if self.area.width < 50 {
-            let short = Paragraph::new(format!(
-                "{} (small)\n[Esc close] [Up/Down] [Enter]",
-                self.title.split('(').next().unwrap_or(self.title).trim()
-            ))
-            .style(Style::default().fg(theme.colors.text));
-            f.render_widget(short, popup_area);
-            return;
-        }
+        // No width floor here: `constrained_popup_area` already clamps the popup
+        // to the viewport, and the query/status/list split degrades by wrapping.
+        // The shell rejects terminals narrower than `is_terminal_too_small` before
+        // any overlay is drawn, so a hard-replaced placeholder used to blank out
+        // a usable feature in the 45..50 column band. Below that floor the
+        // `Layout` constraints collapse harmlessly (zero-height rows, no panic).
 
         let block = Block::default()
             .title(self.title)
@@ -355,5 +352,36 @@ mod tests {
         assert!(popup.height <= 8);
         assert!(popup.width >= 16);
         assert!(popup.height >= 4);
+    }
+
+    #[test]
+    fn selectable_list_popup_renders_between_too_small_floor_and_placeholder_floor() {
+        // 47 columns is above the shell's `is_terminal_too_small` floor (45) but
+        // below the old hard placeholder threshold (50): the overlay must still
+        // render its query and list instead of a 2-line placeholder.
+        let mut app = crate::app::create_test_app();
+        app.quick_switch.visible = true;
+        app.quick_switch.query = "recon".to_string();
+
+        let backend = ratatui::backend::TestBackend::new(47, 20);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                let theme = app.theme_manager.current().clone();
+                draw_quick_switch(f, &mut app, &theme);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        assert!(
+            !text.contains("(small)"),
+            "narrow overlay must not degrade to a placeholder, got:\n{}",
+            text
+        );
+        assert!(
+            text.contains("Filter:") || text.contains("recon"),
+            "narrow overlay must still show the query, got:\n{}",
+            text
+        );
     }
 }

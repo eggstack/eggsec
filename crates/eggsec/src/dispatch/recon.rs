@@ -10,14 +10,29 @@ async fn stop_stage_monitor(handle: tokio::task::JoinHandle<()>) {
     }
 }
 
+/// Where a pipeline report should be written, already resolved and contained.
+///
+/// The path is validated by the caller *before* the scan starts, so an
+/// out-of-bounds destination fails the operation in seconds rather than after
+/// a multi-minute assessment.
+#[derive(Debug, Clone)]
+pub struct PipelineOutput {
+    pub path: std::path::PathBuf,
+    pub format: crate::types::OutputFormat,
+}
+
 pub async fn run_pipeline(
     target: String,
     profile: ScanProfile,
+    output: Option<PipelineOutput>,
+    session_path: Option<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {
     use crate::pipeline::Pipeline;
 
-    let pipeline = Pipeline::from_profile(&target, profile).with_concurrency(10);
+    let pipeline = Pipeline::from_profile(&target, profile)
+        .with_concurrency(10)
+        .with_session_path(session_path);
     let stages_count = pipeline.get_stages().len() as u64;
 
     send_progress(&progress_tx, 0, stages_count.max(1)).await;
@@ -29,7 +44,63 @@ pub async fn run_pipeline(
             Err(_) => return Err(anyhow::anyhow!("Pipeline timed out after 300s")),
         };
 
+    if let Some(output) = &output {
+        // An explicitly requested artifact that cannot be written is a failed
+        // operation, not a silent one: the caller asked for a durable file and
+        // must learn that it does not exist.
+        crate::pipeline::write_output(&report, &output.path.to_string_lossy(), Some(output.format))
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "pipeline report write to {} failed: {e}",
+                    output.path.display()
+                )
+            })?;
+        tracing::info!(path = %output.path.display(), "pipeline report written");
+    }
+
     send_progress(&progress_tx, stages_count, stages_count.max(1)).await;
+    Ok(TaskResult::Pipeline(report))
+}
+
+/// Resume a saved scan checkpoint and return its report.
+///
+/// Non-printing by contract: the TUI owns the alternate screen and must never
+/// write terminal bytes (guard Check 138), so the report is returned to the
+/// caller for the existing `"pipeline"` renderer rather than rendered here.
+pub async fn run_pipeline_resume(
+    session_path: String,
+    progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+) -> anyhow::Result<TaskResult> {
+    use crate::config::EggsecConfig;
+
+    send_progress(&progress_tx, 0, 1).await;
+
+    // Fail before the long run if the checkpoint is unreadable, so a bad path
+    // costs a filesystem error rather than a partial assessment.
+    let remaining = crate::pipeline::session::load(&session_path)
+        .await
+        .map(|s| s.remaining_stages.len() as u64)
+        .map_err(|e| anyhow::anyhow!("could not read the session checkpoint: {e}"))?;
+
+    let config = crate::config::load_config(None::<&str>)
+        .inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to load config for session resume, using default");
+        })
+        .unwrap_or_else(|_| EggsecConfig::default());
+
+    let report = match tokio::time::timeout(
+        std::time::Duration::from_secs(300),
+        crate::pipeline::resume(&session_path, &config),
+    )
+    .await
+    {
+        Ok(Ok(report)) => report,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Session resume timed out after 300s")),
+    };
+
+    send_progress(&progress_tx, remaining.max(1), remaining.max(1)).await;
     Ok(TaskResult::Pipeline(report))
 }
 

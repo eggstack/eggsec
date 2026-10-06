@@ -239,6 +239,11 @@ mod tests {
             results_truncated: false,
             duration_ms: 500,
             spoof_stats: None,
+
+            #[cfg(feature = "udp-scan")]
+            udp_host_state: None,
+            #[cfg(feature = "udp-scan")]
+            udp_evidence: None,
         });
         let outcome = EggsecRuntimeExecutor::task_result_to_outcome(&result);
         match outcome {

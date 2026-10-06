@@ -3,13 +3,19 @@ use super::CommonHttpArgsCli;
 
 pub(crate) const SCAN_PORTS_ABOUT: &str = "Scan ports on target host
 
-Performs TCP port scanning to identify open services.
+Performs TCP port scanning to identify open services, or UDP scanning with --udp.
 Uses async connections for high-speed scanning.
+
+UDP note: UDP cannot prove a port is open. A port that does not answer is
+reported as 'open|filtered' -- it may be open behind a filter, or closed behind
+one. Only 'closed' and 'open' are proven. On Linux, receiving the ICMP errors
+that make this meaningful requires root; macOS/BSD work unprivileged.
 
 Examples:
   eggsec scan-ports example.com -p 1-1000
   eggsec scan-ports 192.168.1.1 -p 22,80,443,8080
   eggsec scan-ports example.com -p 1-1024 -c 50
+  eggsec scan-ports example.com -p 53,161 --udp
   eggsec scan-ports example.com -p 80,443 --json";
 
 pub(crate) const SCAN_ENDPOINTS_ABOUT: &str = "Discover sensitive HTTP endpoints
@@ -156,6 +162,11 @@ pub struct PortScanArgs {
         help = "TCP scan type: syn (default), null, fin, xmas"
     )]
     pub scan_type: Option<String>,
+    #[arg(
+        long,
+        help = "Scan UDP instead of TCP. Needs the 'udp-scan' feature; root required on Linux only"
+    )]
+    pub udp: bool,
     #[arg(
         long = "packet-trace",
         help = "Log all packets sent to a file for analysis"
@@ -351,6 +362,12 @@ pub struct ScanArgs {
     pub json: bool,
     #[arg(long, short = 'o', help = "Output file path")]
     pub output: Option<String>,
+    #[arg(
+        long = "save-session",
+        help = "Write a resumable scan checkpoint into the session store so it \
+                can be continued later with `eggsec resume` or from the TUI Resume tab"
+    )]
+    pub save_session: bool,
     #[arg(long, help = "Output format: json, html, csv, sarif, junit")]
     pub format: Option<super::OutputFormat>,
     #[arg(long, help = "Web payload types for web scan (comma-separated)")]

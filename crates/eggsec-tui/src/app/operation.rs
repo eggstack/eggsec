@@ -113,6 +113,7 @@ impl App {
             Tab::Waf => self.tabs.waf.primary_target(),
             Tab::WafStress => self.tabs.waf_stress.primary_target(),
             Tab::Scan => self.tabs.scan.primary_target(),
+            Tab::Resume => self.tabs.resume.primary_target(),
             Tab::Load => self.tabs.load.primary_target(),
             Tab::Stress => self.tabs.stress.primary_target(),
             Tab::Packet => self.tabs.packet.primary_target(),
@@ -194,6 +195,9 @@ impl App {
                 if ports != "1-1024" {
                     argv.push("--ports".to_string());
                     argv.push(ports.to_string());
+                }
+                if self.tabs.scan_ports.udp() {
+                    argv.push("--udp".to_string());
                 }
             }
             Tab::Fuzz => {
@@ -330,6 +334,7 @@ impl App {
         match self.current_tab {
             Tab::Recon => self.tabs.recon.build_run_request(),
             Tab::Load => self.tabs.load.build_run_request(),
+            Tab::Stress => self.tabs.stress.build_run_request(),
             Tab::ScanPorts => self.tabs.scan_ports.build_run_request(),
             Tab::ScanEndpoints => self.tabs.scan_endpoints.build_run_request(),
             Tab::Fingerprint => self.tabs.fingerprint.build_run_request(),
@@ -337,6 +342,7 @@ impl App {
             Tab::Waf => self.tabs.waf.build_run_request(),
             Tab::WafStress => self.tabs.waf_stress.build_run_request(),
             Tab::Scan => self.tabs.scan.build_run_request(),
+            Tab::Resume => self.tabs.resume.build_run_request(),
             Tab::Packet => self.tabs.packet.build_run_request(),
             Tab::GraphQl => self.tabs.graphql.build_run_request(),
             Tab::OAuth => self.tabs.oauth.build_run_request(),
@@ -364,6 +370,8 @@ impl App {
             Tab::DbPentest => self.tabs.db_pentest.build_run_request(),
             #[cfg(feature = "web-proxy")]
             Tab::Intercept => self.tabs.intercept.build_run_request(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.tabs.nse.build_run_request(),
             _ => None,
         }
     }

@@ -35,6 +35,10 @@ pub mod cli_adapters {
             scan_type: args.scan_type.clone(),
             timeout_ms: Some(args.timeout.saturating_mul(1000)),
             concurrency: Some(args.concurrency),
+            // `--udp` is an opt-in bool flag, so absent means false. Sent as
+            // `Some` rather than `None` so the engine's default (false) is
+            // stated explicitly instead of being inherited silently.
+            udp: Some(args.udp),
         }
     }
 
@@ -44,6 +48,8 @@ pub mod cli_adapters {
             concurrency: Some(args.concurrency),
             timeout_secs: Some(args.timeout),
             wordlist: args.wordlist.clone(),
+            // `--include-404` is opt-in on the CLI, so absent means false.
+            include_404: Some(args.include_404),
         }
     }
 
@@ -101,6 +107,8 @@ pub mod cli_adapters {
             connections: Some(args.concurrency as u32),
             duration_secs: args.timeout.map(|v| v as u32),
             rate_limit: None,
+            body: args.body.clone(),
+            headers: args.headers.clone(),
         }
     }
 
@@ -188,6 +196,7 @@ pub mod runtime_adapters {
             scan_type: p.scan_type.clone(),
             timeout_ms: p.timeout_ms,
             concurrency: p.concurrency,
+            udp: p.udp,
         }
     }
 
@@ -199,6 +208,7 @@ pub mod runtime_adapters {
             concurrency: p.concurrency,
             timeout_secs: p.timeout_secs,
             wordlist: p.wordlist.clone(),
+            include_404: p.include_404,
         }
     }
 
@@ -260,6 +270,8 @@ pub mod runtime_adapters {
             connections: p.connections,
             duration_secs: p.duration_secs,
             rate_limit: p.rate_limit,
+            body: p.body.clone(),
+            headers: p.headers.clone().unwrap_or_default(),
         }
     }
 
@@ -274,6 +286,32 @@ pub mod runtime_adapters {
         PipelineRequest {
             target: p.target.clone(),
             profile: p.profile.clone(),
+            output_format: p.output_format.clone(),
+            output_file: p.output_file.clone(),
+            session_path: p.session_path.clone(),
+        }
+    }
+
+    pub fn resume_from_runtime(p: &eggsec_runtime::request::ResumeParams) -> ResumeRequest {
+        ResumeRequest {
+            session_path: p.session_path.clone(),
+        }
+    }
+
+    pub fn storage_from_runtime(p: &eggsec_runtime::request::StorageParams) -> StorageRequest {
+        StorageRequest {
+            storage_type: p.storage_type.clone(),
+            path: p.path.clone(),
+            host: p.host.clone(),
+            port: p.port,
+            database: p.database.clone(),
+            username: p.username.clone(),
+            max_connections: p.max_connections,
+            mode: p.mode.clone(),
+            scan_id: p.scan_id.clone(),
+            cve_id: p.cve_id.clone(),
+            severity_filter: p.severity_filter.clone(),
+            password_env: p.password_env.clone(),
         }
     }
 
@@ -410,6 +448,9 @@ mod tests {
             TaskKind::Pipeline(PipelineParams {
                 target: "https://example.com".into(),
                 profile: None,
+                output_format: None,
+                output_file: None,
+                session_path: None,
             }),
             TaskKind::Recon(ReconParams {
                 target: "example.com".into(),
@@ -441,6 +482,7 @@ mod tests {
                 target: "10.0.0.1".into(),
                 script: "default".into(),
                 args: None,
+                custom_script: None,
             }),
             TaskKind::Hunt(HuntParams {
                 target: "https://example.com".into(),
@@ -457,6 +499,7 @@ mod tests {
             TaskKind::Storage(StorageParams {
                 storage_type: "findings".into(),
                 path: None,
+                ..Default::default()
             }),
             TaskKind::Integrations(IntegrationsParams {
                 integration_type: "jira".into(),
@@ -477,6 +520,7 @@ mod tests {
             TaskKind::WirelessActive(WirelessActiveParams {
                 interface: None,
                 target_bssid: None,
+                ..Default::default()
             }),
             TaskKind::DbPentest(DbPentestParams {
                 db_type: "postgres".into(),
@@ -511,6 +555,7 @@ mod tests {
             scan_type: Some("syn".into()),
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         };
         let normalized = canonical.normalize().unwrap();
 
@@ -520,6 +565,7 @@ mod tests {
             scan_type: Some("syn".into()),
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         });
         assert_eq!(runtime.normalize().unwrap(), normalized);
     }
@@ -537,6 +583,8 @@ mod tests {
             connections: Some(25),
             duration_secs: None,
             rate_limit: None,
+            body: None,
+            headers: vec![],
         };
         let normalized = canonical.normalize().unwrap();
         // Legacy connections-only means 25 total requests, 25 concurrency.
@@ -550,6 +598,48 @@ mod tests {
             connections: Some(25),
             duration_secs: None,
             rate_limit: None,
+            body: None,
+            headers: None,
+        });
+        assert_eq!(runtime.normalize().unwrap(), normalized);
+    }
+
+    #[cfg(feature = "cli")]
+    #[test]
+    fn load_test_cli_body_and_headers_reach_the_canonical_request() {
+        use crate::operation_request::cli_adapters::load_test_from_cli;
+        use eggsec_runtime::request::LoadTestParams;
+        use runtime_adapters::load_test_from_runtime;
+
+        let args = crate::cli::LoadArgs {
+            url: "https://example.com/api".into(),
+            requests: 20,
+            concurrency: 4,
+            method: "POST".into(),
+            body: Some("{\"probe\":1}".into()),
+            headers: vec!["X-Probe: eggsec".into()],
+            timeout: Some(10),
+            json: false,
+            verbose: false,
+            quiet: false,
+            output: None,
+            common: Default::default(),
+        };
+        let normalized = load_test_from_cli(&args).normalize().unwrap();
+        assert_eq!(normalized.method, "POST");
+        assert_eq!(normalized.body.as_deref(), Some("{\"probe\":1}"));
+        assert_eq!(normalized.headers, vec!["X-Probe:eggsec".to_string()]);
+
+        // The same shape expressed on the wire DTO converges.
+        let runtime = load_test_from_runtime(&LoadTestParams {
+            target: "https://example.com/api".into(),
+            method: "POST".into(),
+            requests: Some(20),
+            connections: Some(4),
+            duration_secs: Some(10),
+            rate_limit: None,
+            body: Some("{\"probe\":1}".into()),
+            headers: Some(vec!["X-Probe: eggsec".into()]),
         });
         assert_eq!(runtime.normalize().unwrap(), normalized);
     }

@@ -10,6 +10,65 @@ pub struct StaticHelpData {
     pub command_palette_entries: Arc<Vec<CommandPaletteResult>>,
 }
 
+/// Palette command name for each tab. These names are the command dispatch
+/// contract, so they stay hand-written and are deliberately *not* the tabs'
+/// `stable_id`s (e.g. "ports" -> `Tab::ScanPorts`). Tab ordering here is
+/// irrelevant; the jump shortcut comes from the tab's real visible index.
+const TAB_PALETTE_COMMANDS: &[(&str, Tab)] = &[
+    ("recon", Tab::Recon),
+    ("load", Tab::Load),
+    ("ports", Tab::ScanPorts),
+    ("endpoints", Tab::ScanEndpoints),
+    ("fingerprint", Tab::Fingerprint),
+    ("fuzz", Tab::Fuzz),
+    ("waf", Tab::Waf),
+    ("wafstress", Tab::WafStress),
+    ("pipeline", Tab::Scan),
+    ("resume", Tab::Resume),
+    ("proxy", Tab::Proxy),
+    ("packet", Tab::Packet),
+    ("graphql", Tab::GraphQl),
+    ("oauth", Tab::OAuth),
+    ("auth-test", Tab::Auth),
+    ("cluster", Tab::Cluster),
+    ("stress", Tab::Stress),
+    ("report", Tab::Report),
+    ("nse", Tab::Nse),
+    ("settings", Tab::Settings),
+    ("history", Tab::History),
+    ("dashboard", Tab::Dashboard),
+    ("hunt", Tab::Hunt),
+    ("browser", Tab::Browser),
+    ("compliance", Tab::Compliance),
+    ("storage", Tab::Storage),
+    ("integrations", Tab::Integrations),
+    ("workflow", Tab::Workflow),
+    ("vuln", Tab::Vuln),
+    ("wireless", Tab::Wireless),
+    ("db-pentest", Tab::DbPentest),
+    ("intercept", Tab::Intercept),
+    ("c2", Tab::C2),
+];
+
+/// The single-key shortcut that jumps to `tab` in normal mode, or `None` when
+/// the tab has no digit shortcut (feature-gated out, or past the 10th visible
+/// tab, which `Ctrl+X` quick switch covers).
+///
+/// Mirrors `KeyHandler::decode_normal_mode_input`: `1`-`9` select visible
+/// indices 0-8 and `0` selects index 9.
+fn tab_jump_shortcut(tab: Tab) -> Option<String> {
+    let index = tab.visible_index()?;
+    match index {
+        // `1`-`9` select visible indices 0-8, in order.
+        0..=8 => Some(char::from(b'1' + u8::try_from(index).unwrap_or(0)).to_string()),
+        // `0` selects the 10th visible tab.
+        9 => Some("0".to_string()),
+        // Past the 10th visible tab there is no digit binding; Ctrl+X quick
+        // switch is the documented route.
+        _ => None,
+    }
+}
+
 pub fn get_static_help_data() -> StaticHelpData {
     let mut sections = FxHashMap::default();
 
@@ -45,8 +104,13 @@ pub fn get_static_help_data() -> StaticHelpData {
                     category: "Navigation".to_string(),
                 },
                 HelpCommand {
+                    key: "Ctrl+Z".to_string(),
+                    description: "Pause/Resume task".to_string(),
+                    category: "Control".to_string(),
+                },
+                HelpCommand {
                     key: "Space".to_string(),
-                    description: "Pause/Resume".to_string(),
+                    description: "Toggle help (global shortcut, not tab-specific)".to_string(),
                     category: "Control".to_string(),
                 },
             ],
@@ -57,10 +121,9 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::ScanPorts,
         HelpSection {
             title: "Port Scanning".to_string(),
-            content: "TCP/UDP port scanning with various scan techniques. Use --spoof for decoy scanning.".to_string(),
+            content: "TCP/UDP port scanning. The tab exposes no scan-type control; the canonical SYN scan applies. Use --spoof for decoy scanning.".to_string(),
             commands: vec![
                 HelpCommand { key: "Enter".to_string(), description: "Start scan".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "1-5".to_string(), description: "Select scan type".to_string(), category: "Selection".to_string() },
             ],
         },
     );
@@ -671,7 +734,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         },
     ];
 
-    let command_palette_entries = Arc::new(vec![
+    let mut palette_entries: Vec<CommandPaletteResult> = vec![
         CommandPaletteResult {
             command: "quit".to_string(),
             description: "Exit the application".to_string(),
@@ -754,7 +817,7 @@ pub fn get_static_help_data() -> StaticHelpData {
             command: "global-search".to_string(),
             description: "Toggle global search".to_string(),
             category: "Navigation".to_string(),
-            shortcut: Some("Ctrl+Shift+/".to_string()),
+            shortcut: Some("Ctrl+F".to_string()),
         },
         CommandPaletteResult {
             command: "open-search".to_string(),
@@ -790,91 +853,91 @@ pub fn get_static_help_data() -> StaticHelpData {
             command: "recon".to_string(),
             description: "Go to Reconnaissance".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("0".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "load".to_string(),
             description: "Go to Load Testing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("1".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "ports".to_string(),
             description: "Go to Port Scanning".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("2".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "endpoints".to_string(),
             description: "Go to Endpoint Discovery".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("3".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "fingerprint".to_string(),
             description: "Go to Service Fingerprinting".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("4".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "fuzz".to_string(),
             description: "Go to Fuzzing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("5".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "waf".to_string(),
             description: "Go to WAF Detection".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("6".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "wafstress".to_string(),
             description: "Go to WAF Stress Testing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("7".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "pipeline".to_string(),
             description: "Go to Pipeline Scan".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("8".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "resume".to_string(),
             description: "Go to Session Resume".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("9".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "proxy".to_string(),
             description: "Go to Proxy".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("10".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "packet".to_string(),
             description: "Go to Packet Crafting".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("11".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "graphql".to_string(),
             description: "Go to GraphQL Testing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("12".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "oauth".to_string(),
             description: "Go to OAuth Testing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("13".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "cluster".to_string(),
             description: "Go to Cluster".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("14".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "auth-test".to_string(),
@@ -886,79 +949,79 @@ pub fn get_static_help_data() -> StaticHelpData {
             command: "stress".to_string(),
             description: "Go to Stress Testing".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("15".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "report".to_string(),
             description: "Go to Reporting".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("16".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "nse".to_string(),
             description: "Go to NSE Scripts".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("17".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "settings".to_string(),
             description: "Go to Settings".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("18".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "history".to_string(),
             description: "Go to History".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("19".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "dashboard".to_string(),
             description: "Go to Dashboard".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("20".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "hunt".to_string(),
             description: "Go to Vulnerability Hunting".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("21".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "browser".to_string(),
             description: "Go to Headless Browser".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("22".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "compliance".to_string(),
             description: "Go to Compliance".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("23".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "storage".to_string(),
             description: "Go to Database Storage".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("24".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "integrations".to_string(),
             description: "Go to Integrations".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("25".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "workflow".to_string(),
             description: "Go to Workflow".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("26".to_string()),
+            shortcut: None,
         },
         CommandPaletteResult {
             command: "vuln".to_string(),
             description: "Go to Vulnerability Management".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("27".to_string()),
+            shortcut: None,
         },
         // Phase 2: previously missing tab entries now derived from the same
         // surface metadata (`TabSpec::palette_command`). They are filtered by
@@ -1033,13 +1096,13 @@ pub fn get_static_help_data() -> StaticHelpData {
             command: "quick-switch".to_string(),
             description: "Open quick switch".to_string(),
             category: "Navigation".to_string(),
-            shortcut: Some("Ctrl+Q".to_string()),
+            shortcut: Some("Ctrl+X".to_string()),
         },
         CommandPaletteResult {
             command: "open-quick".to_string(),
             description: "Open quick switch".to_string(),
             category: "Navigation".to_string(),
-            shortcut: Some("Ctrl+Q".to_string()),
+            shortcut: Some("Ctrl+X".to_string()),
         },
         CommandPaletteResult {
             command: "copy-cli".to_string(),
@@ -1068,11 +1131,96 @@ pub fn get_static_help_data() -> StaticHelpData {
             category: "Data".to_string(),
             shortcut: Some("d".to_string()),
         },
-    ]);
+    ];
+
+    // Tab jump shortcuts are derived from the same rule the key handler uses,
+    // rather than hand-numbered. The hand-written table was off by one for
+    // every tab and advertised two-digit shortcuts ("10".."27") that no single
+    // keystroke can produce.
+    for entry in &mut palette_entries {
+        if let Some(tab) = TAB_PALETTE_COMMANDS
+            .iter()
+            .find(|(cmd, _)| *cmd == entry.command.as_str())
+            .map(|(_, tab)| *tab)
+        {
+            entry.shortcut = tab_jump_shortcut(tab);
+        }
+    }
+
+    let command_palette_entries = Arc::new(palette_entries);
 
     StaticHelpData {
         sections,
         global_commands,
         command_palette_entries,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: the tab jump column was hand-numbered from zero, so every
+    /// label was off by one against the key handler (which maps 1-9 to visible
+    /// indices 0-8 and 0 to index 9), and tabs past the tenth advertised
+    /// two-digit shortcuts no single keystroke can produce.
+    #[test]
+    fn tab_palette_shortcuts_match_the_key_handler_mapping() {
+        let entries = get_static_help_data();
+        for tab in Tab::all() {
+            let entry = entries
+                .command_palette_entries
+                .iter()
+                .find(|e| {
+                    TAB_PALETTE_COMMANDS
+                        .iter()
+                        .any(|(cmd, t)| *t == *tab && *cmd == e.command.as_str())
+                })
+                .unwrap_or_else(|| panic!("no palette command for {tab:?}"));
+
+            let index = tab
+                .visible_index()
+                .unwrap_or_else(|| panic!("{tab:?} has no visible index"));
+            let expected: Option<String> = match index {
+                0..=8 => Some(char::from(b'1' + u8::try_from(index).unwrap_or(0)).to_string()),
+                9 => Some("0".to_string()),
+                _ => None,
+            };
+            assert_eq!(
+                entry.shortcut, expected,
+                "wrong shortcut advertised for {tab:?} (visible index {index})"
+            );
+            // No entry may advertise a multi-character digit sequence, which
+            // cannot be typed as a single key.
+            if let Some(s) = &entry.shortcut {
+                assert!(
+                    !(s.len() > 1 && s.chars().all(|c| c.is_ascii_digit())),
+                    "{tab:?} advertises unpressable shortcut {s:?}"
+                );
+            }
+        }
+    }
+
+    /// Every advertised shortcut must be a real binding. Ctrl+Q was advertised
+    /// for quick switch while the handler binds Ctrl+X, so the documented key
+    /// did nothing.
+    #[test]
+    fn quick_switch_advertises_the_implemented_binding() {
+        let entries = get_static_help_data();
+        for cmd in ["quick-switch", "open-quick"] {
+            let entry = entries
+                .command_palette_entries
+                .iter()
+                .find(|e| e.command == cmd)
+                .unwrap_or_else(|| panic!("missing {cmd}"));
+            assert_eq!(entry.shortcut.as_deref(), Some("Ctrl+X"), "for {cmd}");
+        }
+        assert!(
+            !entries
+                .command_palette_entries
+                .iter()
+                .any(|e| e.shortcut.as_deref() == Some("Ctrl+Q")),
+            "Ctrl+Q is not a binding anywhere in the key handler"
+        );
     }
 }

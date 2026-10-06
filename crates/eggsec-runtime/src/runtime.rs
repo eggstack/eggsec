@@ -798,6 +798,7 @@ mod tests {
                 scan_type: None,
                 timeout_ms: None,
                 concurrency: None,
+                udp: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1545,6 +1546,7 @@ mod tests {
                 scan_type: None,
                 timeout_ms: None,
                 concurrency: None,
+                udp: None,
             }),
             requested_by: None,
             surface: RuntimeSurface::CliManual, // spoofed!
@@ -1641,6 +1643,7 @@ mod tests {
             TaskKind::WirelessActive(crate::request::WirelessActiveParams {
                 interface: None,
                 target_bssid: None,
+                ..Default::default()
             }),
             TaskKind::DbPentest(crate::request::DbPentestParams {
                 db_type: "postgres".into(),

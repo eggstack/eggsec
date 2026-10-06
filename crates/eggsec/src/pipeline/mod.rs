@@ -48,11 +48,9 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-#[cfg(any(feature = "tool-api", feature = "cli"))]
-use crate::error::EggsecError;
-#[cfg(any(feature = "tool-api", feature = "cli"))]
+// Unconditional: `write_output` is no longer feature-gated, so the module's
+// `Result` alias is needed on every build.
 use crate::error::Result;
-#[cfg(feature = "cli")]
 use crate::output::extensions::{JUnitBuilderExt, SarifBuilderExt};
 
 #[cfg(feature = "cli")]
@@ -61,7 +59,6 @@ use crate::cli::ResumeArgs;
 use crate::cli::ScanArgs;
 #[cfg(any(feature = "tool-api", feature = "cli"))]
 use crate::config::EggsecConfig;
-#[cfg(feature = "cli")]
 use crate::types::OutputFormat;
 #[cfg(feature = "cli")]
 use crate::utils::sanitize_for_logging;
@@ -71,8 +68,13 @@ pub use executor::Pipeline;
 pub use report::PipelineReport;
 pub use stage::{parse_stages, Stage};
 
-#[cfg(feature = "cli")]
-async fn write_output(
+/// Render `report` into `output_path` in the requested format, plus a sibling
+/// `<base>.manifest.json` when the report carries a manifest.
+///
+/// Not CLI-gated: the canonical pipeline path writes report output too, and
+/// every writer below is format-dispatched off the engine's own
+/// [`OutputFormat`], so the writers must exist wherever the pipeline runs.
+pub async fn write_output(
     report: &PipelineReport,
     output_path: &str,
     format: Option<OutputFormat>,
@@ -179,7 +181,7 @@ where
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -241,7 +243,7 @@ where
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -286,7 +288,7 @@ pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     }
 
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -298,16 +300,19 @@ pub async fn run_cli(args: ScanArgs, config: &EggsecConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "cli")]
-pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
-    let session = session::load(&args.session).await?;
+/// Resume a saved scan and return its report.
+///
+/// This is the non-printing half of `resume_cli`. Surfaces that render a
+/// session to the user themselves (notably the TUI, which owns the alternate
+/// screen and must never write terminal bytes) call this directly; only the CLI
+/// wrapper renders the returned report.
+pub async fn resume(path: &str, config: &crate::config::EggsecConfig) -> Result<PipelineReport> {
+    let session = session::load(path).await?;
     let pipeline = Pipeline::from_session(session).with_config(config.clone());
     let report = pipeline.run().await?;
 
-    println!("{}", report);
-
     if let Some(failed_stage) = report.first_failed_stage() {
-        return Err(EggsecError::ScanFailed {
+        return Err(crate::error::EggsecError::ScanFailed {
             stage: failed_stage.stage.to_string(),
             error: failed_stage
                 .error
@@ -316,5 +321,138 @@ pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
         });
     }
 
+    Ok(report)
+}
+
+/// Read the target stored in a checkpoint without running it.
+///
+/// The TUI needs the target before dispatch so it can build the enforcement
+/// descriptor for the resumed run, exactly as the CLI handler does.
+pub async fn session_target(path: &str) -> Result<String> {
+    Ok(session::load(path).await?.target)
+}
+
+#[cfg(feature = "cli")]
+pub async fn resume_cli(args: ResumeArgs, config: &EggsecConfig) -> Result<()> {
+    let report = resume(&args.session, config).await?;
+    println!("{}", report);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::OutputFormat;
+
+    fn sample_report() -> PipelineReport {
+        PipelineReport {
+            target: "example.com".into(),
+            total_duration_ms: 42,
+            stage_results: vec![],
+            open_ports: vec![],
+            services: vec![],
+            endpoints: vec![],
+            checkpoint_error: None,
+            manifest: None,
+            vuln_assessment: None,
+            load_test_results: None,
+        }
+    }
+
+    /// Every declared format must produce a non-empty file.
+    ///
+    /// `write_output` is the only renderer all eight output formats share, and
+    /// it previously had no coverage at all, so a writer that panicked or
+    /// returned empty would only surface in production.
+    #[tokio::test]
+    async fn write_output_renders_every_format() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let report = sample_report();
+        let formats = [
+            OutputFormat::Html,
+            OutputFormat::Pretty,
+            OutputFormat::Compact,
+            OutputFormat::Markdown,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Sarif,
+            OutputFormat::Junit,
+        ];
+        for format in formats {
+            let path = dir.path().join(format!("report-{format}.out"));
+            write_output(&report, &path.to_string_lossy(), Some(format))
+                .await
+                .unwrap_or_else(|e| panic!("write_output failed for {format:?}: {e}"));
+            let written = tokio::fs::read_to_string(&path)
+                .await
+                .unwrap_or_else(|e| panic!("{format:?} output unreadable: {e}"));
+            assert!(
+                !written.trim().is_empty(),
+                "{format:?} produced an empty report"
+            );
+        }
+    }
+
+    /// `None` is the documented default (HTML), not an error and not a no-op.
+    #[tokio::test]
+    async fn write_output_defaults_to_html() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("default.out");
+        write_output(&sample_report(), &path.to_string_lossy(), None)
+            .await
+            .expect("default format writes");
+        let written = tokio::fs::read_to_string(&path).await.expect("readable");
+        assert!(written.contains("<"), "default output is not HTML");
+    }
+
+    /// A report carrying a manifest gets a sibling manifest file.
+    #[tokio::test]
+    async fn write_output_emits_manifest_sibling() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut report = sample_report();
+        let now = chrono::Utc::now();
+        report.manifest = Some(crate::output::RunManifest {
+            schema_version: "1.0.0".into(),
+            run_id: "run-1".into(),
+            started_at: now,
+            ended_at: now,
+            eggsec_version: "0.0.0-test".into(),
+            target_scope: "example.com".into(),
+            profile: "quick".into(),
+            probe_intents: vec![],
+            risk_budget: crate::probe::ProbeRisk::SafeActive,
+            feature_flags: vec![],
+            observations: vec![],
+            findings: vec![],
+            artifacts: vec![],
+            baseline_id: None,
+            diff_summary: None,
+        });
+        let path = dir.path().join("manifested.json");
+        write_output(&report, &path.to_string_lossy(), Some(OutputFormat::Json))
+            .await
+            .expect("write with manifest");
+        let sibling = dir.path().join("manifested.manifest.json");
+        assert!(
+            sibling.exists(),
+            "expected sibling manifest at {}",
+            sibling.display()
+        );
+    }
+
+    /// A write failure must surface, not be swallowed.
+    #[tokio::test]
+    async fn write_output_reports_unwritable_destination() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // A path whose parent does not exist cannot be created by `fs::write`.
+        let path = dir.path().join("missing-subdir").join("report.json");
+        let err = write_output(
+            &sample_report(),
+            &path.to_string_lossy(),
+            Some(OutputFormat::Json),
+        )
+        .await
+        .expect_err("unwritable destination must error");
+        tracing::debug!("write_output error surfaced: {err}");
+    }
 }

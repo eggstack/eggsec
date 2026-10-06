@@ -475,6 +475,15 @@ async fn socks5_proxy_peer_fallback_is_forbidden() {
 
 #[tokio::test]
 async fn socks5_ultimate_target_fallback_is_forbidden() {
+    // This fixture needs a second loopback address. Linux routes all of
+    // 127.0.0.0/8 to lo, so 127.0.0.2 binds by default; macOS only assigns
+    // 127.0.0.1 to lo0 and would need a privileged `ifconfig lo0 alias` to add
+    // more. Skip loudly instead of reporting a false failure where the address
+    // does not exist; the assertion is unchanged where it does.
+    if !common::loopback_alias_available() {
+        eprintln!("SKIP: 127.0.0.2 is not bindable on this host (no loopback /8 route)");
+        return;
+    }
     // Ultimate candidates: primary 127.0.0.2 (no listener; SOCKS dial fails)
     // is the only socket-authorized target; secondary 127.0.0.1 (real HTTP
     // target) is DNS-approved but never passes authorize_socket. Must fail on

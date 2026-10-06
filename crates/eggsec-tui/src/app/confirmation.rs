@@ -65,6 +65,14 @@ pub struct PendingPolicyConfirmation {
     pub captured_request: Option<eggsec_runtime::RunRequest>,
     /// CLI-equivalent flags for this confirmation (populated from preflight).
     pub cli_flags: Vec<String>,
+    /// Scroll offset into the rendered confirmation body.
+    ///
+    /// The confirmation body is built here and rendered by a popup rebuilt each
+    /// frame, so the offset has to live with the pending confirmation. Without
+    /// it, content taller than the popup is unreachable and the operator can
+    /// only see the first rows — which is how the risk level, target and denial
+    /// reasons could end up hidden while still being confirmed.
+    pub scroll_offset: usize,
 }
 
 impl PendingPolicyConfirmation {

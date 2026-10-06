@@ -317,15 +317,37 @@ pub async fn run_nse(
     let (output, errors, success, report) = tokio::time::timeout(
         tokio::time::Duration::from_secs(300),
         tokio::task::spawn_blocking(move || {
-            // NOTE: This dispatch path is currently only reached from TUI
-            // (a manual surface). When automated surfaces (agent/MCP/daemon)
-            // are added, they must pass an appropriate profile through
-            // RunRequest and construct the request with that profile.
+            // NOTE: This dispatch path is currently only reached from manual
+            // surfaces (CLI/TUI): NSE is quarantined for MCP/REST/gRPC/agent
+            // (`mcp_exposable`/`rest_exposable`/`agent_exposable`/
+            // `grpc_exposable: false`), so the automated-surface quarantine in
+            // `execute_approved_execution` rejects it before this runs. When
+            // automated surfaces are added (M007) they must thread an
+            // appropriate profile through `RunRequest` rather than inherit this
+            // one.
             let profile = ResolvedNseExecutionProfile::manual_permissive(Some(&target_clone));
             // Custom script files resolve through ScriptResolver (no direct
             // filesystem read); named scripts use the built-in source
             // identity. Execution and report assembly are runtime-owned.
             let source = if let Some(ref script_path) = custom_script {
+                // Fail closed rather than silently downgrading: only a manual
+                // profile may execute an operator-supplied script from disk.
+                // `manual_permissive` is the only profile constructed here, so
+                // this cannot fire today — it exists so that lifting the
+                // automated-surface quarantine cannot quietly turn
+                // `NseParams::custom_script` into a remote-script-execution
+                // primitive for an agent/REST surface.
+                if !matches!(
+                    profile.kind,
+                    crate::nse::NseExecutionProfileKind::ManualPermissive
+                        | crate::nse::NseExecutionProfileKind::ManualStrict
+                ) {
+                    return Err(anyhow::anyhow!(
+                        "a custom NSE script path is only permitted for manual \
+                         profiles, but the resolved profile is '{}'",
+                        profile.kind
+                    ));
+                }
                 crate::nse::NseScriptSource::File {
                     path: std::path::PathBuf::from(script_path),
                 }

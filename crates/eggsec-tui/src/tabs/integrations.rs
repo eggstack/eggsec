@@ -270,6 +270,11 @@ impl Default for IntegrationsTab {
 }
 
 impl TabState for IntegrationsTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -296,6 +301,12 @@ impl TabState for IntegrationsTab {
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
+        // Re-selecting the tracker changes which fields are meaningful, so the
+        // labels must be recomputed. Without this, a reset left the fields
+        // labelled "Owner"/"Repository"/"API Token" (GitHub) while the
+        // dispatch sent tracker 0 = Jira, so the operator typed a GitHub owner
+        // into what was treated as a Jira URL.
+        self.update_config_labels();
         self.issue_inputs.blur();
         for field in &mut self.issue_inputs.fields {
             field.clear();
@@ -439,10 +450,60 @@ impl TabRender for IntegrationsTab {
             f.render_widget(placeholder, results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let input_height = match self.current_mode {
+            IntegrationsMode::Configure => 20,
+            IntegrationsMode::CreateIssue => 20,
+            IntegrationsMode::SearchIssues => 11,
+        };
+
+        // Mirrors the configuration layout in `render` so each dropdown
+        // anchors directly under its collapsed field.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(input_height), Constraint::Min(0)])
+            .split(area);
+
+        let Some(block_area) = chunks.first().copied() else {
+            return;
+        };
+        let input_area = Block::default().borders(Borders::ALL).inner(block_area);
+
+        let tracker_area = Rect {
+            y: input_area.y,
+            height: 3,
+            ..input_area
+        };
+        if let Some(dropdown) = self
+            .tracker_selector
+            .dropdown_info(tracker_area, f.area().height)
+        {
+            dropdown.render(f);
+        }
+
+        let mode_area = Rect {
+            y: input_area.y.saturating_add(3),
+            height: 3,
+            ..input_area
+        };
+        if let Some(dropdown) = self.mode_selector.dropdown_info(mode_area, f.area().height) {
+            dropdown.render(f);
+        }
+    }
 }
 
 impl TabInput for IntegrationsTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == IntegrationsFocusArea::Config {
+            crate::tabs::core::ensure_group_field_focused(&mut self.config_inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -475,6 +536,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -682,6 +746,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
             IntegrationsFocusArea::Mode => self.mode_selector.handle_up(),
@@ -692,6 +759,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
             IntegrationsFocusArea::Mode => self.mode_selector.handle_down(),
@@ -776,5 +846,95 @@ impl TabInput for IntegrationsTab {
             return;
         }
         self.results_view.page_down(page_size);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Draws the tab (including overlays) into an 80x24 buffer and returns it
+    /// as text so the dropdown overlay can be asserted on.
+    fn draw(tab: &IntegrationsTab) -> String {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+        crate::test_utils::buffer_to_text(terminal.backend().buffer())
+    }
+
+    #[test]
+    fn tracker_dropdown_is_drawn_when_expanded() {
+        let mut tab = IntegrationsTab::new();
+        // Default focus is Tracker; Enter opens the tracker dropdown.
+        tab.handle_enter();
+        assert!(tab.tracker_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: first configuration row.
+        let input_area = Rect::new(1, 1, 78, 18);
+        let info = tab
+            .tracker_selector
+            .dropdown_info(
+                Rect {
+                    y: input_area.y,
+                    height: 3,
+                    ..input_area
+                },
+                24,
+            )
+            .expect("expanded tracker selector must yield a dropdown");
+        assert_eq!(info.area.y, input_area.y + 3);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 1 && label == "GitHub"));
+
+        // Only the expanded list shows the non-selected tracker values.
+        let text = draw(&tab);
+        assert!(
+            text.contains("GitHub") && text.contains("GitLab"),
+            "expanded tracker dropdown should be drawn"
+        );
+    }
+
+    #[test]
+    fn mode_dropdown_is_drawn_when_expanded() {
+        let mut tab = IntegrationsTab::new();
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, IntegrationsFocusArea::Mode);
+        tab.handle_enter();
+        assert!(tab.mode_selector.is_open());
+        assert!(!tab.tracker_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: second configuration row.
+        let input_area = Rect::new(1, 1, 78, 18);
+        let info = tab
+            .mode_selector
+            .dropdown_info(
+                Rect {
+                    y: input_area.y + 3,
+                    height: 3,
+                    ..input_area
+                },
+                24,
+            )
+            .expect("expanded mode selector must yield a dropdown");
+        assert_eq!(info.area.y, input_area.y + 6);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 2 && label == "Search Issues"));
+
+        let text = draw(&tab);
+        assert!(
+            text.contains("Create Issue") && text.contains("Search Issues"),
+            "expanded mode dropdown should be drawn"
+        );
     }
 }

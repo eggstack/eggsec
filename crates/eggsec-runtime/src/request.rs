@@ -71,6 +71,7 @@ pub enum TaskKind {
     Waf(WafParams),
     WafStress(WafStressParams),
     Pipeline(PipelineParams),
+    Resume(ResumeParams),
     Recon(ReconParams),
     PacketCapture(PacketCaptureParams),
     PacketTraceroute(PacketTracerouteParams),
@@ -114,6 +115,12 @@ pub struct LoadTestParams {
     pub connections: Option<u32>,
     pub duration_secs: Option<u32>,
     pub rate_limit: Option<u32>,
+    /// Optional request body. Rejected for bodyless methods by normalization.
+    #[serde(default)]
+    pub body: Option<String>,
+    /// Request headers as `Name: Value` entries, validated by normalization.
+    #[serde(default)]
+    pub headers: Option<Vec<String>>,
 }
 
 /// Stress test parameters.
@@ -132,6 +139,10 @@ pub struct PortScanParams {
     pub target: String,
     pub ports: Option<String>,
     pub scan_type: Option<String>,
+    /// Scan UDP instead of TCP. `#[serde(default)]` so payloads written
+    /// before this field existed still deserialize.
+    #[serde(default)]
+    pub udp: Option<bool>,
     pub timeout_ms: Option<u64>,
     pub concurrency: Option<usize>,
 }
@@ -144,6 +155,16 @@ pub struct EndpointScanParams {
     pub wordlist: Option<String>,
     pub concurrency: Option<usize>,
     pub timeout_secs: Option<u64>,
+    /// Keep 404 responses in the result set. `None` means "use the engine
+    /// default" (exclude 404s), which is what the CLI's opt-in
+    /// `--include-404` flag implies when absent. The TUI's checkbox defaults
+    /// to on, so it sends `Some(true)` explicitly.
+    ///
+    /// `#[serde(default)]` is required: serde does not treat a missing
+    /// `Option` field as `None`, so without it this struct would fail to
+    /// deserialize any payload written before the field existed.
+    #[serde(default)]
+    pub include_404: Option<bool>,
 }
 
 /// Fingerprint parameters.
@@ -197,6 +218,30 @@ pub struct WafStressParams {
 pub struct PipelineParams {
     pub target: String,
     pub profile: Option<String>,
+    /// Report format for `output_file` (pretty|json|compact|html|csv|sarif|junit|markdown).
+    #[serde(default)]
+    pub output_format: Option<String>,
+    /// Destination for the rendered report, relative to the export directory.
+    #[serde(default)]
+    pub output_file: Option<String>,
+    /// Absolute path to write a resumable scan checkpoint to.
+    ///
+    /// `None` (the default) writes no checkpoint, so an ordinary scan does not
+    /// accumulate files on disk. When set, the pipeline checkpoints after each
+    /// completed stage, which is what makes the run selectable in the TUI
+    /// resume picker. The caller owns the path; the engine does not invent a
+    /// session directory for it.
+    #[serde(default)]
+    pub session_path: Option<String>,
+}
+
+/// Resume a saved scan checkpoint.
+///
+/// The target is not carried here: it lives inside the checkpoint, and the
+/// engine reads it to build the enforcement descriptor for the resumed run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeParams {
+    pub session_path: String,
 }
 
 /// Recon parameters.
@@ -279,6 +324,21 @@ pub struct NseParams {
     pub target: String,
     pub script: String,
     pub args: Option<String>,
+    /// Path to a user-provided `.nse` script, resolved by the engine's
+    /// `NseScriptSource::File` / `ScriptResolver` rather than by a direct
+    /// filesystem read.
+    ///
+    /// When set it takes precedence over `script`, which still carries the
+    /// built-in identity for reporting and validation. Honours the resolver's
+    /// policy gate, extension allowlist and root containment — never a
+    /// permissive "load whatever path was typed".
+    ///
+    /// Honoured only for manual profiles. An automated profile paired with a
+    /// custom script is refused by the engine rather than executed, so this
+    /// field cannot become a remote-script-execution primitive if the NSE
+    /// automated-surface quarantine (M007) is later lifted.
+    #[serde(default)]
+    pub custom_script: Option<String>,
 }
 
 /// Vulnerability hunt parameters.
@@ -303,10 +363,33 @@ pub struct ComplianceParams {
 }
 
 /// Storage parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageParams {
     pub storage_type: String,
     pub path: Option<String>,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub database: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub max_connections: Option<u32>,
+    /// connect|list_scans|list_findings|search_cve
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub scan_id: Option<String>,
+    #[serde(default)]
+    pub cve_id: Option<String>,
+    #[serde(default)]
+    pub severity_filter: Option<String>,
+    /// Name of the environment variable holding the password. The password
+    /// itself is never carried on the wire.
+    #[serde(default)]
+    pub password_env: Option<String>,
 }
 
 /// Integration parameters.
@@ -337,11 +420,67 @@ pub struct WirelessParams {
     pub duration_secs: Option<u32>,
 }
 
+/// Default attack mode for an unconfigured active wireless request.
+fn default_wireless_attack_type() -> String {
+    "deauth".to_string()
+}
+
+/// Default frame budget for an unconfigured active wireless request.
+fn default_wireless_frame_count() -> u64 {
+    100
+}
+
+/// Default frame rate for an unconfigured active wireless request.
+fn default_wireless_rate_limit() -> u64 {
+    10
+}
+
+/// Fail-safe default: an active wireless request that does not say otherwise
+/// is simulated, never transmitted.
+fn default_wireless_dry_run() -> bool {
+    true
+}
+
 /// Wireless active (deauth/disassoc) parameters.
+///
+/// SAFETY: `dry_run` is `true` in *both* the `Default` impl and the
+/// `#[serde(default = ...)]` path, so a payload written before these fields
+/// existed — or any payload that omits them — simulates the attack instead of
+/// transmitting live frames. Never invert this default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WirelessActiveParams {
     pub interface: Option<String>,
     pub target_bssid: Option<String>,
+    /// Active attack mode: `deauth` or `disassoc`. Defaults to `deauth`.
+    #[serde(default = "default_wireless_attack_type")]
+    pub attack_type: String,
+    /// Target client MAC for a directed (per-client) attack. `None` broadcasts.
+    #[serde(default)]
+    pub client: Option<String>,
+    /// Frames to emit. The engine clamps this to 1000.
+    #[serde(default = "default_wireless_frame_count")]
+    pub frame_count: u64,
+    /// Frames per second. The engine clamps this to 100.
+    #[serde(default = "default_wireless_rate_limit")]
+    pub rate_limit: u64,
+    /// `true` simulates without transmitting. Defaults to `true` (fail-safe).
+    #[serde(default = "default_wireless_dry_run")]
+    pub dry_run: bool,
+}
+
+impl Default for WirelessActiveParams {
+    /// Fail-safe defaults: an unconfigured active attack is a dry run.
+    fn default() -> Self {
+        Self {
+            interface: None,
+            target_bssid: None,
+            attack_type: default_wireless_attack_type(),
+            client: None,
+            frame_count: default_wireless_frame_count(),
+            rate_limit: default_wireless_rate_limit(),
+            dry_run: default_wireless_dry_run(),
+        }
+    }
 }
 
 /// Database pentest parameters.
@@ -393,6 +532,10 @@ impl TaskKind {
             TaskKind::Waf(_) => "waf",
             TaskKind::WafStress(_) => "waf-stress",
             TaskKind::Pipeline(_) => "pipeline",
+            // Resume is a distinct wire kind with its own capability name, so a
+            // runtime can advertise pipeline support without also advertising
+            // resume — the daemon conservative set deliberately omits it.
+            TaskKind::Resume(_) => "resume",
             TaskKind::Recon(_) => "recon",
             TaskKind::PacketCapture(_) => "packet-capture",
             TaskKind::PacketTraceroute(_) => "traceroute",
@@ -447,6 +590,12 @@ impl TaskKind {
             TaskKind::Waf(_) => "waf-detect",
             TaskKind::WafStress(_) => "waf-stress",
             TaskKind::Pipeline(_) => "pipeline",
+            // Resume executes the pipeline stage set from a saved checkpoint,
+            // so it shares the `pipeline` operation identity rather than
+            // declaring a new one. `route_for_command_id` already maps the
+            // `resume` command to ["pipeline"] and the CLI handler resolves
+            // enforcement the same way.
+            TaskKind::Resume(_) => "pipeline",
             TaskKind::Recon(_) => "recon",
             TaskKind::PacketCapture(_) => "packet",
             TaskKind::PacketTraceroute(_) => "packet",
@@ -487,6 +636,12 @@ impl TaskKind {
             TaskKind::Waf(p) => Some(p.target.clone()),
             TaskKind::WafStress(p) => Some(p.target.clone()),
             TaskKind::Pipeline(p) => Some(p.target.clone()),
+            // The resumed target lives inside the checkpoint, not in these
+            // params, so this is the documented target-less case: the bridge
+            // fails explicitly against `OperationMetadata` target policy rather
+            // than resuming something unbound. Manual surfaces supply the
+            // target from the selected session in their own descriptor path.
+            TaskKind::Resume(_) => None,
             TaskKind::Recon(p) => Some(p.target.clone()),
             TaskKind::PacketCapture(_) => None,
             TaskKind::PacketTraceroute(p) => Some(p.target.clone()),
@@ -524,6 +679,7 @@ mod tests {
                 scan_type: Some("syn".into()),
                 timeout_ms: Some(3000),
                 concurrency: None,
+                udp: None,
             }),
             requested_by: Some(ClientId::new()),
             surface: RuntimeSurface::CliManual,
@@ -540,5 +696,57 @@ mod tests {
         assert_eq!(RuntimeSurface::CliManual.label(), "cli-manual");
         assert_eq!(RuntimeSurface::RestApi.label(), "rest-api");
         assert_eq!(RuntimeSurface::Unknown.label(), "unknown");
+    }
+
+    /// SAFETY regression guard: an unconfigured active attack must never arm a
+    /// live deauth, on either the `Default` or the deserialization path.
+    #[test]
+    fn wireless_active_params_default_is_dry_run() {
+        let params = WirelessActiveParams::default();
+        assert!(params.dry_run, "Default must fail safe to a dry run");
+        assert_eq!(params.attack_type, "deauth");
+        assert_eq!(params.frame_count, 100);
+        assert_eq!(params.rate_limit, 10);
+        assert!(params.client.is_none());
+    }
+
+    #[test]
+    fn wireless_active_params_legacy_payload_dry_runs() {
+        let legacy = r#"{"interface":"wlan0","target_bssid":"aa:bb:cc:dd:ee:ff"}"#;
+        let params: WirelessActiveParams = serde_json::from_str(legacy).unwrap();
+        assert!(params.dry_run, "payload without dry_run must dry run");
+        assert_eq!(params.attack_type, "deauth");
+        assert_eq!(params.frame_count, 100);
+        assert_eq!(params.rate_limit, 10);
+    }
+
+    #[test]
+    fn wireless_active_params_roundtrip_preserves_live_fields() {
+        let req = RunRequest {
+            task_kind: TaskKind::WirelessActive(WirelessActiveParams {
+                interface: Some("wlan0".into()),
+                target_bssid: Some("aa:bb:cc:dd:ee:ff".into()),
+                attack_type: "disassoc".into(),
+                client: Some("11:22:33:44:55:66".into()),
+                frame_count: 25,
+                rate_limit: 5,
+                dry_run: false,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: vec![],
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let back: RunRequest = serde_json::from_str(&json).unwrap();
+        match back.task_kind {
+            TaskKind::WirelessActive(p) => {
+                assert_eq!(p.attack_type, "disassoc");
+                assert_eq!(p.client.as_deref(), Some("11:22:33:44:55:66"));
+                assert_eq!(p.frame_count, 25);
+                assert_eq!(p.rate_limit, 5);
+                assert!(!p.dry_run);
+            }
+            other => panic!("expected wireless-active, got {other:?}"),
+        }
     }
 }

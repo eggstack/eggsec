@@ -248,6 +248,12 @@ impl TabRender for BrowserTab {
 }
 
 impl TabInput for BrowserTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == StandardFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     // This tab overrides most focus/navigation methods (checkbox-aware
     // Options area), so only the non-overridden delegations are generated
     // here; the rest are implemented manually below.

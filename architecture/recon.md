@@ -9,7 +9,7 @@ The reconnaissance module performs **passive and active information gathering** 
 ## Location & Feature Gating
 
 - **Path**: `crates/eggsec/src/recon/` (35 `.rs` files: 30 top-level + 5 in `cloud/`)
-- **Declared modules** (`mod.rs:78-102`): 21 unconditional `pub mod` + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = 23 total
+- **Declared modules** (`mod.rs:78-109`): **20 unconditional `pub mod`** + 2 conditional (`cloud` behind `cfg(feature = "cloud")`, `git_secrets` behind `cfg(feature = "git-secrets")`) = **22 total**
 - **Feature-gated modules**: `cloud` (feature `cloud`), `git_secrets` (feature `git-secrets`)
 - **Detached utilities** (7 files exist on disk but are NOT declared as `pub mod` — `mod.rs:520-528`): `asn`, `cve_lookup`, `dns_enhanced`, `ftp_auth`, `smtp_auth`, `ssh_auth`, `ssl_audit`
 
@@ -23,7 +23,7 @@ The reconnaissance module performs **passive and active information gathering** 
 | `subdomain.rs` | 461 | Subdomain enumeration via crt.sh certificate transparency, Threatminer API, DNS brute-force | Yes | Uses `hickory_resolver` with configurable concurrency |
 | `ssl.rs` | 339 | SSL/TLS certificate analysis: chain inspection, protocol versions, cipher suites, expiry checks | Yes | Extracts `CertificateDer` from reqwest extensions |
 | `cve.rs` | 498 | CVE mapping: built-in database (7 product families) + NVD API v2.0 fallback | Yes | Global `OnceLock` cache (`CVE_CACHE`); optional NVD API key |
-| `secrets.rs` | 492 | Secret detection in HTTP responses via 25 regex patterns (30 `SecretType` enum variants, 20 with dedicated patterns) | Yes | LazyLock patterns; entropy filter for AWS secrets |
+| ~~`secrets.rs`~~ | — | **Moved to the `eggsec-secrets` crate in Phase G** (520 lines: 25 patterns covering 20 of 30 `SecretType` variants, entropy gate frozen at 3.5 and scoped to `AwsSecretKey`). Re-exported at `eggsec::recon::secrets`; see the section below. |
 | `content.rs` | 423 | Content/directory discovery: scans ~80 sensitive paths concurrently | Yes | Semaphore-bounded concurrency |
 | `cors.rs` | 281 | CORS misconfiguration testing: sends 9 test origins, checks `Access-Control-*` headers | Yes | Tests `null`, `*`, localhost, evil origins |
 | `dns_records.rs` | 185 | DNS record enumeration: A, AAAA, MX, TXT, NS, SOA, CAA via `hickory_resolver` | Yes | No external API dependency |
@@ -111,12 +111,19 @@ email, takeover, cve, secrets
 - **NVD API**: Requires optional API key (`config.recon.apis.nvd.api_key`); 10 results per product; sorted by CVSS score descending
 - **Output**: `CveMapping` with vulnerability list + severity counts (critical/high/medium)
 
-### secrets — Secret Detection (`secrets.rs`)
+### secrets — Secret Detection (`eggsec-secrets` crate)
 
-- **Pattern count**: 25 regex patterns in `build_patterns()` (`secrets.rs:103`, literals at `:108-300`) covering 20 `SecretType` enum variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the 30-variant enum but have no dedicated pattern in `build_patterns()`.
+Extracted in Phase G to the leaf crate `crates/eggsec-secrets`, re-exported at
+`eggsec::recon::secrets` via `pub use eggsec_secrets as secrets;` so every `recon/`
+consumer and the Python bindings are unchanged. `git_secrets.rs` (473 lines of
+`std::process::Command` orchestration plus filesystem walking) **stays engine-side** and
+imports from this crate — subprocess orchestration is not pattern matching.
+
+- **Pattern count**: 25 regex patterns in `build_patterns()` covering 20 of the 30 `SecretType` variants directly. Ten variants (`AzureKey`, `GcpServiceAccount`, `BitbucketToken`, `JwtToken`, `NpmToken`, `PyPiToken`, `HerokuKey`, `NetlifyToken`, `DockerhubToken`, `KubernetesSecret`) are defined in the enum but have no dedicated pattern in `build_patterns()`.
 - **High-confidence types**: AWS keys (3 variants), GitHub tokens (PAT + OAuth), GitLab PAT, Slack tokens, OpenAI keys, Stripe keys, GCP API keys, private keys, JWT tokens, Discord tokens, Twilio/SendGrid/Mailchimp keys, database connection strings (MongoDB/PostgreSQL/MySQL URIs), password-in-URL, GitHub credentials in URL
-- **Entropy filter**: AWS secret key candidates with Shannon entropy < 3.5 are discarded (`secrets.rs:334`)
+- **Entropy filter**: AWS secret key candidates with Shannon entropy < 3.5 are discarded. This gate is **detection semantics, not a tuning knob**: it is scoped only to `SecretType::AwsSecretKey`, and guard 149 fails if it is retuned or widened.
 - **Output**: `Vec<SecretFinding>` with type, value preview (truncated to 20 chars), confidence, severity
+- **Boundary**: detection only. Masking is separate — the declarative `RedactionState` in `eggsec-report-model` plus the `value_preview` truncation above. The orphan `utils::redaction` module was deleted in Phase G (M001).
 
 ### cloud — Cloud Asset Discovery (`cloud/mod.rs`)
 

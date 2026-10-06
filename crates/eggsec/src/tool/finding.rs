@@ -90,7 +90,7 @@ impl From<crate::scanner::ports::PortResult> for Finding {
                 );
                 m.insert(
                     "status".to_string(),
-                    serde_json::Value::String(result.status),
+                    serde_json::Value::String(result.status.as_str().to_string()),
                 );
                 m
             },

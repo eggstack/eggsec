@@ -1,8 +1,5 @@
-use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, Selector, SelectorItem};
-use crate::tabs::core::{
-    self, render_config_block, render_error_block, render_input_fields, TabCore,
-};
+use crate::tabs::core::{render_config_block, render_error_block, render_input_fields, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::{tab_state_boilerplate, tc};
 use eggsec::compliance::{ComplianceFramework, ComplianceReport, ComplianceStatus};
@@ -156,6 +153,12 @@ impl TabState for ComplianceTab {
     fn reset(&mut self) {
         self.core.reset_all();
         self.report = None;
+        // Match the sibling tabs: a reset must also collapse and defocus the
+        // selector. Leaving it expanded kept `has_selector_open()` true, so
+        // the app kept routing keys to the overlay after the tab had returned
+        // focus to Inputs.
+        self.framework_selector.cancel();
+        self.framework_selector.blur();
         self.framework_selector.select(0);
         self.focus_area = ComplianceFocusArea::Inputs;
     }
@@ -231,10 +234,55 @@ impl TabRender for ComplianceTab {
             f.render_widget(placeholder, results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        if self.core.error.is_some() {
+            return;
+        }
+
+        // Mirrors the framework row layout in `render` so the dropdown anchors
+        // directly under the collapsed field.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(9), Constraint::Min(0)])
+            .split(area);
+
+        let Some(input_area) = chunks.first().copied() else {
+            return;
+        };
+        let input_inner = Block::default().borders(Borders::ALL).inner(input_area);
+
+        let input_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .split(input_inner);
+
+        if let Some(framework_area) = input_chunks.get(2) {
+            if let Some(dropdown) = self
+                .framework_selector
+                .dropdown_info(*framework_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+    }
 }
 
 impl TabInput for ComplianceTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ComplianceFocusArea::Inputs => {
                 self.core.inputs.blur();
@@ -253,6 +301,9 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ComplianceFocusArea::Inputs => {
                 self.core.inputs.blur();
@@ -308,6 +359,9 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() && self.focus_area != ComplianceFocusArea::Results {
+            return;
+        }
         match self.focus_area {
             ComplianceFocusArea::Framework => {
                 self.framework_selector.handle_up();
@@ -322,6 +376,9 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() && self.focus_area != ComplianceFocusArea::Results {
+            return;
+        }
         match self.focus_area {
             ComplianceFocusArea::Framework => {
                 self.framework_selector.handle_down();
@@ -474,5 +531,47 @@ impl TabInput for ComplianceTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == ComplianceFocusArea::Inputs && self.core.inputs.is_focused()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn framework_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = ComplianceTab::new();
+        tab.framework_selector.focus();
+        tab.focus_area = ComplianceFocusArea::Framework;
+        tab.handle_enter();
+        assert!(tab.framework_selector.is_open());
+
+        // Anchored in the third config row, matching `render_overlays`.
+        let anchor = Rect::new(1, 8, 78, 3);
+        let info = tab.framework_selector.dropdown_info(anchor, 24);
+        let info = info.expect("expanded framework selector must yield a dropdown");
+        assert_eq!(info.area.y, anchor.y + anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 1 && label == "PCI DSS"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected frameworks.
+        assert!(
+            text.contains("PCI DSS") && text.contains("HIPAA"),
+            "expanded framework dropdown should be drawn"
+        );
     }
 }

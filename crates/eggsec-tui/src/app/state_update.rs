@@ -44,6 +44,23 @@ impl super::App {
             }
         }
 
+        // Surface an async submit failure (or timeout) in-frame. Without this
+        // the tab spins as "running" with no visible reason and the only
+        // record is a `tracing` line the rich TUI never prints.
+        if let Some(holder) = self.runtime_pending_error.take() {
+            let extracted = holder.try_lock().ok().and_then(|mut guard| guard.take());
+            match extracted {
+                Some(message) => {
+                    dirty = true;
+                    self.stop_with_message(&message);
+                }
+                None => {
+                    // Still pending or lock held, put it back for next poll.
+                    self.runtime_pending_error = Some(holder);
+                }
+            }
+        }
+
         // Phase 4: drain runtime lifecycle events through the adapter.
         // Two-phase reduce/apply to avoid borrow conflicts (adapter lives inside App).
         let current_task_tab = self.task_state.tab;
@@ -71,10 +88,14 @@ impl super::App {
         }
 
         // Auto-expire stale notifications so they don't linger until the
-        // next notification replaces them.
+        // next notification replaces them. Clearing the state is not enough:
+        // the frame is only repainted when `needs_redraw` is set, so without
+        // this the toast stayed on screen until the user pressed a key and
+        // the timeout was invisible.
         if let Some(ref notif) = self.overlay.notification {
             if notif.is_expired() {
                 self.overlay.notification = None;
+                dirty = true;
             }
         }
 
@@ -143,6 +164,36 @@ impl super::App {
                 self.task_state.tab = None;
                 self.task_state.started_at = None;
                 self.task_state.paused = false;
+                self.task_state.finished = false;
+            }
+        }
+
+        // Retire the typed channels once a terminal lifecycle event has been
+        // seen and both receivers are empty.
+        //
+        // The senders live in the App-owned `executor_context` `ArcSwap` for the
+        // whole session, so `is_closed()` is never true and the block above can
+        // never retire them. Leaving them set keeps `has_active_task()` true
+        // forever, which holds the task strip on screen and blocks `q` for the
+        // rest of the session. Retiring only when empty guarantees a result
+        // that is still in flight is rendered rather than dropped.
+        if self.task_state.finished {
+            // `is_empty()` only inspects; `try_recv()` would consume a result
+            // that is still in flight and silently drop it.
+            let progress_idle = self
+                .task_state
+                .progress_rx
+                .as_ref()
+                .is_none_or(|rx| rx.is_empty());
+            let result_idle = self
+                .task_state
+                .result_rx
+                .as_ref()
+                .is_none_or(|rx| rx.is_empty());
+            if progress_idle && result_idle {
+                self.task_state.progress_rx = None;
+                self.task_state.result_rx = None;
+                self.task_state.finished = false;
             }
         }
 
@@ -212,10 +263,17 @@ impl super::App {
             }
             TaskResult::PortScan(r) => {
                 self.with_history(|h| {
+                    // Only proven-open ports. A UDP run puts every probed port
+                    // in `open_ports`, and recording those as "N open" would
+                    // report the whole range as listening.
                     h.add_port_scan_result(
                         &r.host,
                         r.ports_scanned as usize,
-                        r.open_ports.iter().map(|p| p.port).collect(),
+                        r.open_ports
+                            .iter()
+                            .filter(|p| p.status == eggsec::scanner::PortStatus::Open)
+                            .map(|p| p.port)
+                            .collect(),
                     );
                 });
                 self.tabs.scan_ports.set_results(r);

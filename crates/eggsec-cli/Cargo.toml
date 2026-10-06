@@ -53,6 +53,12 @@ mobile = ["eggsec/mobile"]
 mobile-dynamic = ["eggsec/mobile-dynamic", "mobile"]
 stress-testing = ["eggsec/stress-testing", "eggsec-tui?/stress-testing"]
 packet-inspection = ["eggsec/packet-inspection", "eggsec-tui?/packet-inspection"]
+# Not in `default`: UDP verdicts need an ICMP receiver whose availability is
+# OS- and privilege-dependent (root required on Linux), so it is opt-in. The
+# `scan-ports --udp` flag exists unconditionally in the Clap tree; without this
+# feature it fails closed with a "feature not enabled" message rather than
+# silently scanning TCP.
+udp-scan = ["eggsec/udp-scan", "eggsec-tui?/udp-scan"]
 advanced-hunting = ["eggsec/advanced-hunting", "eggsec-tui?/advanced-hunting"]
 tool-api = ["eggsec/tool-api", "eggsec-tui?/tool-api"]
 rest-api = ["eggsec/rest-api", "eggsec-tui?/rest-api"]

@@ -1,0 +1,32 @@
+[package]
+name = "eggsec-udp-scan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "UDP port scanning for Eggsec: ICMP-error correlation, honest open/closed/filtered classification"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "udp", "port-scan", "icmp", "network"]
+categories = ["development-tools"]
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+
+# Raw socket syscalls. `socket2` is deliberately NOT used: it exposes no
+# `IP_RECVERR` control and its `as_raw()` is `pub(crate)`, so an ICMP receive
+# socket cannot be built through it. `libc` is already in the workspace graph.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = []
+# Recording/scripted transports for tests. Mirrors `eggsec-transport`.
+test-util = []
+
+[dev-dependencies]
+tempfile = "3"

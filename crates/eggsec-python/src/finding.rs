@@ -542,17 +542,60 @@ impl Report {
             let open_ports_py = result.getattr("open_ports")?;
             let open_ports: Vec<crate::dto::OpenPort> = open_ports_py.extract()?;
             for port in open_ports {
-                let finding = Finding::new(
-                    format!("port-open-{}", port.port),
-                    format!("Open port {}/{}", port.port, port.protocol),
-                    Severity::Info,
-                    port_result.target.clone(),
-                    "port-scan".to_string(),
-                    format!("Port {} is open (service: {})", port.port, port.service),
-                    None,
-                    None,
-                    None,
-                );
+                // `open_ports` holds every probed port for a UDP run, most of
+                // them `open|filtered`. Emitting a finding titled "Open port"
+                // for each would report the whole port range as listening, so
+                // only a proven `open` becomes a finding. The ambiguous
+                // states are recorded in the description instead, at their
+                // real severity for what they do prove.
+                let finding = match port.state.as_str() {
+                    "open" => Finding::new(
+                        format!("port-open-{}-{}", port.protocol, port.port),
+                        format!("Open port {}/{}", port.port, port.protocol),
+                        Severity::Info,
+                        port_result.target.clone(),
+                        "port-scan".to_string(),
+                        format!("Port {} is open (service: {})", port.port, port.service),
+                        None,
+                        None,
+                        None,
+                    ),
+                    state @ ("closed" | "filtered" | "open|filtered") => Finding::new(
+                        format!("port-{}-{}", port.protocol, port.port),
+                        format!("Port {}/{} is {}", port.port, port.protocol, state),
+                        Severity::Info,
+                        port_result.target.clone(),
+                        "port-scan".to_string(),
+                        match state {
+                            "closed" => format!("Port {} is closed (proved by RST or ICMP)", port.port),
+                            "filtered" => format!(
+                                "Port {} produced no response while the host answered other probes; \
+                                 consistent with a firewall drop, not proof either way",
+                                port.port
+                            ),
+                            _ => format!(
+                                "Port {} produced no response and the host proved nothing; it may be \
+                                 open behind a filter or closed behind one -- UDP cannot tell",
+                                port.port
+                            ),
+                        },
+                        None,
+                        None,
+                        None,
+                    ),
+                    // An unrecognized state is reported, not dropped.
+                    other => Finding::new(
+                        format!("port-{}-{}", port.protocol, port.port),
+                        format!("Port {}/{} has unknown state '{}'", port.port, port.protocol, other),
+                        Severity::Info,
+                        port_result.target.clone(),
+                        "port-scan".to_string(),
+                        format!("Port {} reported an unrecognized state: {}", port.port, other),
+                        None,
+                        None,
+                        None,
+                    ),
+                };
                 self.findings.push(finding);
             }
         } else if let Ok(endpoint_result) = result.extract::<crate::endpoint::EndpointScanResult>()

@@ -224,6 +224,11 @@ impl ReportTab {
 }
 
 impl TabState for ReportTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -373,10 +378,72 @@ impl TabRender for ReportTab {
             }
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        if self.error.is_some() {
+            return;
+        }
+
+        // Mirrors the row layout in `render` so each dropdown anchors directly
+        // under its collapsed field.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(14),
+                Constraint::Min(5),
+            ])
+            .split(area);
+
+        if let Some(view_area) = chunks.first() {
+            if let Some(dropdown) = self
+                .view_selector
+                .dropdown_info(*view_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+
+        if self.current_view == ReportView::Convert {
+            if let Some(inputs_area) = chunks.get(1) {
+                let format_area = Rect {
+                    x: inputs_area.x + inputs_area.width.saturating_sub(25),
+                    y: inputs_area.y + 1,
+                    width: 23,
+                    height: 3,
+                };
+                if let Some(dropdown) = self
+                    .format_selector
+                    .dropdown_info(format_area, f.area().height)
+                {
+                    dropdown.render(f);
+                }
+            }
+        }
+    }
 }
 
 impl TabInput for ReportTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            crate::tabs::core::ensure_group_field_focused(inputs);
+        } else if !self.view_selector.is_focused() {
+            // This tab opens on its view selector, not on the inputs. Without
+            // this the tab entry left *nothing* focused, so no key could reach
+            // any control.
+            self.view_selector.focus();
+        }
+    }
+
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -404,6 +471,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -616,6 +686,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -637,6 +710,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -692,7 +768,11 @@ impl TabInput for ReportTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == ReportFocusArea::Inputs && self.current_inputs().is_focused()
+        // The view selector is a focusable input control on this tab, so it
+        // must report as focused: it is what tab entry focuses, and reporting
+        // `false` there told the app that no control was focused at all.
+        self.view_selector.is_focused()
+            || (self.focus_area == ReportFocusArea::Inputs && self.current_inputs().is_focused())
     }
 
     fn is_at_left_edge(&self) -> bool {
@@ -767,5 +847,84 @@ impl ReportTab {
 
     pub fn stop(&mut self) {
         self.state = AppState::Idle;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draw(tab: &ReportTab) -> String {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+        crate::test_utils::buffer_to_text(terminal.backend().buffer())
+    }
+
+    #[test]
+    fn view_dropdown_is_drawn_when_expanded() {
+        let mut tab = ReportTab::new();
+        // Default focus is the view selector; Enter opens its dropdown.
+        tab.handle_enter();
+        assert!(tab.view_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the first layout row.
+        let anchor = Rect::new(0, 0, 80, 3);
+        let info = tab
+            .view_selector
+            .dropdown_info(anchor, 24)
+            .expect("expanded view selector must yield a dropdown");
+        assert_eq!(info.area.y, anchor.y + anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 1 && label == "Trend Analysis"));
+
+        // Only the expanded list shows the non-selected views.
+        let text = draw(&tab);
+        assert!(
+            text.contains("Trend Analysis") && text.contains("Schedule"),
+            "expanded view dropdown should be drawn"
+        );
+    }
+
+    #[test]
+    fn format_dropdown_is_drawn_when_expanded() {
+        let mut tab = ReportTab::new();
+        tab.format_selector.open();
+        assert!(tab.format_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the Convert-view format field.
+        let inputs_area = Rect::new(0, 3, 80, 14);
+        let format_area = Rect {
+            x: inputs_area.x + inputs_area.width.saturating_sub(25),
+            y: inputs_area.y + 1,
+            width: 23,
+            height: 3,
+        };
+        let info = tab
+            .format_selector
+            .dropdown_info(format_area, 24)
+            .expect("expanded format selector must yield a dropdown");
+        assert_eq!(info.area.x, format_area.x);
+        assert_eq!(info.area.y, format_area.y + format_area.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 4 && label == "SARIF"));
+
+        // Only the expanded list shows the non-selected formats.
+        let text = draw(&tab);
+        assert!(
+            text.contains("Markdown") && text.contains("SARIF"),
+            "expanded format dropdown should be drawn"
+        );
     }
 }

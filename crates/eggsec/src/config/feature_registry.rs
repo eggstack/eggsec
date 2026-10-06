@@ -215,6 +215,11 @@ feature_registry! {
         category: DomainCapability,
         hint: "enable feature 'mobile' in Cargo.toml: cargo build --features mobile"
     },
+    "udp-scan" => {
+        enabled: cfg!(feature = "udp-scan"),
+        category: DomainCapability,
+        hint: "enable feature 'udp-scan' in Cargo.toml: cargo build --features udp-scan"
+    },
     "wireless" => {
         enabled: cfg!(feature = "wireless"),
         category: DomainCapability,
@@ -513,6 +518,10 @@ pub static FULL_EXCLUDED_WITH_REASON: &[(&str, &str)] = &[
     (
         "api-schema",
         "marker-only compile gate; covered by individual sweep, not lab aggregate",
+    ),
+    (
+        "udp-scan",
+        "platform-mode: needs an ICMP error receiver whose availability is OS- and privilege-dependent, so it is opt-in rather than part of the lab aggregate",
     ),
     (
         "c2-mcp",

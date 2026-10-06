@@ -55,8 +55,12 @@ pub mod workflow;
 mod handle_enter_regression;
 #[cfg(test)]
 mod input_accessibility;
+#[cfg(test)]
+mod mid_run_navigation;
 mod spec;
 pub mod surface;
+#[cfg(test)]
+mod tab_entry_focus;
 pub use spec::{
     palette_command_for, resolve_palette_command, PaletteResolution, TabAvailability, TabSpec,
     TuiSurfaceRoute,
@@ -103,6 +107,9 @@ pub use settings::{SettingsSection, SettingsTab};
 #[cfg(feature = "database")]
 pub use storage::StorageTab;
 pub use stress::StressTab;
+// `StressType` is the return type of `StressTab::stress_type`, so it has to be
+// nameable from outside the module (e.g. the request builder).
+pub use stress::StressType;
 #[cfg(feature = "vuln-management")]
 pub use vuln::VulnTab;
 pub use waf::WafTab;
@@ -344,6 +351,14 @@ pub struct TabSpan {
     pub x_end: u16,
 }
 
+/// Columns ratatui's `Tabs` widget spends per tab beyond the title itself:
+/// one left pad, one right pad, and a one-column divider between tabs.
+const TAB_CHROME_WIDTH: u16 = 3;
+
+/// Offset from the tab area's left edge to the start of the tabs widget's
+/// inner area, i.e. the position of tab 0's left pad.
+const TAB_INNER_ORIGIN: u16 = 1;
+
 impl TabWindow {
     pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self {
         let all_tabs = Tab::all();
@@ -355,11 +370,17 @@ impl TabWindow {
 
         let tab_widths: Vec<usize> = all_tabs.iter().map(|t| t.title().len()).collect();
 
+        // Each tab costs its title plus left pad + right pad + a trailing
+        // divider. A contiguous group of `n` tabs therefore renders
+        // `sum(titles) + 3n - 1` columns: the final tab has no divider after
+        // it. Counting titles alone overflowed the bar and ratatui silently
+        // clipped the right-hand tabs, so the selected tab could go unrendered.
         let mut max_visible = 0;
         let mut cum_width = 0;
         for (i, &w) in tab_widths.iter().enumerate() {
-            cum_width += w;
-            if cum_width > available_width && i > 0 {
+            cum_width += w + TAB_CHROME_WIDTH as usize;
+            let group_width = cum_width - 1;
+            if group_width > available_width && i > 0 {
                 break;
             }
             max_visible = i + 1;
@@ -428,20 +449,21 @@ impl TabWindow {
         let visible_tabs: Vec<_> = all_tabs[self.start..self.end].iter().collect();
         let title_widths: Vec<usize> = visible_tabs.iter().map(|t| t.title().len()).collect();
 
-        // Ratatui Tabs widget adds spacing between tabs (1 space on each side = 2 total)
-        let tab_spacing = 2;
-
-        // Calculate cumulative widths to determine x positions
-        // Positions are relative to the tab area (which starts at x = 0 for this calculation)
-        let mut cum_width = 0;
+        // Ratatui renders, per tab: left pad (1) + title + right pad (1), plus
+        // a 1-column divider between tabs. Consecutive tabs are therefore
+        // `title + TAB_CHROME_WIDTH` apart, and tab k's clickable region runs
+        // from its own left pad up to the next tab's left pad. Using 2 here
+        // instead of 3 drifted the hit boxes one column left per tab, so
+        // clicking a tab's right edge selected the following tab.
+        let mut cum_width: u16 = 0;
         let mut spans = Vec::new();
 
         for (i, (&tab, &title_width)) in visible_tabs.iter().zip(title_widths.iter()).enumerate() {
-            // +1 to account for the left border of the block
-            let x_start = (cum_width + 1) as u16;
-            let tab_width = title_width + tab_spacing;
-            // The clickable area includes the title and half of the spacing on each side
-            let x_end = x_start + tab_width as u16;
+            // +1 for the block's left border: the widget's inner area (where
+            // tab 0's left pad sits) starts one column into the tab area.
+            let x_start = TAB_INNER_ORIGIN + cum_width;
+            let tab_width = title_width as u16 + TAB_CHROME_WIDTH;
+            let x_end = x_start + tab_width;
 
             spans.push(TabSpan {
                 tab: *tab,
@@ -577,6 +599,15 @@ pub trait TabState {
     fn reset(&mut self) {}
     fn set_error(&mut self, _error: TabError) {}
     fn set_completed_message(&mut self, _message: String) {}
+    /// Test-only: drive a tab into a given lifecycle state.
+    ///
+    /// Production code reaches `Running` through a dispatch, never by
+    /// assignment. Tests that assert "what does navigation do *while* a task
+    /// runs" need that precondition without a full dispatch (which is gated on
+    /// enforcement and target validation), so the boilerplate macro generates
+    /// this from the tab's own `TabCore`.
+    #[cfg(test)]
+    fn set_state(&mut self, _state: AppState) {}
 }
 
 pub trait TabRender {
@@ -617,6 +648,19 @@ pub trait TabInput: TabState {
     }
     fn handle_search(&mut self, _query: &str) {}
     fn is_input_focused(&self) -> bool;
+    /// Make the tab's first input field focusable when the tab's focus area is
+    /// its input area.
+    ///
+    /// Tabs default their focus area to the input area, but `InputGroup::new()`
+    /// leaves every field unfocused, so on a freshly entered tab the visible
+    /// focus ring points at a field that cannot receive input: `i` enters insert
+    /// mode and every keystroke is silently discarded. `focus_next_*` only
+    /// focuses a field when it moves *toward* inputs, and it blurs when the
+    /// focus area is already the input area, so tab entry has to establish this
+    /// invariant itself.
+    ///
+    /// Idempotent, and a no-op for tabs whose focus area is not their inputs.
+    fn ensure_input_focus(&mut self) {}
     fn is_at_left_edge(&self) -> bool {
         true
     }
@@ -702,25 +746,30 @@ mod tests {
         let tab_window = TabWindow::for_width(term_width, current_tab, 0);
 
         let all_tabs = Tab::all();
-        let tab_widths: Vec<usize> = all_tabs.iter().map(|t| t.title().len()).collect();
+        // Budget is the tabs widget's own area: tab area (term - 2*margin) minus
+        // the block's two borders. Assert the property directly instead of
+        // re-deriving the arithmetic, which is what let the overflow through.
+        let widgets_area_width = (term_width as usize).saturating_sub(4);
+        let group_width = |n: usize| -> usize {
+            all_tabs
+                .iter()
+                .take(n)
+                .map(|t| t.title().len() + TAB_CHROME_WIDTH as usize)
+                .sum::<usize>()
+                .saturating_sub(1)
+        };
 
-        let inner_width = (term_width as usize).saturating_sub(2);
-        let available_width = inner_width.saturating_sub(0 + 2);
-
-        let mut cum_width = 0;
-        let mut expected_max = 0;
-        for (i, &w) in tab_widths.iter().enumerate() {
-            cum_width += w;
-            if cum_width > available_width && i > 0 {
-                break;
-            }
-            expected_max = i + 1;
+        let shown = tab_window.max_visible;
+        assert!(shown >= 1, "narrow widths must still show one tab");
+        assert!(group_width(shown) <= widgets_area_width);
+        if shown < all_tabs.len() {
+            assert!(
+                group_width(shown + 1) > widgets_area_width,
+                "should have fitted one more tab at {term_width} cols"
+            );
         }
-        let expected_max = expected_max.max(1).min(all_tabs.len());
-
-        assert_eq!(tab_window.max_visible, expected_max);
         assert_eq!(tab_window.start, 0);
-        assert_eq!(tab_window.end, expected_max);
+        assert_eq!(tab_window.end, shown);
         assert_eq!(tab_window.selected_visible, 0);
     }
 
@@ -776,6 +825,60 @@ mod tests {
             .find(|s| x >= s.x_start && x < s.x_end)
             .map(|s| s.tab);
         assert_ne!(clicked_tab, Some(Tab::ScanEndpoints));
+    }
+
+    /// Regression: the click hit-boxes must tile the tab bar exactly the way
+    /// ratatui lays it out — each tab's span starts at its own left pad and
+    /// runs to the next tab's left pad, so consecutive spans touch with no gap
+    /// and no overlap. Assuming 2 columns of chrome instead of 3 drifted the
+    /// boxes left by one column per tab, so clicking a tab's right edge
+    /// selected the following tab.
+    #[test]
+    fn visible_tab_spans_tile_without_gaps_or_overlap() {
+        for term_width in [60u16, 80, 100, 120, 160] {
+            let window = TabWindow::for_width(term_width, Tab::Scan, 0);
+            let spans = window.visible_tab_spans(term_width);
+            assert!(!spans.is_empty(), "expected spans at {term_width} cols");
+
+            let mut expected_x = TAB_INNER_ORIGIN;
+            for (i, span) in spans.iter().enumerate() {
+                let title_width = span.tab.title().len() as u16;
+                assert_eq!(
+                    span.x_start, expected_x,
+                    "span {i} start at {term_width} cols"
+                );
+                assert_eq!(
+                    span.x_end,
+                    span.x_start + title_width + TAB_CHROME_WIDTH as u16,
+                    "span {i} end at {term_width} cols"
+                );
+                // Exactly one tab may claim any given column.
+                let claimants = spans
+                    .iter()
+                    .filter(|s| span.x_start >= s.x_start && span.x_start < s.x_end)
+                    .count();
+                assert_eq!(claimants, 1, "column {} claimed twice", span.x_start);
+                expected_x = span.x_end;
+            }
+        }
+    }
+
+    /// Every column of every span must resolve back to that same tab through
+    /// the real click predicate used in `App`'s mouse handler.
+    #[test]
+    fn clicking_any_column_of_a_span_selects_that_tab() {
+        let term_width = 120u16;
+        let window = TabWindow::for_width(term_width, Tab::Scan, 0);
+        let spans = window.visible_tab_spans(term_width);
+        for span in &spans {
+            for x in span.x_start..span.x_end {
+                let clicked = spans
+                    .iter()
+                    .find(|s| x >= s.x_start && x < s.x_end)
+                    .map(|s| s.tab);
+                assert_eq!(clicked, Some(span.tab), "column {x} misrouted");
+            }
+        }
     }
 
     #[test]

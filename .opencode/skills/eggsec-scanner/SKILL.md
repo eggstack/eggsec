@@ -12,6 +12,15 @@ Port scanning and endpoint discovery module workflows and patterns.
 ### Port Scanning (`scanner/ports/`)
 - `mod.rs` - `scan_ports()` entry point, `PortScanConfig`, `PortResult`, `PortScanResults`
 - `spoofed.rs` - Raw socket scanning, `init_packet_trace(path, include_header)` for CSV tracing
+- `PortStatus` - a per-port verdict: `open`/`closed` are *proofs*; `filtered` and
+  `open|filtered` are the *absence* of one. Never render an `open|filtered` as
+  `open`, and never count list membership as "open" -- a UDP run puts every
+  probed port in `open_ports`. Use `PortScanResults::proved_open_ports()`.
+- `PortProtocol` - `Tcp` (default) or `Udp`; `#[serde(default)]` so payloads
+  written before the field existed still load.
+- UDP transport lives in the separate `eggsec-udp-scan` crate behind the
+  `udp-scan` feature; the engine projects it into `PortStatus`/`PortProtocol`.
+  See `architecture/capability_segregation.md`.
 
 ### Endpoint Discovery (`scanner/endpoints.rs`, `scanner/wordlist.rs`)
 - `EndpointScanConfig`, `EndpointResult`, `EndpointScanResults`
@@ -34,9 +43,15 @@ Port scanning and endpoint discovery module workflows and patterns.
 
 | Command | Handler | Key Args |
 |---------|---------|----------|
-| `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--source-ip`, `--decoy` |
+| `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--source-ip`, `--decoy`, `--udp` |
 | `scan-endpoints <url>` | `handle_scan_endpoints()` | `--wordlist`, `--source-ip`, `--concurrency` |
 | `fingerprint <host>` | `handle_fingerprint()` | `--ports`, `--timeout` |
+
+`--udp` is a *sibling* of `--scan-type`, not one of its values: `scan_type` is a
+TCP technique with a strict parser. `--udp` needs the `udp-scan` feature and
+fails closed without it rather than silently scanning TCP. Spoof/decoy/
+fragment/packet-trace/max-rate/ttl options are TCP-SYN concepts and are
+ignored (with a warning) under `--udp`.
 
 ## Critical Patterns
 

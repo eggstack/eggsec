@@ -4,6 +4,8 @@
 
 `audit.rs` provides a single `EnforcementAuditEvent` model for consistent audit records across all execution surfaces (CLI, TUI, REST, MCP, gRPC, Agent, CI). Every meaningful enforcement decision produces an audit event that can be used for debugging, compliance reporting, and agent workflow correlation.
 
+> **Corrections (verified against source 2026-10-06):** `EnforcementAuditEvent` (15 fields), `AuditOutcome` (5 variants), all 21 tests + line cites, and all key-function cites re-verified **unchanged**. Fixed stale cites: `lib.rs` re-export `:205-206` → `:219-221`; REST audit site `rest.rs:743` → `:749`; gRPC audit site `grpc.rs:641` → `:649`; MCP audit site `server.rs:592` → `:598`; `tracing::info!` `:191` → `:192` and `tracing::warn!` `:205` → `:206`; `audit_event_from_preflight` hardcoded `confirmed=false` `:170` → `:169`.
+
 **Non-responsibilities:**
 - Audit emission never changes control flow or return values — it is purely observational.
 - Audit events capture decisions, not request payloads (no full payload serialization).
@@ -15,7 +17,7 @@
 | Item | Path | Feature Gate |
 |------|------|:------------:|
 | Audit module | `crates/eggsec/src/audit.rs` | None (always compiled) |
-| Re-exports | `crates/eggsec/src/lib.rs:205-206` | None |
+| Re-exports | `crates/eggsec/src/lib.rs:219-221` | None |
 | `AuditSummary` (consumer) | `crates/eggsec-output/src/audit_summary.rs` | None |
 | Agent denial recording (consumer) | `crates/eggsec/src/agent/mod.rs:574` | None |
 | REST integration (consumer) | `crates/eggsec/src/tool/protocol/rest.rs` | `rest-api` |
@@ -53,11 +55,11 @@ Derives: `Debug`, `Clone`, `Serialize`, `Deserialize` (`:16`).
 
 | Variant | Source (`from_outcome`, `:49`) | Tracing Level |
 |---------|-------------------------------|---------------|
-| `Allow` | `EnforcementOutcome::Allow` | `info!` (`:191`) |
-| `Warn` | `EnforcementOutcome::Warn` | `info!` (`:191`) |
-| `Confirmed` | `RequireConfirmation` with `confirmed=true` | `info!` (`:191`) |
-| `Deny` | `EnforcementOutcome::Deny` | `warn!` (`:205`) |
-| `ConfirmationRequired` | `RequireConfirmation` with `confirmed=false` | `warn!` (`:205`) |
+| `Allow` | `EnforcementOutcome::Allow` | `info!` (`:192`) |
+| `Warn` | `EnforcementOutcome::Warn` | `info!` (`:192`) |
+| `Confirmed` | `RequireConfirmation` with `confirmed=true` | `info!` (`:192`) |
+| `Deny` | `EnforcementOutcome::Deny` | `warn!` (`:206`) |
+| `ConfirmationRequired` | `RequireConfirmation` with `confirmed=false` | `warn!` (`:206`) |
 
 Serde: `#[serde(rename_all = "kebab-case")]` (`:37`) — serialized as `"allow"`, `"warn"`, `"confirmed"`, `"deny"`, `"confirmation-required"`.
 
@@ -132,8 +134,8 @@ Delegates to `audit_event_from_enforcement_outcome` with hardcoded:
 
 ### Emission (`emit_audit_event`, `:183`)
 
-- `Allow | Warn | Confirmed` → `tracing::info!` with structured fields (`:191-203`).
-- `ConfirmationRequired | Deny` → `tracing::warn!` with identical structured fields (`:205-218`).
+- `Allow | Warn | Confirmed` → `tracing::info!` with structured fields (`:192-204`).
+- `ConfirmationRequired | Deny` → `tracing::warn!` with identical structured fields (`:206-219`).
 - `serde_json::to_string(&event.outcome).unwrap_or_default()` (`:184`) — the `unwrap_or_default` silently converts serialization failure to `"null"`. This is on the error-logging path, not a correctness concern, but worth noting.
 - Fields logged: `event_id`, `decision_id`, `outcome`, `operation`, `surface`, `profile`, `target`, `scope_source`, `manual_override_ignored`.
 
@@ -145,9 +147,9 @@ Delegates to `audit_event_from_enforcement_outcome` with hardcoded:
 |---------|:------------:|----------------------|:--------------:|---------------|
 | CLI | Yes | Accepted overrides include class+reason | None | `commands/handlers/` (via `EnforcementContext`) |
 | TUI | Yes | Accepted overrides include class+reason | None | `eggsec-tui` (via `EnforcementContext`) |
-| REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:743` |
-| MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:592` |
-| gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:641` |
+| REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:749` |
+| MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:598` |
+| gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:649` |
 | Agent | Yes | Never (Agent never confirms) | None | `agent/mod.rs:1090` (`emit_audit_event` call sites: `:1090,:1153,:1188,:1211,:1245`) |
 | CI | Yes | Never | None | Via `EnforcementContext` |
 
@@ -196,7 +198,7 @@ All tests are in `audit.rs:222-765`. Test count: 21 tests total.
 ### Invariants
 
 1. **Purely observational** — Audit emission never changes control flow or return values.
-2. **Preflight never confirms** — `audit_event_from_preflight()` always passes `confirmed=false` (`:170`).
+2. **Preflight never confirms** — `audit_event_from_preflight()` always passes `confirmed=false` (`:169`).
 3. **Manual override only when confirmed** — `manual_override` field is `Some` only if `confirmed=true` AND override was provided (`:128-132`).
 4. **Agent denial bounded to 50** — `recent_policy_denials` drains old entries when exceeding 50 (`agent/mod.rs:579-580`).
 5. **Policy hash is deterministic** — SHA-256 of serialized `ExecutionPolicy`, 64 hex chars, stable across calls (`:525-531`).
@@ -212,4 +214,4 @@ All tests are in `audit.rs:222-765`. Test count: 21 tests total.
 
 ---
 
-*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review); agent cites re-verified 2026-09-25*
+*Last verified against source: 2026-08-25; counts/cites re-verified 2026-09-22 (systematic review); agent cites re-verified 2026-09-25; 7 stale cites (lib.rs, rest, grpc, mcp, info!/warn!, preflight) fixed 2026-10-06 (systematic review)*

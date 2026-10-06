@@ -106,6 +106,13 @@ fn named_color(name: &str) -> Option<Color> {
 fn parse_hex_color(s: &str) -> Option<Color> {
     let s = s.trim();
     if let Some(hex) = s.strip_prefix('#') {
+        // Reject non-ASCII before any slicing. `hex.len()` counts *bytes*, so a
+        // color like "#aébcd" is 6 bytes long and would pass the length match
+        // below, then panic when `&hex[0..2]` lands inside the multi-byte 'é'.
+        // ASCII-only input makes every index a char boundary by construction.
+        if !hex.is_ascii() {
+            return None;
+        }
         match hex.len() {
             6 => {
                 let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
@@ -132,6 +139,12 @@ fn parse_color_or(s: &Option<String>, default: Color) -> Color {
 
 fn luminance(color: &str) -> f64 {
     if let Some(hex) = color.strip_prefix('#') {
+        // Reject non-ASCII before any slicing, for the same reason as
+        // `parse_hex_color`: `len()` is a byte count, so a multi-byte color
+        // string would otherwise be sliced mid-character and panic.
+        if !hex.is_ascii() {
+            return 0.5;
+        }
         // Expand 3-char shorthand hex (#FFF -> #FFFFFF) before parsing
         let hex = if hex.len() == 3 {
             let mut expanded = String::with_capacity(6);
@@ -455,6 +468,43 @@ background = "#2E3440"
     fn invalid_hex_returns_none() {
         assert!(parse_hex_color("#ZZZZZZ").is_none());
         assert!(parse_hex_color("notacolor").is_none());
+    }
+
+    #[test]
+    fn non_ascii_hex_is_rejected_without_panicking() {
+        // Regression: these are 6 *bytes* but not 6 hex digits. Slicing
+        // [0..2] landed inside the multi-byte char and panicked, aborting the
+        // process in release builds (panic = "abort").
+        assert!(parse_hex_color("#a\u{e9}bcd").is_none());
+        assert!(parse_hex_color("#\u{00e9}bcdef").is_none());
+        // 3-byte shorthand path has the same exposure.
+        assert!(parse_hex_color("#\u{e9}bc").is_none());
+    }
+
+    #[test]
+    fn non_ascii_luminance_is_neutral_without_panicking() {
+        // Same regression for `luminance`, which slices by byte offset.
+        assert!((luminance("#a\u{e9}bcd") - 0.5).abs() < f64::EPSILON);
+        assert!((luminance("#\u{00e9}bcd") - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn non_ascii_background_falls_back_instead_of_aborting() {
+        // End-to-end: an unvalidated user theme file must load and fall back
+        // to the default palette rather than killing the loader thread. The
+        // fallback is whatever a background-less theme resolves to, so this
+        // asserts behaviour rather than a hard-coded colour.
+        // A non-ASCII colour is unknown, so the background falls back to the
+        // default of the mode that got selected. `luminance` reports the neutral
+        // midpoint for it, which resolves to the light mode.
+        let outcome =
+            load_halloy_theme("[general]\nbackground = \"#a\u{e9}bcd\"\n", "non-ascii-bg")
+                .expect("non-ASCII background must not fail theme load");
+        assert_eq!(outcome.theme.mode, ThemeMode::Light);
+        assert_eq!(
+            outcome.theme.colors.background,
+            light_theme().colors.background
+        );
     }
 
     #[test]

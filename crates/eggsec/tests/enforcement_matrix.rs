@@ -9,10 +9,10 @@
 //! This file is the canonical cross-surface guardrail.
 
 use eggsec::config::{
-    metadata_for_tool_id, Capability, ConfirmationClass, EnforcementContext, EnforcementOutcome,
-    ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope, ManualOverride,
-    OperationDescriptor, OperationMetadata, OperationMode, OperationRisk, Scope, ScopeRule,
-    ScopeSource,
+    metadata_for_tool_id, Capability, ConfirmationClass, DenialClass, EnforcementContext,
+    EnforcementOutcome, ExecutionPolicy, ExecutionProfile, ExecutionSurface, LoadedScope,
+    ManualOverride, OperationDescriptor, OperationMetadata, OperationMode, OperationRisk, Scope,
+    ScopeRule, ScopeSource,
 };
 
 // ---------------------------------------------------------------------------
@@ -3412,4 +3412,137 @@ fn approval_token_rejects_different_target() {
     assert_eq!(approved.descriptor().operation, "matrix-op");
     assert_eq!(approved.surface(), ExecutionSurface::RestApi);
     assert_eq!(approved.profile(), ExecutionProfile::McpStrict);
+}
+
+// ---------------------------------------------------------------------------
+// Target-less operations on strict surfaces
+// ---------------------------------------------------------------------------
+
+/// A strict surface must be able to run an operation that has no target.
+///
+/// Regression guard for a policy that was self-contradictory: `storage`,
+/// `integrations` and `workflow` all have `canonical_target() == None`, so
+/// declaring `ExplicitScopeRequired` made descriptor construction fail with
+/// `MissingTarget` and left them unrunnable on REST, MCP, agent and gRPC.
+/// The intent here is that "no target" is a legitimate state, not a missing
+/// one.
+#[test]
+fn strict_surface_allows_target_less_operation() {
+    for op in ["storage", "integrations", "workflow"] {
+        let metadata =
+            metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} should have metadata"));
+        let desc = metadata
+            .try_descriptor_for_target(None)
+            .unwrap_or_else(|e| panic!("{op} should build a target-less descriptor: {e}"));
+        assert_eq!(desc.operation, op);
+        assert!(desc.target.is_none());
+
+        // Grant the operation's own capability and enable its feature, so a
+        // denial here can only be about the target dimension. Leaving them
+        // ungranted would let the assertion pass for the wrong reason: a
+        // capability or feature denial also blocks the run, but it says
+        // nothing about target policy.
+        let caps: Vec<Capability> = metadata.required_capabilities.to_vec();
+        let mut enabled: Vec<String> = metadata
+            .required_features
+            .iter()
+            .map(|f| f.to_string())
+            .collect();
+        enabled.push("database".to_string());
+        enabled.push("external-integrations".to_string());
+        enabled.push("finding-workflow".to_string());
+        let mut ctx = ctx_for_surface(
+            ExecutionSurface::McpServer,
+            ExecutionPolicy {
+                allowed_capabilities: caps,
+                ..Default::default()
+            },
+            LoadedScope::default(),
+        );
+        ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled);
+        let outcome = ctx.evaluate(&desc);
+        let classes = &outcome.decision().denial_classes;
+        assert!(
+            !classes.contains(&DenialClass::ScopeMissing)
+                && !classes.contains(&DenialClass::TargetOutOfScope)
+                && !classes.contains(&DenialClass::InvalidTarget),
+            "{op} was still blocked on the target dimension: {classes:?}"
+        );
+    }
+}
+
+/// The relaxation must not become a scope bypass for a supplied target.
+///
+/// This is the security property that makes relaxing the no-target branch
+/// acceptable: a caller that *does* attach a target still has it checked
+/// against the loaded scope, and an out-of-scope target is still denied.
+#[test]
+fn strict_surface_still_denies_out_of_scope_target_on_relaxed_operation() {
+    let metadata = metadata_for_tool_id("storage").expect("storage should have metadata");
+    let desc = metadata
+        .try_descriptor_for_target(Some("10.9.9.9"))
+        .expect("a supplied target is still accepted");
+    assert_eq!(desc.target.as_deref(), Some("10.9.9.9"));
+
+    let caps: Vec<Capability> = metadata.required_capabilities.to_vec();
+    let policy = ExecutionPolicy {
+        allowed_capabilities: caps,
+        ..Default::default()
+    };
+
+    // Grant the operation's own required features as well as its capability.
+    // Without this, `storage` denies on `required feature 'database' is not
+    // enabled` before the scope dimension is ever reached, and the
+    // "in-scope target is allowed" assertion below would fail for a reason that
+    // has nothing to do with target policy. Mirrors the setup in
+    // `strict_surface_allows_target_less_operation`.
+    let enabled: Vec<String> = metadata
+        .required_features
+        .iter()
+        .map(|f| f.to_string())
+        .collect();
+
+    // A scope that does not cover the target must still deny it.
+    let mut ctx = ctx_for_surface(
+        ExecutionSurface::McpServer,
+        policy.clone(),
+        loaded_explicit(scope_allow("192.168.0.0/16")),
+    );
+    ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled.clone());
+    let outcome = ctx.evaluate(&desc);
+    assert!(
+        !outcome.is_allowed(),
+        "an out-of-scope target on a relaxed operation must still be denied, got {outcome:?}"
+    );
+
+    // And a scope that does cover it must allow it, proving the descriptor is
+    // genuinely being scope-checked rather than waved through.
+    let mut allow_ctx = ctx_for_surface(
+        ExecutionSurface::McpServer,
+        policy,
+        loaded_explicit(scope_allow("10.0.0.0/8")),
+    );
+    allow_ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled);
+    let allowed = allow_ctx.evaluate(&desc);
+    assert!(
+        allowed.is_allowed(),
+        "an in-scope target should be allowed, got {allowed:?}"
+    );
+}
+
+/// Interface-bound sniffing keeps requiring an explicit scope.
+///
+/// The counterpart to the relaxation above: `packet` and `wireless` are also
+/// target-less, but they sniff, so requiring a loaded scope is the only lever an
+/// operator has over them and it stays.
+#[test]
+fn strict_surface_still_requires_scope_for_interface_bound_operations() {
+    for op in ["packet", "wireless", "wireless-deauth"] {
+        let metadata =
+            metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} should have metadata"));
+        assert!(
+            metadata.try_descriptor_for_target(None).is_err(),
+            "{op} should still refuse a target-less run"
+        );
+    }
 }

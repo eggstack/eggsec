@@ -246,14 +246,25 @@ impl TuiRuntimeAdapter {
                 TuiAction::TabError(mut tab, message) => {
                     tab.as_tab_state_mut(app)
                         .set_error(crate::app::tab_error::TabError::Target(message));
+                    // Terminal lifecycle event: the task is over even if the
+                    // typed result never arrives (daemon mode, or a failure).
+                    app.clear_active_task_state_for(tab);
                     dirty = true;
                 }
                 TuiAction::TabCancelled(mut tab, _reason) => {
                     tab.as_tab_state_mut(app).reset();
+                    app.clear_active_task_state_for(tab);
                     dirty = true;
                 }
-                TuiAction::TabCompleted(_tab, _outcome) => {
+                TuiAction::TabCompleted(tab, _outcome) => {
                     // Typed TaskResult continues through result_rx as compatibility bridge.
+                    //
+                    // `result_rx` is NOT closed on completion (its sender is held by the
+                    // App-owned `executor_context` ArcSwap for the session), so channel
+                    // closure cannot be used as the "task finished" signal. This
+                    // authoritative event is that signal — without clearing here the
+                    // status bar reports a running task forever and `q` never quits.
+                    app.clear_active_task_state_for(tab);
                     dirty = true;
                 }
                 TuiAction::TabStarted(_tab, _task_id) => {

@@ -78,6 +78,9 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::Pipeline(PipelineParams {
             target: "https://example.com".into(),
             profile: None,
+            output_format: None,
+            output_file: None,
+            session_path: None,
         }),
         TaskKind::Recon(ReconParams {
             target: "example.com".into(),
@@ -109,6 +112,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
             target: "10.0.0.1".into(),
             script: "default".into(),
             args: None,
+            custom_script: None,
         }),
         TaskKind::Hunt(HuntParams {
             target: "https://example.com".into(),
@@ -125,6 +129,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::Storage(StorageParams {
             storage_type: "findings".into(),
             path: None,
+            ..Default::default()
         }),
         TaskKind::Integrations(IntegrationsParams {
             integration_type: "jira".into(),
@@ -145,6 +150,7 @@ fn all_task_kinds() -> Vec<TaskKind> {
         TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }),
         TaskKind::DbPentest(DbPentestParams {
             db_type: "postgres".into(),
@@ -324,6 +330,7 @@ fn multiplexer_families_share_operations_explicitly() {
     let active = TaskKind::WirelessActive(WirelessActiveParams {
         interface: None,
         target_bssid: None,
+        ..Default::default()
     });
     assert_eq!(wifi.operation_id(), "wireless");
     assert_eq!(active.operation_id(), "wireless");
@@ -379,23 +386,16 @@ fn runtime_surface_wire_labels_are_stable() {
 
 #[test]
 fn no_target_and_interface_families_fail_descriptor_explicitly() {
-    // These kinds carry no canonical target; the bridge must fail with
-    // InvalidTarget (explicit) rather than UnsupportedTaskKind or a silent
-    // downgrade.
+    // These kinds are *interface*-bound: without an interface/target they
+    // cannot proceed at all, so the bridge must fail with InvalidTarget
+    // (explicit) rather than UnsupportedTaskKind or a silent downgrade.
+    //
+    // Target-less *operations* (storage / integrations / workflow) are
+    // deliberately not here: they legitimately resolve a target-less
+    // descriptor, gated behind a required feature and capability. Their contract
+    // is asserted by `target_less_operations_stay_gated`.
     let kinds = [
         TaskKind::PacketCapture(PacketCaptureParams::default()),
-        TaskKind::Storage(StorageParams {
-            storage_type: "findings".into(),
-            path: None,
-        }),
-        TaskKind::Integrations(IntegrationsParams {
-            integration_type: "jira".into(),
-            config: None,
-        }),
-        TaskKind::Workflow(WorkflowParams {
-            workflow_id: None,
-            steps: None,
-        }),
         TaskKind::Wireless(WirelessParams {
             interface: None,
             duration_secs: None,
@@ -403,6 +403,7 @@ fn no_target_and_interface_families_fail_descriptor_explicitly() {
         TaskKind::WirelessActive(WirelessActiveParams {
             interface: None,
             target_bssid: None,
+            ..Default::default()
         }),
     ];
     for kind in &kinds {
@@ -412,6 +413,63 @@ fn no_target_and_interface_families_fail_descriptor_explicitly() {
         assert!(
             matches!(err, RuntimeBridgeError::InvalidTarget { .. }),
             "{kind:?}: expected InvalidTarget, got {err}"
+        );
+    }
+}
+
+#[test]
+fn target_less_operations_stay_gated() {
+    // A target-less descriptor is only safe if enforcement still has something
+    // to deny on. Each of these operations must therefore keep declaring the
+    // feature it belongs to plus a required capability; if either is dropped, a
+    // strict surface would have nothing left to gate the operation on.
+    let cases = [
+        (
+            "storage",
+            "database",
+            TaskKind::Storage(StorageParams {
+                storage_type: "findings".into(),
+                path: None,
+                ..Default::default()
+            }),
+        ),
+        (
+            "integrations",
+            "external-integrations",
+            TaskKind::Integrations(IntegrationsParams {
+                integration_type: "jira".into(),
+                config: None,
+            }),
+        ),
+        (
+            "workflow",
+            "finding-workflow",
+            TaskKind::Workflow(WorkflowParams {
+                workflow_id: None,
+                steps: None,
+            }),
+        ),
+    ];
+
+    for (operation, feature, kind) in cases {
+        assert_eq!(kind.canonical_target(), None, "{kind:?}");
+        let req = run_request_for(kind.clone());
+        let desc = descriptor_for_run_request(&req)
+            .unwrap_or_else(|e| panic!("{operation}: expected a target-less descriptor, got {e}"));
+
+        assert_eq!(desc.operation, operation);
+        assert!(
+            desc.target.is_none(),
+            "{operation} must not invent a target"
+        );
+        assert!(
+            desc.required_features.iter().any(|f| f == feature),
+            "{operation} must keep requiring the `{feature}` feature, got {:?}",
+            desc.required_features
+        );
+        assert!(
+            !desc.required_capabilities.is_empty(),
+            "{operation} must keep at least one required capability, else a strict surface has nothing to gate on"
         );
     }
 }
@@ -441,6 +499,10 @@ fn envelope_kinds_are_stable_wire_discriminators() {
                 results_truncated: false,
                 duration_ms: 500,
                 spoof_stats: None,
+                #[cfg(feature = "udp-scan")]
+                udp_host_state: None,
+                #[cfg(feature = "udp-scan")]
+                udp_evidence: None,
             }),
             "port-scan",
         ),

@@ -248,6 +248,11 @@ impl Default for ScanTab {
 }
 
 impl TabState for ScanTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -486,11 +491,20 @@ pub enum ScanFocusArea {
 }
 
 impl TabInput for ScanTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            crate::tabs::core::ensure_group_field_focused(&mut self.inputs);
+        }
+    }
+
     fn stop(&mut self) {
         ScanTab::stop(self);
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ScanFocusArea::Inputs => {
                 self.inputs.blur();
@@ -512,6 +526,9 @@ impl TabInput for ScanTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ScanFocusArea::Inputs => {
                 self.inputs.blur();
@@ -685,6 +702,9 @@ impl TabInput for ScanTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.profile_selector.is_open() {
             self.profile_selector.move_prev();
             self.update_stages_for_profile();
@@ -701,6 +721,9 @@ impl TabInput for ScanTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.profile_selector.is_open() {
             self.profile_selector.move_next();
             self.update_stages_for_profile();
@@ -785,5 +808,70 @@ impl TabInput for ScanTab {
 
     fn primary_target(&self) -> Option<String> {
         Some(self.target().to_string())
+    }
+}
+
+#[cfg(test)]
+mod running_guard_tests {
+    use super::*;
+
+    /// A tab with a target, mid-run: exactly the state during a pipeline run.
+    fn running_tab() -> ScanTab {
+        let mut tab = ScanTab::new();
+        if let Some(field) = tab.inputs.fields.first_mut() {
+            field.value = "example.com".to_string();
+        }
+        tab.start();
+        assert!(tab.is_running());
+        tab
+    }
+
+    #[test]
+    fn test_focus_next_is_ignored_while_running() {
+        let mut tab = running_tab();
+        tab.focus_area = ScanFocusArea::ProfileSelector;
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ScanFocusArea::ProfileSelector);
+    }
+
+    #[test]
+    fn test_focus_prev_is_ignored_while_running() {
+        let mut tab = running_tab();
+        tab.focus_area = ScanFocusArea::ProfileSelector;
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, ScanFocusArea::ProfileSelector);
+    }
+
+    #[test]
+    fn test_up_does_not_move_profile_while_running() {
+        let mut tab = running_tab();
+        tab.profile_selector.open();
+        let before = tab.profile_selector.selected;
+        tab.handle_up();
+        assert!(
+            tab.profile_selector.is_open(),
+            "dropdown state is untouched"
+        );
+        assert_eq!(tab.profile_selector.selected, before);
+    }
+
+    #[test]
+    fn test_down_does_not_rebuild_stages_while_running() {
+        let mut tab = running_tab();
+        let stages_before = tab.stages.len();
+        let selected_before = tab.profile_selector.selected;
+        tab.handle_down();
+        assert_eq!(tab.stages.len(), stages_before);
+        assert_eq!(tab.profile_selector.selected, selected_before);
+    }
+
+    #[test]
+    fn test_navigation_works_again_after_stop() {
+        let mut tab = running_tab();
+        ScanTab::stop(&mut tab);
+        assert!(!tab.is_running());
+        tab.focus_area = ScanFocusArea::ProfileSelector;
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ScanFocusArea::OutputSelector);
     }
 }

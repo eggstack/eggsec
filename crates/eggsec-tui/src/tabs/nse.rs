@@ -1,6 +1,7 @@
 use super::nse_report_view::{
     render_filtered_report, render_report_sections, NseReportSection, NseSectionContent,
 };
+use crate::app::tab_error::TabError;
 use crate::components::{empty_state_paragraph, Selector, SelectorItem};
 use crate::tabs::core::{render_config_block, render_error_block, render_input_fields, TabCore};
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
@@ -265,6 +266,31 @@ impl TabRender for NseTab {
             }
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        if self.core.error.is_some() {
+            return;
+        }
+
+        // Mirrors the selector row layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(12),
+                Constraint::Length(4),
+                Constraint::Min(5),
+            ])
+            .split(area);
+
+        if let Some(selector_area) = chunks.get(1) {
+            if let Some(dropdown) = self
+                .script_selector
+                .dropdown_info(*selector_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+    }
 }
 
 impl TabInput for NseTab {
@@ -332,6 +358,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => NseFocusArea::ScriptSelector,
             NseFocusArea::ScriptSelector => NseFocusArea::Results,
@@ -344,6 +373,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => NseFocusArea::Results,
             NseFocusArea::ScriptSelector => NseFocusArea::Inputs,
@@ -428,6 +460,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             NseFocusArea::Inputs => {
                 self.core.inputs.focus_prev();
@@ -442,6 +477,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             NseFocusArea::Inputs => {
                 self.core.inputs.focus_next();
@@ -481,13 +519,42 @@ impl TabInput for NseTab {
 impl NseTab {
     pub fn start(&mut self) {
         if self.target().is_empty() {
+            // Previously a silent `return`: the tab stayed Idle with no
+            // explanation, which read as "nothing happens". Say why.
+            self.core.error = Some(TabError::Target(
+                "Target host / URL is required to run an NSE scan".to_string(),
+            ));
             return;
         }
+        // A custom script path used to be refused here because `NseParams` had
+        // nowhere to carry it, so the only canonical executor could run a named
+        // built-in script. `NseParams::custom_script` now carries the path and
+        // the engine resolves it through `NseScriptSource::File` /
+        // `ScriptResolver`, so the operator gets the script they actually
+        // picked. Keep a blank-path check rather than trusting the builder:
+        // a whitespace-only path would otherwise resolve as a literal filename.
+        if let Some(path) = self.custom_script() {
+            if path.trim().is_empty() {
+                self.core.error = Some(TabError::Config(
+                    "The custom NSE script path is blank. Clear the field to use \
+                     the selected built-in script."
+                        .to_string(),
+                ));
+                return;
+            }
+        }
+        self.core.error = None;
         if self.core.state != AppState::Running {
             self.core.progress.current = 0;
             self.core.progress.total = 0;
             self.core.state = AppState::Running;
         }
+    }
+
+    /// True when the operator asked for a custom script rather than a
+    /// built-in one, either via the selector or a typed path.
+    pub fn uses_custom_script(&self) -> bool {
+        self.custom_script().is_some() || self.script() == "custom"
     }
 
     /// Cycle through report filters: None → Summary → Compatibility → ... → Diagnostics → None.
@@ -595,5 +662,115 @@ impl NseTab {
     #[cfg(feature = "nse")]
     pub fn has_report(&self) -> bool {
         self.structured_report.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn script_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = NseTab::new();
+        tab.script_selector.focus();
+        tab.focus_area = NseFocusArea::ScriptSelector;
+        tab.handle_enter();
+        assert!(tab.script_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the second layout row.
+        let anchor = Rect::new(0, 12, 80, 4);
+        let info = tab
+            .script_selector
+            .dropdown_info(anchor, 24)
+            .expect("expanded script selector must yield a dropdown");
+        assert_eq!(info.area.y, anchor.y + anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 2 && label == "Banner Grab"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected scripts.
+        assert!(
+            text.contains("Banner Grab") && text.contains("Custom Script"),
+            "expanded script dropdown should be drawn"
+        );
+    }
+
+    /// A missing target used to leave the tab silently Idle.
+    #[test]
+    fn start_without_target_reports_an_error() {
+        let mut tab = NseTab::new();
+        tab.focus_area = NseFocusArea::Inputs;
+        tab.handle_enter();
+        assert!(tab.core.error.is_some(), "empty target must explain itself");
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    /// A custom script path now crosses `NseParams::custom_script`, so Enter
+    /// starts the run instead of refusing. The path must reach the request
+    /// unchanged: it is the operator's chosen script, and substituting the
+    /// built-in one would run a different check than the one on screen.
+    #[test]
+    fn start_with_custom_script_path_dispatches_the_path() {
+        use crate::app::task_management::TaskBuilder;
+        use eggsec_runtime::request::TaskKind;
+
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        tab.core.inputs.fields.get_mut(2).unwrap().value = "/tmp/custom.nse".into();
+        assert!(tab.uses_custom_script());
+
+        tab.start();
+        assert!(tab.core.error.is_none(), "{:?}", tab.core.error);
+        assert_eq!(tab.core.state, AppState::Running);
+
+        let req = tab
+            .build_run_request()
+            .expect("a runnable NSE tab must produce a request");
+        let TaskKind::Nse(params) = req.task_kind else {
+            panic!("expected an Nse task kind, got {:?}", req.task_kind);
+        };
+        assert_eq!(
+            params.custom_script.as_deref(),
+            Some("/tmp/custom.nse"),
+            "the operator's script path must reach the engine verbatim"
+        );
+    }
+
+    /// A whitespace-only path would otherwise resolve as a literal filename.
+    #[test]
+    fn start_with_blank_custom_script_path_reports_an_error() {
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        tab.core.inputs.fields.get_mut(2).unwrap().value = "   ".into();
+
+        tab.start();
+        assert!(
+            tab.core.error.is_some(),
+            "a blank custom script path must be reported, not dispatched"
+        );
+        assert_eq!(tab.core.state, AppState::Idle);
+    }
+
+    #[test]
+    fn start_with_built_in_script_enters_running() {
+        let mut tab = NseTab::new();
+        tab.core.inputs.fields.get_mut(0).unwrap().value = "example.com".into();
+        assert!(!tab.uses_custom_script());
+        tab.start();
+        assert!(tab.core.error.is_none());
+        assert_eq!(tab.core.state, AppState::Running);
     }
 }

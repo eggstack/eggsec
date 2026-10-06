@@ -38,7 +38,7 @@ mod tests {
 
     /// Helper tabs: report-style, no operation-backed dispatch.
     fn helper_tabs() -> BTreeSet<&'static str> {
-        BTreeSet::from(["report", "resume", "proxy"])
+        BTreeSet::from(["report", "proxy"])
     }
 
     /// Lifecycle tabs: daemon/server session management.

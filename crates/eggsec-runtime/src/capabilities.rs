@@ -150,6 +150,7 @@ fn task_kind_name(kind: &TaskKind) -> &'static str {
         TaskKind::Waf(_) => "waf",
         TaskKind::WafStress(_) => "waf-stress",
         TaskKind::Pipeline(_) => "pipeline",
+        TaskKind::Resume(_) => "resume",
         TaskKind::Recon(_) => "recon",
         TaskKind::PacketCapture(_) => "packet-capture",
         TaskKind::PacketTraceroute(_) => "traceroute",
@@ -317,6 +318,7 @@ mod tests {
             scan_type: None,
             timeout_ms: None,
             concurrency: None,
+            udp: None,
         })));
         assert!(caps.supports_task_kind(&TaskKind::Recon(ReconParams {
             target: "example.com".into(),

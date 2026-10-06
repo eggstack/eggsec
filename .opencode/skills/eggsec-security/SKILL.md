@@ -67,6 +67,12 @@ eggsec scan-ports 192.168.1.1 -p 1-65535
 
 # With IP spoofing (stress-testing feature, Unix only)
 eggsec scan-ports 192.168.1.1 --source-ip 10.0.0.1
+
+# UDP instead of TCP (udp-scan feature; root needed on Linux only)
+# UDP cannot prove a port is open: a silent port is reported "open|filtered",
+# meaning it may be open behind a filter or closed behind one. Only "closed"
+# and "open" are proven.
+eggsec scan-ports 192.168.1.1 -p 53,161,500 --udp
 ```
 
 ### 3. Endpoint Discovery

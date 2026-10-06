@@ -1,4 +1,4 @@
-# Capability Segregation Decisions (Phase E WS2–WS4 + Phase C policy extraction + Phase D loadtest/resilience closure)
+# Capability Segregation Decisions (Phase E WS2–WS4 + Phase C policy extraction + Phase D loadtest/resilience closure + Phase G knowledge-corpus evaluation)
 
 Status: Phase E decided 2026-09-13 (no new crates; all WS4 candidates rejected).
 Phase C (crate-boundary consolidation, 2026-09-16) extracts `eggsec-policy`
@@ -6,6 +6,9 @@ below; `eggsec-net` / web-client / evidence rejections remain in force.
 Phase D (crate-boundary consolidation, 2026-09-16) decouples load testing
 internally and rejects both `eggsec-loadtest` and `eggsec-resilience`
 (see Phase D section below).
+Phase G (2026-10-05) evaluates data-shaped **knowledge-corpus** modules and
+proposes three leaf crates under `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md`;
+no Phase E WS4 or Phase D rejection is reopened.
 WS2 (empty library default) and WS3 (per-crate Tokio) implemented; this record
 covers WS4 extraction evaluations with the required decision fields.
 
@@ -211,6 +214,270 @@ evaluated against the roadmap's decision rule and rejected:
 - Incidental cleanup: `utils::cache::ApiCache` (zero production consumers,
   flagged in Phase A) removed.
 
+## Phase F — `eggsec-udp-scan` (UDP port scanning): ACCEPT as a separate crate
+
+**Decision:** accept a new domain crate `crates/eggsec-udp-scan`, dependent on
+`libc` only. It authorizes nothing, resolves no DNS, renders no output, and
+never acquires privilege — it *reports* that privilege is required.
+
+**Why a crate and not engine code.** Three reasons, in order of weight:
+
+1. **The primitives are incompatible, not merely different.** TCP scanning
+   works by handshake: a failed `connect` is a definitive `closed`, so the
+   result is a 2-state boolean list. UDP has no handshake. A send always
+   "succeeds" and the answer lives in a negative, rate-limited, out-of-band
+   signal. The existing per-port `Option<PortResult>` shape cannot express
+   "a correlated negative that may never arrive".
+2. **The authorization facts differ.** A TCP port scan needs
+   `Capability::ActiveProbe`. Receiving unsolicited ICMP errors needs
+   `Capability::RawPacketProbe` and, on Linux, a platform privilege gate.
+   Those belong in different metadata records, not one union type.
+3. **The result type differs in kind.** TCP is a boolean list. UDP is a
+   four-state lattice with per-state evidence *plus a host-level verdict that
+   can invalidate the per-port claims*. Forcing that into
+   `PortResult { port, status: String, service: String }` makes the state
+   stringly-typed and pushes the state machine onto every consumer.
+
+**What it shares with the TCP scanner: shape, not code.** It mirrors the
+bounded-concurrency admission discipline so operators see consistent progress
+semantics, and reuses the engine's result-mapping boundary. It does not
+generalise, reuse, or subclass the TCP scan loop.
+
+### Platform findings (measured, not assumed)
+
+The usual "unprivileged tier" designs start from `IP_RECVERR` on Linux
+connected sockets. Both halves of that premise were checked against this
+repository's development platform (darwin/arm64, `euid != 0`) and **neither
+holds**:
+
+| Claim | Measured result |
+| --- | --- |
+| `socket2` 0.5 exposes `IP_RECVERR` | No such accessor. `Socket::as_raw()` is `pub(crate)`, so even a `libc::setsockopt` shim is impossible against a `socket2` socket. |
+| `IP_RECVERR` exists on macOS/BSD | Undeclared. The constant does not compile. |
+| macOS unprivileged ICMP | `socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMPV4)` **succeeds unprivileged** and delivers port-unreachable for UDP probes, with the originating IPv4 header attached. `SOCK_RAW` for the same protocol returns `EPERM`. |
+
+So the crate uses `libc` directly rather than `socket2`, and the unprivileged
+tier is available on macOS/BSD and *not* on Linux — the inverse of the usual
+assumption. The ICMP parser accepts both delivery shapes (raw socket strips
+the IPv4 header, datagram socket keeps it) and the tests assert the two parse
+identically.
+
+### Honesty contract
+
+The crate's load-bearing invariant is that **closed is provable and open is
+not**. Silence is ambiguous across four cases, so it is reported as
+`open|filtered` and never as `open`, and a port list from a host that produced
+no attributable ICMP is explicitly marked not meaningful via `HostState`.
+Reporting `open` requires a protocol-specific probe, which is a different
+operation with different authorization requirements (arbitrary protocol
+payloads on the wire is materially closer to packet injection than to
+`ActiveProbe`) and is out of scope for this crate.
+
+### Supply chain
+
+`libc` is already a direct workspace dependency (`crates/eggsec/Cargo.toml:131`)
+and already in `Cargo.lock`; `socket2` and `pnet` are likewise already present.
+`deny.toml` needs no new entry and no new exception: the crate introduces no
+new graph node. `pnet`/`pnet_packet` are deliberately **not** used — a raw or
+datagram ICMP socket is a plain BSD socket, so pulling in `pnet` would drag the
+`libpcap-dev` system dependency in for no benefit.
+
+## Phase G — Knowledge-corpus modules (2026-10-05): PROPOSED, 3 leaf crates
+
+Full decision: `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md`.
+Roadmap: `plans/subsystems/security-knowledge-corpus-roadmap.md`.
+Implementation plans: `plans/implementation/security-knowledge-corpus/001…005`.
+
+**Status: proposed — not implemented.** Nothing in this section is a code change yet.
+
+### Why this category is new
+
+Phases A–F evaluated *logic* clusters: policy semantics, report contracts, load-test
+internals, web-client vs interception proxy, evidence crypto. Phase G evaluates a
+category none of them addressed — **domain knowledge expressed as data**, where the
+coupling is near zero because the module's job is to hold a body of knowledge rather
+than to reach outward. The engine's large modules (`fuzzer`, `recon`, `scanner`, `waf`,
+`distributed`) are *not* in this category: they are executor bodies whose coupling is
+their function, and Phase C/D/WS4's rejections of them stand unchanged.
+
+### Dependency delta (measured, not assumed)
+
+| Module | Lines | `crate::` coupling | Workspace deps after | Tests |
+|---|---|---|---|---|
+| `fuzzer/payloads/` pure-data subset | 7,084 | ~0 | `eggsec-core` | 233 |
+| `recon/secrets.rs` | 492 | 1 (`Severity`) | `eggsec-core` | 11 |
+| `scanner/service_data.rs` | 302 | 0 | none | 21 |
+
+All three were validated by extraction spike: copied into scratch crates and compiled
+with their full original test suites passing. The payload corpus needed exactly four
+mechanical edits (two `Severity` import rewrites, one `crate::fuzzer::payloads` path
+rewrite, one `$crate` macro path); the service table needed **none**.
+
+The decisive structural fact: `Severity` is already owned by `eggsec-core`, a
+zero-internal-dependency leaf (`crates/eggsec/src/types.rs:16` re-exports it). Any module
+whose only engine reference is `Severity` is one import away from being a leaf crate —
+the same rationale that justified `eggsec-policy` in Phase C.
+
+### Proposals
+
+| Crate | Contents | Rationale |
+|---|---|---|
+| `eggsec-service-db` | port→service tables, banner heuristics | zero workspace deps, zero consumers, 21 tests; `nmap-services`-style corpus |
+| `eggsec-secrets` | 25 credential patterns, entropy scoring | pure regex+entropy over strings; gitleaks/trufflehog-adjacent |
+| `eggsec-payloads` | 40 data-only payload modules | largest closure reduction; SecLists/ffuf-adjacent |
+
+Each lands as `publish = false` with an engine re-export facade, so **no consumer import
+changes** — the `eggsec-python` exhaustive matches over 30 `SecretType` and 40
+`PayloadType` variants compile untouched.
+
+**Status: `eggsec-service-db` implemented (milestone 002).** 302 lines moved verbatim,
+21 tests green in isolation, single dependency edge (`rustc-hash`) confirmed by
+`cargo tree`. The engine reaches it only through
+`pub use eggsec_service_db as service_data;`, and `git diff` shows **zero** changes in
+`scanner/ports/`, `eggsec-python`, `eggsec-tui`, `eggsec-mobile-lab`, or
+`crates/eggsec/tests/`. Check 114's canonical-owner pin moved to
+`crates/eggsec-service-db/src/lib.rs` (and now also fails if the old engine-side file
+reappears, or if the engine facade is dropped). **Check 148** enforces the leaf invariant
+for every corpus crate and is demonstrated to fail on a forbidden dependency.
+`cargo test -p eggsec-service-db --tests` is registered in `make check`.
+
+**Status: `eggsec-secrets` implemented (milestone 003).** 492 lines moved with **exactly
+one** source change — `pub use crate::types::Severity` → `pub use
+eggsec_core::types::Severity`. The 25-pattern corpus, 30 `SecretType` variants, 3
+`Confidence` tiers, and the entropy gate are byte-identical; the 11-test count is
+unchanged. `cargo tree` shows `eggsec-core` as the only workspace edge. The engine facade
+`pub use eggsec_secrets as secrets;` preserved `eggsec::recon::secrets::*` with an
+**empty** diff across `crates/eggsec-python/`, `crates/eggsec-mobile-lab/`,
+`crates/eggsec-tui/`, and `crates/eggsec/tests/` — the milestone's defining constraint,
+since the bindings match all 30 variants exhaustively. `git_secrets.rs` (subprocess
+orchestration) stays engine-side. **Check 149** pins the owner, the facade, and the
+entropy constant. `cargo test -p eggsec-secrets --tests` is registered in `make check`.
+
+**Status: `eggsec-payloads` implemented (milestone 004), then corrected.** The 34 pure-data
+payload modules (7,084 lines) moved to `crates/eggsec-payloads`; **233 tests pass**,
+matching the baseline count exactly. The four mechanical edits were applied (two
+`Severity` imports, one module-path rewrite across 11 files, the `$crate` macro path).
+`git diff` shows **zero** changes in `eggsec-python` or `eggsec-tui`, so
+`waf_validation.rs`'s exhaustive 40-arm `parse_payload_type` compiles untouched.
+
+**Correction (2026-10-06).** Milestone 004 rested on a premise that turned out to be
+false: it held that 6 of the 40 payload modules "generate payloads by performing live
+`reqwest` probing" and therefore could not move. That is wrong. Those 6 files hold a
+*prober* (`GraphQLFuzzer`, `OAuthFuzzer`, `JwtFuzzer`, `IdorFuzzer`, `SstiFuzzer`,
+`GrpcFuzzer`) whose async methods take a `reqwest::Client` — but their free
+`get_payloads()` functions are pure static string construction, verified by extracting
+each function body and confirming it references no client, runtime, or `.await`. The
+prober and its payload strings were always separable.
+
+So the 6 payload sets have since moved into `crates/eggsec-payloads` as well, and the
+crate now owns **all 40** variants. `eggsec-payloads::get_payloads` resolves every
+variant and **no longer panics**; the cross-variant caches moved into the corpus crate
+too, since they can now be built from all 40 variants without the engine. The seam is
+**execution, not payload data**: `PayloadType::is_advanced` marks which types the engine
+*runs* through a live prober (`eggsec::fuzzer::engine` branches on it to choose a
+strategy), and is no longer a statement about where payloads live.
+
+The "trap" milestone 004 designed out — routing those 6 to a documented `unreachable!`
+rather than a silent `Vec::new()` — was real but self-inflicted: it existed only because
+the payload data had been left behind. The trap now cannot be reached, and is guarded
+from both sides. **Check 150** asserts the corpus owns all 6 payload modules, dispatches
+every variant to one, never panics or stubs, and that no corpus module reaches for a
+client; the engine keeps the 6 probers behind a re-export; and the corpus crate's own
+`lib` tests pin the all-40 invariant (`every_variant_resolves_to_non_empty_correctly_labelled_payloads`),
+alongside the engine-side `tests/fuzzer_payload_corpus_seam.rs`. Verified directly:
+GraphQL 15, OAuth 22, Jwt 25, Idor 21, Ssti 27, Grpc 14 payloads, with all 40 distinct
+types present in the cached view.
+
+### Explicit rejections carried forward from this evaluation
+
+| Candidate | Lines | Why not |
+|---|---|---|
+| `fuzzer/payloads/` prober 6 | 4,354 | **Rationale corrected 2026-10-06.** The original finding read these as "mixing generation with `reqwest` execution". Wrong: each file bundles a *prober* (needs a client) with a `get_payloads()` that is pure data. The payload halves have since moved; only the probers remain. |
+| `vuln/` | 1,273 | spike found a live `crate::error` seam in `cvss.rs`/`exploit.rs`; not yet free |
+| `scanner/endpoints.rs` `DEFAULT_ENDPOINTS` | 347 paths | table is pure `&[&str]`, but the file carries `reqwest`/`cli`/`tool-api` coupling |
+| `recon/techdetect.rs` | 538 | fingerprint table separable; the file owns an HTTP client |
+| `compliance/` | 793 | serde-only and zero I/O — genuinely viable, but low value and 5 consumers |
+| `supply_chain/` | 1,962 | serde-only coupling, filesystem I/O, domain-specific |
+| `websocket/` | 1,262 | cleanest mechanically (1 path) but only 2 consumers |
+| `c2/` + `postex/` | 3,795 | domain crates defensible; `cli::*Args` + `output::convert` coupling |
+| `eggsec-resilience` | — | Phase D rejection re-affirmed: `RateLimiter` is keyed on `&str` REST client identity, not a pacing primitive; `governor`/`failsafe` cover the generic shape better |
+| `eggsec-utils` | — | Phase A rejection re-affirmed: 13 unrelated files, no coherent boundary |
+
+### Defect found and dispositioned: `utils/redaction.rs` removed (Phase G)
+
+`utils/redaction.rs` — 366 lines, 26 tests, **zero production consumers**. Every
+repo-wide `redact_sensitive`/`redact_json` match is a different local function or a
+string literal. `eggsec-transport` maintains a narrower debug-redaction surface
+(`redacted_headers_debug`, `redact_url_for_debug`) that is related but not equivalent,
+and that crate must stay exactly `bytes`/`http`/`url`/`thiserror` per check 108, so
+unification is not free.
+
+**Disposition: deleted (milestone 001, Option 3).** The three adoption candidates were
+evaluated and rejected on evidence, not assumed:
+
+- `findings::Evidence` — `Evidence::new` always sets `redacted: false`, but the only
+  production `Finding` construction (`dispatch/security.rs`, the `search_cve` storage
+  mode) sets `evidence: vec![]`. There is no populated evidence path to mask.
+- Secret detection — already carries a deliberate, tested masking policy that differs
+  from `redaction.rs`: `SecretFinding::value_preview` truncates to 20 chars + `"..."`,
+  asserted by `recon/secrets.rs::test_value_preview_truncation`. Adopting regex masking
+  there would be a different policy, which is the milestone's own stop condition.
+- `nse_bridge.rs` — maps external NSE evidence and already declares redaction
+  declaratively via `.with_redaction(RedactionState::None)`.
+
+The decisive observation: **the repo's redaction contract is already declarative**, not a
+regex masker. `eggsec-report-model`'s `RedactionState` (`None`/`FullyRedacted`/
+`PartiallyRedacted`/`Summarized`) is carried per evidence item and consumed by
+`eggsec-output`, `eggsec-db-lab`, and `eggsec-mobile-lab`. `utils/redaction.rs` was a
+second, orphaned implementation of a concept the report model already tracks. Deleting
+it removes a duplicate rather than a capability.
+
+Deleted test count: **26**. Disclosed as a real loss of tested behavior, not cleanup.
+
+**Check 147** now fails if the file reappears, if `utils/mod.rs` re-exposes the module,
+or if an engine-local `fn redact_sensitive`/`fn redact_json` reappears under
+`crates/eggsec/src/`.
+
+### Publication: DEFERRED (ADR-0006, accepted 2026-10-05)
+
+All three corpus crates remain internal `publish = false` leaves. ADR-0005 decision 3
+separated extraction from publication, and **ADR-0006 records the decision**: defer.
+
+The evidence, in one place:
+
+1. **The corpora are still moving.** 14 commits touched the corpus paths since
+   2026-06-01, including `e05711ab Expand payload repository: +550 payloads across 10 new
+   modules`. Published payload text is consumer-visible *behavior*, so every later corpus
+   improvement would become a semver question.
+2. **Release qualification is expensive and already proven so.** `nse-runtime-extraction`
+   M007C ran `cargo semver-checks` and found a 74-function major break; `0.2.1` was not
+   published. Separately, `scripts/release-package-graph.py` requires that a published
+   package's deps not be private and share the release version — so publishing
+   `eggsec-secrets`/`eggsec-payloads` means publishing `eggsec-core` too.
+3. **No external consumer has been identified.** This is the gate that is unmet, and the
+   plan's own stop condition when it is.
+4. ~~**`eggsec-payloads` would ship a panicking public API.**~~ **SATISFIED 2026-10-06.**
+   Its `get_payloads` used to route 6 types to a documented `unreachable!`. Those payload
+   sets were static data misfiled as probe output; they now live in the corpus crate,
+   `get_payloads` resolves all 40 variants, and no public path panics.
+
+Reopening requires all four: a named external consumer; one release cycle without
+variant or content changes; a corpus update policy with an owner; and a library-appropriate
+payload API. `eggsec-service-db` is closest to ready (no workspace dep, no panic paths);
+`eggsec-payloads` is least (needs API design, not just qualification).
+
+Publication is **not** rejected — it is blocked on evidence. If approved later it gets its
+own roadmap, and the engine re-export facades stay permanent (ADR-0005 decision 2).
+
+### What would invalidate this decision
+
+If a corpus crate acquires an engine, transport, or frontend dependency; if the engine
+re-export facades prove removable (they are not — they are the compatibility contract);
+or if the phase-D `eggsec-resilience` rationale is withdrawn, the corresponding
+extraction should be folded back into the engine. As with `eggsec-udp-scan`, nothing
+mechanically enforces this paragraph — the crates earn their place on the argument
+recorded here.
+
 ## Guards
 
 - Check 107 fails if `crates/eggsec-net`, `crates/eggsec-web-client`,
@@ -225,9 +492,37 @@ evaluated against the roadmap's decision rule and rejected:
   feature queries, no resolver/authority behavior); engine → policy one-way
   with transport independent; engine policy modules stay facades (no
   redefined core types).
+- Check 107 forbids `eggsec-net`, `eggsec-web-client`, `eggsec-evidence`, and
+  `eggsec-signing`. `eggsec-udp-scan` is deliberately **not** on that list, but
+  nothing mechanically forces the justification above to stay accurate. The
+  crate earns its exception on the argument recorded here; if that argument is
+  withdrawn, the crate should be folded back into the engine.
 - Checks 124–126 (Phase D): loadtest core owns no Reqwest/indicatif/Clap/
   config (core files import none; `indicatif` only in `cli`-gated `run_cli`);
   no `eggsec-loadtest` / `eggsec-resilience` / `eggsec-utils` crate appears;
   `utils::cache` stays removed.
+- **Phase G (in progress):** check 114 pins
+  `crates/eggsec-service-db/src/lib.rs` as the single canonical service-table owner, and
+  fails if the old `crates/eggsec/src/scanner/service_data.rs` reappears or the engine's
+  `pub use eggsec_service_db as service_data` facade is dropped. **Check 148** enforces the
+  leaf invariant across every extracted corpus crate: `eggsec-core` is the only permitted
+  workspace dependency (it is a zero-internal-dependency leaf owning `Severity`), no
+  runtime/network/TLS/frontend/persistence dependency, and no `Scope` /
+  `ApprovedOperation` / `Capability` reference. `eggsec-service-db` is held to a
+  stricter bar separately, since it needs no workspace edge at all. **Check 149**
+  additionally pins secret
+  detection's canonical owner and engine facade, and freezes the entropy gate at `3.5`
+  scoped only to `SecretType::AwsSecretKey`, because retuning or widening it would
+  silently change what the scanner detects. **Check 150** polices the payload
+  corpus/prober seam: the corpus owns all 40 payload sets and dispatches every variant,
+  never panics or stubs one; the 6 probers stay engine-side behind a re-export of the
+  corpus builder; no corpus module reaches for a client; and the cross-variant caches live
+  in the corpus and stay `LazyLock`.
 
 *Last verified against source: 2026-09-16 (Phase D closure); spot re-verified 2026-09-25: engine `default = []` (`crates/eggsec/Cargo.toml:281`), workspace Tokio `default-features = false` (root `Cargo.toml:47`) with engine narrow set (no `test-util`; `crates/eggsec/Cargo.toml:34`), `eggsec-transport` exactly `bytes`/`http`/`url`/`thiserror` (`crates/eggsec-transport/Cargo.toml:15-18`), no `crates/eggsec-net|web-client|evidence|signing|loadtest|resilience` in workspace members, `eggsec-policy` leaf (no Tokio/HTTP/TLS/filesystem/frontend/engine/transport edge; Checks 121–126 present in `scripts/check-architecture-guards.sh`)*
+
+*Phase G section added 2026-10-05 (analysis only; no code, manifest, or guard changed). Verified at that date: `fuzzer/payloads/` 34 of the 40 payload-type modules free of `reqwest` (7,084 pure-data lines, 233 tests); `recon/secrets.rs` 492 lines / 11 tests / 1 `crate::` reference; `scanner/service_data.rs` 302 lines / 21 tests / 0 `crate::` references / 0 external consumers; `utils/redaction.rs` 366 lines / 26 tests / 0 consumers; check 114 pin at line 3121 and check 126 at line 3457 of `scripts/check-architecture-guards.sh` (baseline `979dca67`); `Severity` re-exported from `eggsec-core` at `crates/eggsec/src/types.rs:16`.*
+
+*Phase G milestone 001 executed 2026-10-05: `utils/redaction.rs` deleted (366 lines, 26 tests), `pub mod redaction;` removed from `crates/eggsec/src/utils/mod.rs`, and check 147 added in the shape of check 126 — verified to fail on all three of its conditions when the file, the module declaration, and engine-local `redact_sensitive`/`redact_json` are artificially reintroduced. No manifest change: `regex` remains a direct engine dependency for 12 other modules.*
+
+*Phase G milestones 002 and 003 executed 2026-10-05: `eggsec-service-db` and `eggsec-secrets` created as internal `publish = false` leaves, both re-exported through permanent engine facades with zero consumer diffs. Checks 114, 148, and 149 present and demonstrated to fail. Milestone 004 remains unimplemented. Correction applied during 003: `build_patterns()` holds **25** patterns covering 20 of 30 `SecretType` variants (the repo's `architecture/recon.md` was right; an earlier draft of this Phase G record and the plans said 26).*

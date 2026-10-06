@@ -453,6 +453,11 @@ impl DashboardTab {
 }
 
 impl TabState for DashboardTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }

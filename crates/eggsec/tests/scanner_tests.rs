@@ -227,13 +227,53 @@ async fn test_timing_preset_parse() {
 async fn test_port_result_serialization() {
     let result = eggsec::scanner::PortResult {
         port: 80,
-        status: "open".to_string(),
+        status: eggsec::scanner::PortStatus::Open,
+        protocol: eggsec::scanner::PortProtocol::Tcp,
         service: "HTTP".to_string(),
     };
     let json = serde_json::to_string(&result).unwrap();
     assert!(json.contains("\"port\":80"));
     assert!(json.contains("\"status\":\"open\""));
+    assert!(json.contains("\"protocol\":\"tcp\""));
     assert!(json.contains("\"service\":\"HTTP\""));
+}
+
+/// Wire compatibility: every `PortResult` written before the `protocol`
+/// field existed was TCP, so a payload without it must still load -- and must
+/// not silently load as UDP, which would re-interpret a TCP verdict.
+#[tokio::test]
+async fn test_port_result_without_protocol_field_deserializes_as_tcp() {
+    let legacy = r#"{"port":443,"status":"open","service":"HTTPS"}"#;
+    let parsed: eggsec::scanner::PortResult =
+        serde_json::from_str(legacy).expect("legacy must load");
+    assert_eq!(parsed.protocol, eggsec::scanner::PortProtocol::Tcp);
+    assert_eq!(parsed.status, eggsec::scanner::PortStatus::Open);
+}
+
+/// An unrecognized status must fail loudly rather than be coerced into a
+/// state the enum does not model -- a wrong verdict is worse than a load
+/// error.
+#[tokio::test]
+async fn test_port_result_rejects_unknown_status() {
+    let bogus = r#"{"port":53,"status":"probably-fine","service":"DNS"}"#;
+    assert!(serde_json::from_str::<eggsec::scanner::PortResult>(bogus).is_err());
+}
+
+/// The UDP wire value is `open|filtered`, not a flattened spelling. This is
+/// the honest string a consumer matches on.
+#[tokio::test]
+async fn test_port_status_open_filtered_serializes_with_pipe() {
+    let result = eggsec::scanner::PortResult {
+        port: 53,
+        status: eggsec::scanner::PortStatus::OpenFiltered,
+        protocol: eggsec::scanner::PortProtocol::Udp,
+        service: String::new(),
+    };
+    let json = serde_json::to_string(&result).unwrap();
+    assert!(json.contains("\"status\":\"open|filtered\""), "got {json}");
+    assert!(json.contains("\"protocol\":\"udp\""), "got {json}");
+    let round: eggsec::scanner::PortResult = serde_json::from_str(&json).unwrap();
+    assert_eq!(round, result);
 }
 
 #[tokio::test]
@@ -244,12 +284,14 @@ async fn test_port_scan_results_display() {
         open_ports: vec![
             eggsec::scanner::PortResult {
                 port: 80,
-                status: "open".to_string(),
+                status: eggsec::scanner::PortStatus::Open,
+                protocol: eggsec::scanner::PortProtocol::Tcp,
                 service: "HTTP".to_string(),
             },
             eggsec::scanner::PortResult {
                 port: 443,
-                status: "open".to_string(),
+                status: eggsec::scanner::PortStatus::Open,
+                protocol: eggsec::scanner::PortProtocol::Tcp,
                 service: "HTTPS".to_string(),
             },
         ],
@@ -257,6 +299,10 @@ async fn test_port_scan_results_display() {
         results_truncated: false,
         duration_ms: 1000,
         spoof_stats: None,
+        #[cfg(feature = "udp-scan")]
+        udp_host_state: None,
+        #[cfg(feature = "udp-scan")]
+        udp_evidence: None,
     };
     let output = format!("{}", results);
     assert!(output.contains("example.com"));

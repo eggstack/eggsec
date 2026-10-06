@@ -172,28 +172,34 @@ impl InputField {
     }
 
     pub fn move_word_forward(&mut self) {
-        if self.cursor_pos < self.value.len() {
-            let mut found_non_word = false;
-            let mut new_pos = self.cursor_pos;
+        if self.cursor_pos >= self.value.len() {
+            return;
+        }
+        let is_sep =
+            |c: char| c.is_whitespace() || c == '/' || c == '.' || c == '-' || c == '_' || c == ':';
 
-            for (i, c) in self.value[self.cursor_pos..].char_indices() {
-                if i == 0 {
-                    continue;
-                }
-                if c.is_whitespace() || c == '/' || c == '.' || c == '-' || c == '_' || c == ':' {
-                    found_non_word = true;
-                } else if found_non_word {
-                    new_pos = self.cursor_pos + i;
-                    break;
-                }
+        // Vim `w`: land on the first character of the next word. The scan has to
+        // start from the state of the character *under* the cursor rather than
+        // skipping it, otherwise pressing `w` while sitting on a separator found
+        // no later word boundary and fell through to the end of the value.
+        let mut in_word = self.value[self.cursor_pos..]
+            .chars()
+            .next()
+            .is_some_and(|c| !is_sep(c));
+
+        for (i, c) in self.value[self.cursor_pos..].char_indices() {
+            if i == 0 {
+                continue;
             }
-
-            if new_pos == self.cursor_pos {
-                self.move_end();
-            } else {
-                self.cursor_pos = new_pos;
+            if is_sep(c) {
+                in_word = false;
+            } else if !in_word {
+                self.cursor_pos += i;
+                return;
             }
         }
+
+        self.move_end();
     }
 
     pub fn move_word_backward(&mut self) {

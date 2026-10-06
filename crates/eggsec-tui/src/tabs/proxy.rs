@@ -462,11 +462,23 @@ impl TabRender for ProxyTab {
 }
 
 impl TabInput for ProxyTab {
+    fn ensure_input_focus(&mut self) {
+        // This tab opens on its view selector, not on the inputs. Without this
+        // the tab entry left *nothing* focused (neither the selector nor an
+        // input field), so no key could reach any control.
+        if !self.view_selector.is_focused() && !self.core.inputs.is_focused() {
+            self.view_selector.focus();
+        }
+    }
+
     fn stop(&mut self) {
         self.core.stop();
     }
 
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             if matches!(
@@ -487,6 +499,9 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
             if matches!(
@@ -630,6 +645,9 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() && self.view_selector.is_open() {
             self.view_selector.handle_up();
         } else if !self.core.inputs.is_focused() {
@@ -640,6 +658,9 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() && self.view_selector.is_open() {
             self.view_selector.handle_down();
         } else if !self.core.inputs.is_focused() {

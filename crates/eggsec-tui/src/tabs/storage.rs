@@ -227,6 +227,11 @@ impl Default for StorageTab {
 }
 
 impl TabState for StorageTab {
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -393,9 +398,51 @@ impl TabRender for StorageTab {
             f.render_widget(placeholder, *results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        // Connect mode renders the connection fields instead of the mode selector.
+        if self.current_mode == StorageMode::Connect {
+            return;
+        }
+
+        // Mirrors the query layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(9), Constraint::Min(0)])
+            .split(area);
+
+        let Some(input_area) = chunks.first().copied() else {
+            return;
+        };
+        let input_inner = Block::default().borders(Borders::ALL).inner(input_area);
+
+        let query_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .split(input_inner);
+
+        if let Some(mode_area) = query_chunks.first() {
+            if let Some(dropdown) = self
+                .mode_selector
+                .dropdown_info(*mode_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+    }
 }
 
 impl TabInput for StorageTab {
+    fn ensure_input_focus(&mut self) {
+        if self.focus_area == StorageFocusArea::Config {
+            crate::tabs::core::ensure_group_field_focused(&mut self.config_inputs);
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -730,5 +777,50 @@ impl TabInput for StorageTab {
             return;
         }
         self.results_view.page_down(page_size);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = StorageTab::new();
+        // Mode focus is only reachable in a non-Connect mode.
+        tab.current_mode = StorageMode::ListScans;
+        tab.focus_area = StorageFocusArea::Mode;
+        tab.handle_enter();
+        assert!(tab.mode_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the first query row.
+        let input_inner = Rect::new(1, 1, 78, 7);
+        let info = tab
+            .mode_selector
+            .dropdown_info(input_inner, 24)
+            .expect("expanded mode selector must yield a dropdown");
+        assert_eq!(info.area.y, input_inner.y + input_inner.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 3 && label == "Search by CVE"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected storage modes.
+        assert!(
+            text.contains("List Findings") && text.contains("Search by CVE"),
+            "expanded mode dropdown should be drawn"
+        );
     }
 }

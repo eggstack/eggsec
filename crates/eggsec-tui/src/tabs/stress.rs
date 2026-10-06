@@ -243,6 +243,31 @@ impl TabRender for StressTab {
             );
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        if self.core.error.is_some() {
+            return;
+        }
+
+        // Mirrors the row layout in `render`.
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(14),
+                Constraint::Length(3),
+                Constraint::Min(5),
+            ])
+            .split(area);
+
+        if let Some(selector_area) = chunks.get(1) {
+            if let Some(dropdown) = self
+                .type_selector
+                .dropdown_info(*selector_area, f.area().height)
+            {
+                dropdown.render(f);
+            }
+        }
+    }
 }
 
 impl TabInput for StressTab {
@@ -347,5 +372,43 @@ mod tests {
         tab.focus_area = StandardFocusAreaSelector::Results;
         tab.handle_enter();
         assert!(!tab.is_running());
+    }
+
+    #[test]
+    fn type_dropdown_is_drawn_when_expanded() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut tab = create_test_tab();
+        // Enter from the inputs area moves focus to the selector and opens it.
+        tab.handle_enter();
+        assert!(tab.type_selector.is_open());
+
+        // Anchor mirrors `render_overlays`: the second layout row.
+        let anchor = Rect::new(0, 14, 80, 3);
+        let info = tab
+            .type_selector
+            .dropdown_info(anchor, 24)
+            .expect("expanded type selector must yield a dropdown");
+        assert_eq!(info.area.y, anchor.y + anchor.height);
+        assert!(info
+            .items
+            .iter()
+            .any(|(i, label, _)| *i == 1 && label == "SYN Flood"));
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|f| {
+                let area = f.area();
+                tab.render(f, area, false);
+                tab.render_overlays(f, area);
+            })
+            .unwrap();
+
+        let text = crate::test_utils::buffer_to_text(terminal.backend().buffer());
+        // Only the expanded list shows the non-selected stress types.
+        assert!(
+            text.contains("SYN Flood") && text.contains("ICMP Flood"),
+            "expanded type dropdown should be drawn"
+        );
     }
 }

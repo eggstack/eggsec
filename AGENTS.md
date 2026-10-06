@@ -20,7 +20,8 @@ make check-python           # only when Python bindings/stubs/docs/scripts chang
 
 ## Workspace
 
-19 workspace crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`. CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
+23 workspace crates. Engine `eggsec` is lib-only (no binary); binary shell is `eggsec-cli`. CLI handlers live in-engine at `crates/eggsec/src/commands/handlers/` (`crates/eggsec/src/cli/` holds command types only; `crates/eggsec-cli/src/` is just main/daemon-client/logging).
+- Knowledge-corpus leaves: `eggsec-service-db` (service tables), `eggsec-secrets` (credential patterns), `eggsec-payloads` (attack payloads), `eggsec-udp-scan` (UDP scanning + ICMP correlation). Each is a near-empty-dependency leaf reached only through engine `pub use` facades (`scanner::service_data`, `recon::secrets`, `fuzzer::payloads`); deep dive in `architecture/knowledge_corpus.md`.
 
 - `eggsec-core`, `eggsec-tool-core`: shared types, tool DTOs.
 - `eggsec-report-model`: stable report/evidence data contracts (data only). `eggsec-output` renders over it, never the reverse.
