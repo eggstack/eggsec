@@ -11,6 +11,18 @@
 //!   `scope_resolver`, `runtime_config`, `runtime_sink`, `host_auth`,
 //!   `host_persistence`) resolve identically to their legacy paths.
 
+// Feature gate: this target exercises the `commands` / `tool` / `dispatch` /
+// `runtime_bridge` surfaces, which are not compiled without those features.
+// Without this gate the `--no-default-features` *test* build breaks; the
+// per-PR contract only compiles library/binary targets for that profile, so
+// the breakage is invisible until someone builds the tests.
+#![cfg(all(
+    feature = "cli",
+    feature = "tool-api",
+    feature = "rest-api",
+    feature = "grpc-api"
+))]
+
 use eggsec::config::{
     all_operation_metadata, classify_address, default_resolver, metadata_for_tool_id,
     operation_matches_tool_id, operation_metadata, AddressClass, EnforcementContext,

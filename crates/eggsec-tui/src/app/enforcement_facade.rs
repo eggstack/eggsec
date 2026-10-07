@@ -121,6 +121,10 @@ impl EnforcementFacade {
 
     /// Attempt to approve an operation using the appropriate enforcement path
     /// based on the current TUI surface.
+    // `EnforcementError` embeds a full `PolicyDecision` and is deliberately
+    // kept unboxed (see `eggsec_policy::decision::EnforcementError`), so the
+    // large `Err` payload is inherent to the API rather than a defect here.
+    #[allow(clippy::result_large_err)]
     pub fn try_approve(
         &mut self,
         desc: OperationDescriptor,
@@ -173,6 +177,10 @@ impl EnforcementFacade {
     /// never produces a second approval for the wrong descriptor nor a late
     /// engine binding failure the frontend could have caught earlier.
     /// Engine-side `validate_request_binding` remains the final gate.
+    // `EnforcementError` embeds a full `PolicyDecision` and is deliberately
+    // kept unboxed (see `eggsec_policy::decision::EnforcementError`), so the
+    // large `Err` payload is inherent to the API rather than a defect here.
+    #[allow(clippy::result_large_err)]
     pub fn evaluate_and_try_approve(
         &mut self,
         desc: OperationDescriptor,
@@ -203,6 +211,10 @@ impl EnforcementFacade {
 
     /// Confirm the pending policy override and return the approved operation + audit info.
     /// Returns (ApprovedOperation, EnforcementOutcome for audit, required classes, decision).
+    // `EnforcementError` embeds a full `PolicyDecision` and is deliberately
+    // kept unboxed (see `eggsec_policy::decision::EnforcementError`), so the
+    // large `Err` payload is inherent to the API rather than a defect here.
+    #[allow(clippy::result_large_err)]
     pub fn confirm_override(
         &mut self,
         descriptor: &OperationDescriptor,

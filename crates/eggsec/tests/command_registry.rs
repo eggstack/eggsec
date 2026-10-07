@@ -3,6 +3,13 @@
 //! Validates that registry entries are consistent with `OperationMetadata`,
 //! command IDs are unique, and metadata resolution works correctly.
 
+// Feature gate: this target exercises the `commands` / `tool` / `dispatch` /
+// `runtime_bridge` surfaces, which are not compiled without those features.
+// Without this gate the `--no-default-features` *test* build breaks; the
+// per-PR contract only compiles library/binary targets for that profile, so
+// the breakage is invisible until someone builds the tests.
+#![cfg(feature = "cli")]
+
 use eggsec::commands::registry::{
     build_descriptor_for_command, lookup_command, suggest_command, CommandCategory,
     CommandDispatchMode, REGISTERED_COMMANDS,

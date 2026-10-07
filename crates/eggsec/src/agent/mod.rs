@@ -695,7 +695,10 @@ impl Agent {
         // Persist runtime state at agent start
         self.persist_runtime_state().await;
 
-        let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
+        // Clamp: `tokio::time::interval` panics on a zero period. The CLI arg is
+        // range-checked, but this value can also arrive from a config file.
+        let mut poll_interval =
+            interval(Duration::from_secs(self.config.poll_interval_secs.max(1)));
         poll_interval.tick().await;
 
         loop {

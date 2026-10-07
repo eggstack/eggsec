@@ -30,6 +30,11 @@ pub struct ArtifactPy {
     pub external_uri: Option<String>,
     #[serde(skip)]
     content: Option<Vec<u8>>,
+    /// Backing storage for `Py_buffer::shape`. `shape` must stay valid for
+    /// the whole buffer export, so it cannot point at a stack local — see
+    /// `BinaryBufferPy::shape` for the same pattern.
+    #[serde(skip)]
+    shape: isize,
 }
 
 #[pymethods]
@@ -58,6 +63,7 @@ impl ArtifactPy {
             redacted: redacted.unwrap_or(false),
             retention_policy: retention_policy.unwrap_or_else(|| "session".to_string()),
             external_uri,
+            shape: content.as_ref().map(|c| c.len()).unwrap_or(0) as isize,
             content,
         }
     }
@@ -72,6 +78,7 @@ impl ArtifactPy {
         content_hash: String,
     ) -> Self {
         let size_bytes = content.len() as u64;
+        let shape = content.len() as isize;
         Self {
             id,
             name,
@@ -83,6 +90,7 @@ impl ArtifactPy {
             retention_policy: "session".to_string(),
             external_uri: None,
             content: Some(content),
+            shape,
         }
     }
 
@@ -143,16 +151,20 @@ impl ArtifactPy {
         match &slf.content {
             Some(data) => {
                 let ptr = data.as_ptr() as *const c_void;
-                let len = data.len() as isize;
 
                 (*view).obj = std::ptr::null_mut();
                 (*view).buf = ptr as *mut c_void;
-                (*view).len = len;
-                (*view).readonly = 0;
+                (*view).len = slf.shape;
+                // The `Vec<u8>` is owned by `&self` and reachable only through
+                // a shared borrow: advertising a writable buffer would let
+                // Python write through a `&self` alias.
+                (*view).readonly = 1;
                 (*view).itemsize = 1;
                 (*view).format = b"b\0".as_ptr() as *mut _;
                 (*view).ndim = 1;
-                (*view).shape = std::ptr::addr_of!(len) as *mut _;
+                // `slf.shape` is a field that outlives the call; a local would
+                // leave `shape` pointing at a dead stack slot.
+                (*view).shape = std::ptr::addr_of!(slf.shape) as *mut _;
                 (*view).strides = std::ptr::null_mut();
                 (*view).suboffsets = std::ptr::null_mut();
                 (*view).internal = std::ptr::null_mut();
@@ -212,6 +224,7 @@ impl ArtifactPy {
             retention_policy: self.retention_policy.clone(),
             external_uri: self.external_uri.clone(),
             content: None,
+            shape: 0,
         };
         serde_json::to_string(&redacted)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))

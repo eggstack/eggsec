@@ -20,9 +20,10 @@ pub use app::*;
 pub use tabs::Tab;
 
 /// Runtime mode for the TUI.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum RuntimeMode {
     /// Embedded in-process runtime (default).
+    #[default]
     Embedded,
     /// Remote daemon via Unix socket.
     Daemon {
@@ -31,10 +32,4 @@ pub enum RuntimeMode {
         new_session: bool,
         attach_latest: bool,
     },
-}
-
-impl Default for RuntimeMode {
-    fn default() -> Self {
-        Self::Embedded
-    }
 }

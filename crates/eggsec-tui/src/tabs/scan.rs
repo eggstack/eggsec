@@ -336,7 +336,7 @@ impl TabRender for ScanTab {
             if let Some(field) = self.inputs.fields.first() {
                 field.render(
                     f,
-                    inner_chunks.get(0).copied().unwrap_or(input_inner),
+                    inner_chunks.first().copied().unwrap_or(input_inner),
                     insert_mode,
                 );
             }

@@ -70,6 +70,13 @@ pub enum ErrorCode {
 }
 
 /// A command sent from a client to the daemon.
+//
+// The variant spread is inherent to the wire contract: this is a flat,
+// `#[serde(tag = "type")]` IPC DTO, so boxing `CreateSession` would change the
+// serialized shape that every client and the daemon itself already agree on.
+// Commands are enqueued and deserialized once, not moved in hot loops, so the
+// stack cost is not on a hot path.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientCommand {

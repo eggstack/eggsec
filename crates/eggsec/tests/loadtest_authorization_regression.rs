@@ -5,6 +5,18 @@
 //!
 //! Uses deterministic local fixtures + recording fakes. No public DNS.
 
+// Feature gate: this target exercises the `commands` / `tool` / `dispatch` /
+// `runtime_bridge` surfaces, which are not compiled without those features.
+// Without this gate the `--no-default-features` *test* build breaks; the
+// per-PR contract only compiles library/binary targets for that profile, so
+// the breakage is invisible until someone builds the tests.
+#![cfg(all(
+    feature = "cli",
+    feature = "tool-api",
+    feature = "rest-api",
+    feature = "grpc-api"
+))]
+
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;

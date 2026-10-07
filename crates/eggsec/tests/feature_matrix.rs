@@ -2,6 +2,13 @@
 //! OperationMetadata and DomainDescriptor match the authoritative feature
 //! registry, and that feature naming conventions and dependencies are well-formed.
 
+// Feature gate: this target exercises the `commands` / `tool` / `dispatch` /
+// `runtime_bridge` surfaces, which are not compiled without those features.
+// Without this gate the `--no-default-features` *test* build breaks; the
+// per-PR contract only compiles library/binary targets for that profile, so
+// the breakage is invisible until someone builds the tests.
+#![cfg(feature = "cli")]
+
 use eggsec::config::all_operation_metadata;
 use eggsec::config::{
     classify_feature, feature_state, is_feature_enabled_registry, is_known_feature_registry,

@@ -170,7 +170,7 @@ impl TabRender for FingerprintTab {
             .constraints([Constraint::Length(11), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks.get(0).copied().unwrap_or(area);
+        let input_area = chunks.first().copied().unwrap_or(area);
         let results_area = chunks.get(1).copied().unwrap_or_default();
 
         let input_inner = render_config_block(

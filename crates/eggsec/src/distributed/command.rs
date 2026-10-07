@@ -2,12 +2,18 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use std::time::Instant;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 
 const ALLOWED_COMMANDS: &[&str] = &["eggsec"];
 const MAX_OUTPUT_SIZE: usize = 10 * 1024 * 1024; // 10MB
 const MAX_ARGS: usize = 50;
 const MAX_ARG_LENGTH: usize = 1000;
+
+/// Upper bound for a single remote command. A peer that supplies no timeout
+/// (`timeout: None` on the wire) gets this default instead of an unbounded
+/// child, and an explicit value is clamped into `1..=MAX_COMMAND_TIMEOUT_SECS`.
+const MAX_COMMAND_TIMEOUT_SECS: u64 = 300;
 
 const FORBIDDEN_PATTERNS: &[&str] = &[
     "../",
@@ -182,54 +188,94 @@ impl CommandExecutor {
         let start = Instant::now();
 
         let mut cmd = Command::new(program);
-        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            // `kill_on_drop` is what makes the timeout below actually reap the
+            // child: dropping the `output()` future only *detaches* a
+            // kill_on_drop=false process, which leaks an orphan per timeout.
+            .kill_on_drop(true);
 
-        if let Some(timeout) = timeout_secs {
-            let result =
-                tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output()).await;
+        // A peer-supplied `timeout: None` must not remove the bound entirely.
+        let timeout_secs = timeout_secs
+            .unwrap_or(MAX_COMMAND_TIMEOUT_SECS)
+            .clamp(1, MAX_COMMAND_TIMEOUT_SECS);
 
-            match result {
-                Ok(Ok(output)) => {
-                    let duration_ms = start.elapsed().as_millis() as u64;
-                    let output_str = Self::format_output(&output);
-                    Ok((output_str, duration_ms))
-                }
-                Ok(Err(e)) => {
-                    let _duration_ms = start.elapsed().as_millis() as u64;
-                    Err(format!("Command execution failed: {}", e))
-                }
-                Err(_) => {
-                    let _duration_ms = start.elapsed().as_millis() as u64;
-                    Err(format!("Command timed out after {} seconds", timeout))
-                }
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            Self::collect_output(&mut cmd),
+        )
+        .await
+        {
+            Ok(Ok(output)) => {
+                let duration_ms = start.elapsed().as_millis() as u64;
+                let output_str = Self::format_output(&output.0, &output.1);
+                Ok((output_str, duration_ms))
             }
-        } else {
-            match cmd.output().await {
-                Ok(output) => {
-                    let duration_ms = start.elapsed().as_millis() as u64;
-                    let output_str = Self::format_output(&output);
-                    Ok((output_str, duration_ms))
-                }
-                Err(e) => {
-                    let _duration_ms = start.elapsed().as_millis() as u64;
-                    Err(format!("Command execution failed: {}", e))
-                }
+            Ok(Err(e)) => {
+                let _duration_ms = start.elapsed().as_millis() as u64;
+                Err(format!("Command execution failed: {}", e))
+            }
+            Err(_) => {
+                let _duration_ms = start.elapsed().as_millis() as u64;
+                Err(format!("Command timed out after {} seconds", timeout_secs))
             }
         }
     }
 
-    fn format_output(output: &std::process::Output) -> String {
+    /// Spawn the child and drain stdout/stderr concurrently, stopping each
+    /// stream at [`MAX_OUTPUT_SIZE`] so a chatty child cannot force an
+    /// unbounded allocation before truncation is applied.
+    ///
+    /// A non-zero exit is *not* an error: this mirrors `Command::output()`,
+    /// which also returns `Ok` for a failed exit, and the operator still wants
+    /// the captured output when `eggsec` exits non-zero.
+    async fn collect_output(cmd: &mut Command) -> std::io::Result<(Vec<u8>, Vec<u8>)> {
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let (out, err) = tokio::join!(Self::read_capped(stdout), Self::read_capped(stderr));
+        child.wait().await?;
+        Ok((out, err))
+    }
+
+    async fn read_capped<R>(reader: Option<R>) -> Vec<u8>
+    where
+        R: AsyncRead + Unpin,
+    {
+        let Some(mut reader) = reader else {
+            return Vec::new();
+        };
+        let mut buf = Vec::new();
+        let mut chunk = vec![0u8; 64 * 1024];
+        loop {
+            match reader.read(&mut chunk).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let remaining = MAX_OUTPUT_SIZE.saturating_sub(buf.len());
+                    if remaining == 0 {
+                        break;
+                    }
+                    buf.extend_from_slice(&chunk[..n.min(remaining)]);
+                }
+            }
+        }
+        buf
+    }
+
+    fn format_output(stdout: &[u8], stderr: &[u8]) -> String {
         let mut result = String::new();
 
-        if !output.stdout.is_empty() {
-            result.push_str(&String::from_utf8_lossy(&output.stdout));
+        if !stdout.is_empty() {
+            result.push_str(&String::from_utf8_lossy(stdout));
         }
 
-        if !output.stderr.is_empty() {
+        if !stderr.is_empty() {
             if !result.is_empty() {
                 result.push_str("\n--- stderr ---\n");
             }
-            result.push_str(&String::from_utf8_lossy(&output.stderr));
+            result.push_str(&String::from_utf8_lossy(stderr));
         }
 
         if result.is_empty() {
@@ -238,7 +284,14 @@ impl CommandExecutor {
 
         // Limit output size to prevent memory issues
         if result.len() > MAX_OUTPUT_SIZE {
-            result.truncate(MAX_OUTPUT_SIZE);
+            // Floor to a char boundary first: `String::truncate` panics when the
+            // cut lands mid-character, and `from_utf8_lossy` emits multi-byte
+            // `U+FFFD` for invalid input.
+            let mut cut = MAX_OUTPUT_SIZE;
+            while !result.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            result.truncate(cut);
             result.push_str(&format!(
                 "\n\n[Output truncated at {} bytes]",
                 MAX_OUTPUT_SIZE
@@ -301,5 +354,39 @@ mod tests {
         let psk1 = generate_psk();
         let psk2 = generate_psk();
         assert_ne!(psk1, psk2);
+    }
+
+    #[test]
+    fn format_output_truncates_on_char_boundary() {
+        // MAX_OUTPUT_SIZE - 2 ASCII bytes then a 4-byte emoji: a naive
+        // `truncate(MAX_OUTPUT_SIZE)` lands mid-character and panics.
+        let mut stdout = vec![b'a'; MAX_OUTPUT_SIZE - 2];
+        stdout.extend_from_slice("😀".as_bytes());
+        stdout.extend_from_slice(&[b'b'; 64]);
+
+        let out = CommandExecutor::format_output(&stdout, b"");
+        assert!(out.len() > MAX_OUTPUT_SIZE, "truncation marker expected");
+        assert!(out.starts_with(&"a".repeat(64)));
+    }
+
+    #[test]
+    fn format_output_truncates_invalid_utf8_on_boundary() {
+        // from_utf8_lossy expands each invalid byte into a 3-byte U+FFFD, so
+        // the cut can land mid-character there too.
+        let stdout = vec![0xffu8; MAX_OUTPUT_SIZE + 128];
+        let out = CommandExecutor::format_output(&stdout, b"");
+        assert!(out.contains("[Output truncated at"));
+    }
+
+    #[test]
+    fn format_output_keeps_short_output_intact() {
+        let out = CommandExecutor::format_output(b"stdout bytes", b"stderr bytes");
+        assert_eq!(out, "stdout bytes\n--- stderr ---\nstderr bytes");
+    }
+
+    #[test]
+    fn format_output_empty_reports_placeholder() {
+        let out = CommandExecutor::format_output(b"", b"");
+        assert_eq!(out, "(no output)");
     }
 }

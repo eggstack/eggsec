@@ -67,10 +67,10 @@ impl super::App {
         let actions = self
             .runtime_adapter
             .drain_and_reduce(&mut self.runtime_binding.events, current_task_tab);
-        if !actions.is_empty() {
-            if super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, self) {
-                dirty = true;
-            }
+        if !actions.is_empty()
+            && super::runtime_adapter::TuiRuntimeAdapter::apply_actions(actions, self)
+        {
+            dirty = true;
         }
 
         // Phase 8: drain daemon event handle for remote mode.
@@ -80,10 +80,10 @@ impl super::App {
                 let actions = self.runtime_adapter.reduce(event, current_task_tab);
                 daemon_actions.extend(actions);
             }
-            if !daemon_actions.is_empty() {
-                if super::runtime_adapter::TuiRuntimeAdapter::apply_actions(daemon_actions, self) {
-                    dirty = true;
-                }
+            if !daemon_actions.is_empty()
+                && super::runtime_adapter::TuiRuntimeAdapter::apply_actions(daemon_actions, self)
+            {
+                dirty = true;
             }
         }
 

@@ -88,12 +88,26 @@ impl TaskQueue {
         let now = chrono::Utc::now().timestamp();
 
         let mut state = self.state.lock().await;
+        // `enqueue` refuses to exceed `max_size`, but the reassign path used to
+        // push unconditionally. `in_progress` is itself unbounded, so a mass
+        // worker disconnect requeued the whole set at once and blew past the
+        // documented bound.
+        let capacity = self.max_size.saturating_sub(state.pending.len());
         let mut stale_tasks = Vec::new();
         state.in_progress.retain(|_id, task| {
             if let Some(assigned_at) = task.assigned_at_secs {
                 if now - assigned_at > timeout_secs {
-                    stale_tasks.push(task.clone());
-                    return false;
+                    if stale_tasks.len() < capacity {
+                        stale_tasks.push(task.clone());
+                        return false;
+                    }
+                    // Queue is full: leave the task in `in_progress` so the
+                    // next sweep retries it rather than dropping the work.
+                    tracing::warn!(
+                        task_id = %task.id,
+                        queue_capacity = capacity,
+                        "Task queue full; deferring stale task reassignment"
+                    );
                 }
             }
             true

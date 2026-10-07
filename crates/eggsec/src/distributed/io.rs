@@ -337,38 +337,82 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 }
 
 pub struct LineWriter {
-    stream: StreamWrapper,
+    /// The buffered reader is a *field*, not a per-call temporary: recreating
+    /// a `BufReader` for each `read_line` discards whatever it read past the
+    /// first `\n`, so a pipelined second message would be silently dropped.
+    reader: TokioBufReader<StreamWrapper>,
 }
+
+/// Maximum accepted length of a single protocol line (excluding the trailing
+/// `\n`). Lines are newline-delimited JSON, so this is far above any real
+/// message while still bounding memory for a peer that streams forever
+/// without a newline.
+const MAX_LINE_LENGTH: usize = 1024 * 1024;
 
 impl LineWriter {
     pub fn new(stream: StreamWrapper) -> Self {
-        Self { stream }
+        Self {
+            reader: TokioBufReader::new(stream),
+        }
     }
 
     pub async fn write_line(&mut self, line: &str) -> std::io::Result<usize> {
+        let stream = self.reader.get_mut();
         let mut data = line.as_bytes();
         let mut written = 0;
 
         while !data.is_empty() {
-            let n = self.stream.write(data).await?;
+            let n = stream.write(data).await?;
             written += n;
             data = &data[n..];
         }
 
-        self.stream.write_all(b"\n").await?;
-        self.stream.flush().await?;
+        stream.write_all(b"\n").await?;
+        stream.flush().await?;
 
         Ok(written)
     }
 
+    /// Read one newline-delimited message.
+    ///
+    /// Returns `io::ErrorKind::InvalidData` when the peer exceeds
+    /// [`MAX_LINE_LENGTH`], so a caller can distinguish an over-long line from
+    /// a clean EOF. An `InvalidData` error leaves the stream position at the
+    /// offending bytes: callers must drop the connection rather than resync.
     pub async fn read_line(&mut self) -> std::io::Result<Option<String>> {
-        let mut reader = TokioBufReader::new(&mut self.stream);
-        let mut line = String::new();
-        match reader.read_line(&mut line).await {
-            Ok(0) => Ok(None),
-            Ok(_) => Ok(Some(line)),
-            Err(e) => Err(e),
+        let mut line = Vec::with_capacity(256);
+        let read = self
+            .reader
+            .read_until(b'\n', &mut line)
+            .await
+            .map_err(unexpected_eof_to_invalid_data)?;
+        if read == 0 {
+            return Ok(None);
         }
+        if line.len() > MAX_LINE_LENGTH {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Protocol line exceeds maximum length of {} bytes",
+                    MAX_LINE_LENGTH
+                ),
+            ));
+        }
+        Ok(Some(String::from_utf8_lossy(&line).into_owned()))
+    }
+}
+
+/// `AsyncBufReadExt::read_until` surfaces a mid-stream EOF as
+/// `UnexpectedEof`; the wire protocol has no reason to distinguish that from
+/// other IO faults, so normalise it.
+fn unexpected_eof_to_invalid_data(e: std::io::Error) -> std::io::Error {
+    if e.kind() == std::io::ErrorKind::UnexpectedEof {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "unexpected EOF while reading protocol line",
+        )
+    } else {
+        e
     }
 }
 

@@ -797,7 +797,10 @@ impl HttpResponsePy {
     /// everything into memory at once. Each chunk is a bytes object.
     #[pyo3(signature = (chunk_size=None))]
     fn iter_body_chunks(&self, chunk_size: Option<usize>) -> Vec<Vec<u8>> {
-        let chunk_size = chunk_size.unwrap_or(8192);
+        // `slice::chunks` panics on a zero chunk size, and this is reachable
+        // straight from Python (`iter_body_chunks(0)`). Mirrors the guard in
+        // `iter_support.rs::batch_to_dicts`.
+        let chunk_size = chunk_size.filter(|c| *c > 0).unwrap_or(8192);
         self.body_bytes
             .chunks(chunk_size)
             .map(|c| c.to_vec())

@@ -37,7 +37,12 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     };
 
     let clients = build_clients(proxy_manager.as_ref()).await?;
-    let total_requests = config.rate_pps * config.duration_secs;
+    // `rate_pps * duration_secs` is an unchecked u64 multiply. The scope caps
+    // (100_000 × 300) are safe, but `max_rate_pps`/`max_duration_secs` default
+    // to `None` = "no limit" in a hand-edited stress.toml, so saturate rather
+    // than wrapping to 0 (which collapses `worker_count` and exits at once) or
+    // panicking in debug builds.
+    let total_requests = config.rate_pps.saturating_mul(config.duration_secs);
     let mut proxy_index = 0usize;
 
     let progress = Arc::new(ProgressBar::new(total_requests));

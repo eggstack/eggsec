@@ -79,14 +79,21 @@ impl LockoutDetector {
 
                     if let Some(prev) = prev_status {
                         if status != prev || self.is_lockout_response(&body) {
-                            // Lockout was observed on the (i+1)-th request.
-                            result.lockout_threshold = Some(i + 1);
-                            result.attempts_before_lockout = i + 1;
-
-                            result.lockout_type = self.classify_lockout(status, &body);
-                            result.indicators = self.extract_indicators(status, &body);
-
-                            if result.lockout_type != LockoutType::None {
+                            let lockout_type = self.classify_lockout(status, &body);
+                            // Only record the threshold once the transition has
+                            // actually been classified as a lockout. A bare
+                            // status change (e.g. 200 -> 302 on a
+                            // redirect-to-login flow) is not a lockout, and
+                            // recording it would leave the result holding
+                            // `lockout_threshold: Some(N)` alongside
+                            // `lockout_type: None` — and the loop keeps
+                            // overwriting N on later transitions.
+                            if lockout_type != LockoutType::None {
+                                // Lockout was observed on the (i+1)-th request.
+                                result.lockout_threshold = Some(i + 1);
+                                result.attempts_before_lockout = i + 1;
+                                result.lockout_type = lockout_type;
+                                result.indicators = self.extract_indicators(status, &body);
                                 break;
                             }
                         }

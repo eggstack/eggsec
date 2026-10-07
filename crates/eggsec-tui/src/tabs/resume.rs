@@ -198,6 +198,14 @@ impl ResumeTab {
     }
 }
 
+impl Default for ResumeTab {
+    fn default() -> Self {
+        // Single source of truth for the initial state: `TabCore` and
+        // `StandardFocusArea2` are not `Default`, so derive is not an option.
+        Self::new()
+    }
+}
+
 impl TabState for ResumeTab {
     tab_state_boilerplate!(ResumeTab, core: core);
 

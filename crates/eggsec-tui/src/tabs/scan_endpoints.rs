@@ -225,7 +225,7 @@ impl TabRender for ScanEndpointsTab {
             .constraints([Constraint::Length(17), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks.get(0).copied().unwrap_or(area);
+        let input_area = chunks.first().copied().unwrap_or(area);
         let results_area = chunks.get(1).copied().unwrap_or_default();
 
         let input_block = Block::default()

@@ -47,7 +47,12 @@ pub struct ClusterWorkerArgs {
     pub worker_id: Option<String>,
     #[arg(long, help = "Pre-shared key for authentication")]
     pub psk: Option<String>,
-    #[arg(long, default_value = "30", help = "Heartbeat interval in seconds")]
+    #[arg(
+        long,
+        default_value = "30",
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "Heartbeat interval in seconds (must be >= 1)"
+    )]
     pub heartbeat_interval: u64,
     #[arg(
         long,

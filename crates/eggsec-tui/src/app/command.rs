@@ -896,11 +896,15 @@ mod tests {
             f.value = "safe-target".to_string();
         }
         app.execute_command("copy-cli");
-        // Either success message or graceful clipboard-fail message (both acceptable per AC)
+        // Either success message or graceful clipboard-fail message (both
+        // acceptable per AC). The failure text is produced by
+        // `Clipboard::unavailable_message`, which reports the real reason
+        // ("Clipboard copy failed: ...") and falls back to "Clipboard write
+        // failed" when no reason is known — match the prefix, not one
+        // spelling, or the test only passes on a machine with a display.
         let n = app.overlay.notification.as_ref().unwrap();
         assert!(
-            n.message.contains("CLI command copied")
-                || n.message.contains("Clipboard write failed"),
+            n.message.contains("CLI command copied") || n.message.starts_with("Clipboard"),
             "got: {}",
             n.message
         );

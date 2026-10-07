@@ -20,6 +20,13 @@ use crate::utils::connect_with_nodelay_timeout;
 const MAX_CONNECTIONS: usize = 100;
 const RATE_LIMIT_PER_MINUTE: u32 = 60;
 const RATE_LIMIT_WINDOW_SECS: u64 = 60;
+/// Bound on each pre-authentication step (TLS handshake, auth read). Matches
+/// the timeout the in-file test servers already wrap their auth reads with, and
+/// keeps a silent socket from pinning a task and an fd indefinitely.
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Pause after a failed `accept()` so a persistent failure (drained fd table,
+/// EMFILE) degrades into a slow retry instead of a CPU-pinning busy loop.
+const ACCEPT_ERROR_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
 
 #[derive(Clone)]
 pub struct TlsConfig {
@@ -52,10 +59,13 @@ pub struct RemoteListener {
 
 /// Per-connection dependencies (keeps `handle_connection` under the
 /// clippy argument-count lint).
+///
+/// Note: the `connections` set is deliberately absent — the accept-loop
+/// supervisor owns the admission slot for the whole lifetime of a connection,
+/// including the pre-authentication phase and the panic path.
 #[derive(Clone)]
 struct ConnectionDeps {
     psk: String,
-    connections: Arc<RwLock<FxHashSet<String>>>,
     tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
     task_queue: Arc<TaskQueue>,
     workers: Arc<RwLock<FxHashMap<String, crate::distributed::WorkerRegistration>>>,
@@ -345,7 +355,6 @@ impl RemoteListener {
 
                             let deps = ConnectionDeps {
                                 psk: self.psk.clone(),
-                                connections: Arc::clone(&self.connections),
                                 tls_acceptor: tls_acceptor.clone(),
                                 task_queue: Arc::clone(&self.task_queue),
                                 workers: Arc::clone(&self.workers),
@@ -353,20 +362,39 @@ impl RemoteListener {
                                 authenticated: Arc::clone(&self.authenticated),
                             };
                             self.accepted.fetch_add(1, Ordering::Relaxed);
+                            let addr_clone = addr.to_string();
+                            // Reserve the admission slot at accept time, not
+                            // post-auth: a peer parked in the TLS handshake or
+                            // the auth read must still count against
+                            // `max_connections`, otherwise the limit bounds
+                            // nothing that is pre-authentication.
+                            let conns = Arc::clone(&self.connections);
+                            conns.write().await.insert(addr_clone.clone());
                             let handle = tokio::spawn(async move {
                                 if let Err(e) = Self::handle_connection(stream, addr, deps).await {
                                     tracing::error!("Connection error: {}", e);
                                 }
                             });
-                            let addr_clone = addr.to_string();
                             tokio::spawn(async move {
+                                // Supervisor: fires on *both* exit paths. A
+                                // panic inside the handler unwinds past the
+                                // in-handler cleanup, so the slot must be
+                                // released here too — otherwise enough panicking
+                                // connections pin `connection_count()` at
+                                // `max_connections` for the life of the process.
                                 if let Err(e) = handle.await {
                                     tracing::error!("Connection task panicked for {}: {}", addr_clone, e);
                                 }
+                                conns.write().await.remove(&addr_clone);
                             });
                         }
                         Err(e) => {
+                            // Back off before retrying. Without this, a
+                            // persistent accept failure (e.g. a drained fd
+                            // table) becomes a tight spin that pins a core and
+                            // floods the log, compounding the failure.
                             tracing::error!("Failed to accept connection: {}", e);
+                            tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
                         }
                     }
                 }
@@ -389,7 +417,6 @@ impl RemoteListener {
     ) -> Result<()> {
         let ConnectionDeps {
             psk,
-            connections,
             tls_acceptor,
             task_queue,
             workers,
@@ -397,29 +424,59 @@ impl RemoteListener {
             authenticated,
         } = deps;
         tracing::info!("Connection from {}", addr);
-        tracing::info!("Connection from {}", addr);
 
+        // Pre-authentication steps are wrapped in the same handshake timeout
+        // the in-file test servers already use. Without it a peer that opens a
+        // socket and then goes silent pins a task and an fd for the lifetime
+        // of the process; the connection slot alone is not a bound.
         let stream = match tls_acceptor {
-            Some(acceptor) => match StreamWrapper::accept_tls(&acceptor, stream).await {
-                Ok(s) => {
-                    tls_handshakes.fetch_add(1, Ordering::Relaxed);
-                    s
+            Some(acceptor) => {
+                match tokio::time::timeout(
+                    HANDSHAKE_TIMEOUT,
+                    StreamWrapper::accept_tls(&acceptor, stream),
+                )
+                .await
+                {
+                    Ok(Ok(s)) => {
+                        tls_handshakes.fetch_add(1, Ordering::Relaxed);
+                        s
+                    }
+                    Ok(Err(e)) => {
+                        tracing::error!(addr = %addr, "TLS handshake failed: {}", e);
+                        return Err(EggsecError::Network(format!(
+                            "TLS handshake failed from {}: {}",
+                            addr, e
+                        )));
+                    }
+                    Err(_) => {
+                        tracing::warn!(addr = %addr, "TLS handshake timed out");
+                        return Err(EggsecError::Network(format!(
+                            "TLS handshake timed out after {}s from {}",
+                            HANDSHAKE_TIMEOUT.as_secs(),
+                            addr
+                        )));
+                    }
                 }
-                Err(e) => {
-                    tracing::error!(addr = %addr, "TLS handshake failed: {}", e);
-                    return Err(EggsecError::Network(format!(
-                        "TLS handshake failed from {}: {}",
-                        addr, e
-                    )));
-                }
-            },
+            }
             None => StreamWrapper::plain(stream),
         };
 
         let mut line_writer = LineWriter::new(stream);
 
-        // Read auth message
-        let auth_line = line_writer.read_line().await?;
+        // Read auth message (bounded: an unauthenticated peer that never
+        // sends a newline must not hold the connection open forever).
+        let auth_line = match tokio::time::timeout(HANDSHAKE_TIMEOUT, line_writer.read_line()).await
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                tracing::warn!(addr = %addr, "Auth read timed out");
+                return Err(EggsecError::Network(format!(
+                    "Auth read timed out after {}s from {}",
+                    HANDSHAKE_TIMEOUT.as_secs(),
+                    addr
+                )));
+            }
+        };
         let auth: AuthMessage = serde_json::from_str(
             &auth_line.ok_or_else(|| EggsecError::Validation("No auth".to_string()))?,
         )?;
@@ -435,8 +492,8 @@ impl RemoteListener {
             )));
         }
 
-        // Register connection
-        connections.write().await.insert(addr.to_string());
+        // The admission slot was already reserved by the accept loop; only the
+        // authentication counter is updated here.
         authenticated.fetch_add(1, Ordering::Relaxed);
         tracing::info!(addr = %addr, "Authenticated successfully");
 
@@ -464,7 +521,6 @@ impl RemoteListener {
         let mut connected_worker_id: Option<String> = None;
 
         // Handle commands loop
-        let addr_str = addr.to_string();
         loop {
             let line = match line_writer.read_line().await {
                 Ok(Some(l)) => l,
@@ -714,7 +770,8 @@ impl RemoteListener {
             }
             tracing::info!(worker_id = %worker_id, "Worker connection closed");
         }
-        connections.write().await.remove(&addr_str);
+        // The admission slot is released by the accept-loop supervisor, which
+        // also covers the panic path.
         tracing::info!(addr = %addr, "Client disconnected");
         Ok(())
     }
@@ -1680,7 +1737,11 @@ async fn session_actor_loop(
                     match reconnect.ensure_connected(&mut client, &config.host, config.port, registration.as_ref()).await {
                         Ok(established) => {
                             writer = Some(established);
-                            let _ = reply.send(Ok(()));
+                            // Match the error branch below: a dropped reply
+                            // (caller gone) is not a failure of this work.
+                            if let Err(e) = reply.send(Ok(())) {
+                                tracing::debug!("Session registration reply dropped: {:?}", e);
+                            }
                         }
                         Err(e) => {
                             tracing::warn!("Coordinator session registration failed: {}", e);

@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_get_payloads_count_reasonable() {
         let payloads = get_payloads();
-        assert!(payloads.len() > 0);
+        assert!(!payloads.is_empty());
         assert!(payloads.len() < 10000);
     }
 

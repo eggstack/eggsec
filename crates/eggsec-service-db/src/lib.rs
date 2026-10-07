@@ -100,24 +100,30 @@ pub fn guess_service_from_banner(banner: &str) -> Option<&'static str> {
     if lower.contains("mongodb") {
         return Some("MongoDB");
     }
-    if lower.contains("ftp") {
-        return Some("FTP");
-    }
-    if lower.contains("smtp") || lower.contains("mail") {
-        return Some("SMTP");
-    }
-    if lower.contains("imap") {
-        return Some("IMAP");
-    }
-    if lower.contains("pop") {
-        return Some("POP3");
-    }
+    // HTTP is checked first: a web banner routinely embeds tokens that would
+    // otherwise match a later rule ("Location: https://mail.corp.example.com"
+    // contains both `http` and `mail`, and was being reported as SMTP), and a
+    // wrong service attribution sends the operator to the wrong check. The
+    // generic rules below then run most-specific first so that, e.g., `imap`
+    // is not shadowed by a bare `mail` match.
     if lower.contains("http")
         || lower.contains("nginx")
         || lower.contains("apache")
         || lower.contains("iis")
     {
         return Some("HTTP");
+    }
+    if lower.contains("ftp") {
+        return Some("FTP");
+    }
+    if lower.contains("imap") {
+        return Some("IMAP");
+    }
+    if lower.contains("pop3") || lower.contains("pop-3") {
+        return Some("POP3");
+    }
+    if lower.contains("smtp") || lower.contains("mail") {
+        return Some("SMTP");
     }
     if lower.contains("ldap") {
         return Some("LDAP");

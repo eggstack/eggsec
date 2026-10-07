@@ -136,14 +136,23 @@ impl ResponseDiffer {
     ) -> ResponseDiff {
         let current = self.create_snapshot(status_code, headers, body, timing_ms);
 
-        let diff = match &self.baseline {
-            Some(baseline) => self.compute_diff(baseline, &current),
-            None => DiffResult::default(),
-        };
-
-        ResponseDiff {
-            baseline: current,
-            diff,
+        match &self.baseline {
+            Some(baseline) => {
+                let diff = self.compute_diff(baseline, &current);
+                // Report the snapshot the diff was computed *against*. This
+                // field used to be filled with `current`, so any exporter
+                // reading it got the post-diff value twice.
+                ResponseDiff {
+                    baseline: baseline.clone(),
+                    diff,
+                }
+            }
+            // No baseline recorded yet: `current` is the only snapshot
+            // available, so it stands in for it.
+            None => ResponseDiff {
+                baseline: current,
+                diff: DiffResult::default(),
+            },
         }
     }
 

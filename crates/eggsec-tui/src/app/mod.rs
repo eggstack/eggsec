@@ -689,6 +689,10 @@ impl App {
 
     /// Attempt to approve an operation using the appropriate enforcement path
     /// based on the current TUI surface.
+    // `EnforcementError` embeds a full `PolicyDecision` and is deliberately
+    // kept unboxed (see `eggsec_policy::decision::EnforcementError`), so the
+    // large `Err` payload is inherent to the API rather than a defect here.
+    #[allow(clippy::result_large_err)]
     fn try_approve(
         &mut self,
         desc: OperationDescriptor,

@@ -302,7 +302,10 @@ impl Worker {
         };
 
         let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
+            // Clamp: `tokio::time::interval` panics on a zero period. The CLI arg is
+            // range-checked, but the value also flows through the handler.
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval.max(1)));
 
             loop {
                 tokio::select! {

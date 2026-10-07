@@ -264,6 +264,10 @@ impl TimingAnalyzer {
             let min = self.min_response_time.load(Ordering::Relaxed);
             let max = self.max_response_time.load(Ordering::Relaxed);
             let avg = total_time.checked_div(total).unwrap_or(0);
+            // With no samples, `min_response_time` still holds its `u64::MAX`
+            // initialisation sentinel (only `record` lowers it), so the cast
+            // would report `min = 1.8e19`. No samples means no minimum.
+            let min = if total == 0 { 0 } else { min };
             TimingStats {
                 min: min as f64,
                 max: max as f64,

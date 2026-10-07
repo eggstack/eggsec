@@ -29,7 +29,10 @@ pub struct AgentArgs {
     pub memory_dir: String,
 
     /// Poll interval in seconds
-    #[arg(long, default_value = "60")]
+    ///
+    /// `tokio::time::interval` panics on a zero period, so the floor is
+    /// enforced at parse time rather than trusted from a config file.
+    #[arg(long, default_value = "60", value_parser = clap::value_parser!(u64).range(1..))]
     pub poll_interval: u64,
 
     /// Enable AI integration

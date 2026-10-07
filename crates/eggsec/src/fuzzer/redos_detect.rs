@@ -141,8 +141,16 @@ impl RegexExecutor {
 
         let elapsed = start.elapsed().as_millis() as u64;
         let iter_count = iterations.load(Ordering::SeqCst);
-        let is_vulnerable =
-            timeout_flag.load(Ordering::SeqCst) == 1 || iter_count > self.max_iterations / 10;
+        // `regex` matches in linear time and cannot exhibit catastrophic
+        // backtracking, and `iterations` counts one search per test string
+        // (bounded by `test_strings.len()`, 10 by default). There is therefore
+        // no iteration count that indicates blow-up — an earlier
+        // `iter_count > max_iterations / 10` comparison against a default
+        // budget of 10_000 could never be true, so the branch was dead and the
+        // verdict rested on no evidence at all. The timeout flag is the one
+        // real signal this executor can observe: it trips either on the
+        // wall-clock budget or on the per-run iteration guard.
+        let is_vulnerable = timeout_flag.load(Ordering::SeqCst) == 1;
 
         ReDosResult {
             pattern: pattern.to_string(),

@@ -329,7 +329,7 @@ impl TabInput for AuthTab {
             return;
         }
 
-        if self.target().map_or(true, |t| t.is_empty()) {
+        if self.target().is_none_or(|t| t.is_empty()) {
             let err =
                 TabError::Target("Target URL is required for authentication testing".to_string());
             self.core.state = AppState::Error(err.message());

@@ -76,6 +76,17 @@ pub fn decode_packaged_archive(bytes: &[u8]) -> Result<Vec<PackagedThemeFile>, T
     std::io::Read::read_exact(&mut cursor, &mut file_count_buf)?;
     let file_count = u32::from_le_bytes(file_count_buf);
 
+    // Cap the entry count before it drives an allocation. Without this a
+    // corrupt/adversarial `u32::MAX` count pre-allocates ~200 GiB via
+    // `with_capacity` before a single entry is validated — the per-file
+    // content cap below never gets a chance to bound it.
+    const MAX_THEME_FILES: usize = 512;
+    if file_count as usize > MAX_THEME_FILES {
+        return Err(ThemeArchiveError::LzmaError(format!(
+            "theme archive claims {file_count} entries, exceeds {MAX_THEME_FILES} cap"
+        )));
+    }
+
     let mut files = Vec::with_capacity(file_count as usize);
 
     for _ in 0..file_count {
@@ -120,9 +131,28 @@ pub fn decode_packaged_archive(bytes: &[u8]) -> Result<Vec<PackagedThemeFile>, T
 pub fn decode_lzma_base64(encoded: &str) -> Result<Vec<PackagedThemeFile>, ThemeArchiveError> {
     let compressed = STANDARD.decode(encoded)?;
 
+    // `xz_decompress` buffers the whole stream before any entry is validated,
+    // so the per-file cap inside `decode_packaged_archive` never bounds it.
+    // Bound the decompressed payload here: the packaged archive is a few
+    // hundred KiB, so 64 MiB is orders of magnitude of headroom.
+    const MAX_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
+    if compressed.len() > MAX_DECOMPRESSED_BYTES {
+        return Err(ThemeArchiveError::LzmaError(format!(
+            "compressed theme archive is {} bytes, exceeds {MAX_DECOMPRESSED_BYTES} cap",
+            compressed.len()
+        )));
+    }
+
     let mut decompressed = Vec::new();
     lzma_rs::xz_decompress(&mut Cursor::new(compressed), &mut decompressed)
         .map_err(|e| ThemeArchiveError::LzmaError(format!("{e}")))?;
+
+    if decompressed.len() > MAX_DECOMPRESSED_BYTES {
+        return Err(ThemeArchiveError::LzmaError(format!(
+            "decompressed theme archive is {} bytes, exceeds {MAX_DECOMPRESSED_BYTES} cap",
+            decompressed.len()
+        )));
+    }
 
     decode_packaged_archive(&decompressed)
 }

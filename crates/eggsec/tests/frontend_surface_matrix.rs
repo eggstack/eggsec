@@ -11,6 +11,18 @@
 //! runtime TaskKind). TUI tab parity lives in `eggsec-tui` (see
 //! `tabs::spec` parity tests) because the engine must not depend on TUI.
 
+// Feature gate: this target exercises the `commands` / `tool` / `dispatch` /
+// `runtime_bridge` surfaces, which are not compiled without those features.
+// Without this gate the `--no-default-features` *test* build breaks; the
+// per-PR contract only compiles library/binary targets for that profile, so
+// the breakage is invisible until someone builds the tests.
+#![cfg(all(
+    feature = "cli",
+    feature = "tool-api",
+    feature = "rest-api",
+    feature = "grpc-api"
+))]
+
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(feature = "cli")]

@@ -363,7 +363,7 @@ async fn perf_loadtest_wiremock_h1() {
 // A4: synthetic scheduler proof — retained-handle shape vs bounded JoinSet.
 // ---------------------------------------------------------------------------
 
-async fn synthetic_spawn_per_item(total: usize, concurrency: usize) -> (u64, usize) {
+async fn synthetic_spawn_per_item(total: usize, concurrency: usize) -> (u64, usize, usize) {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let live = Arc::new(AtomicUsize::new(0));
     let peak = Arc::new(AtomicUsize::new(0));
@@ -387,13 +387,12 @@ async fn synthetic_spawn_per_item(total: usize, concurrency: usize) -> (u64, usi
     for h in handles {
         acc = acc.wrapping_add(h.await.unwrap_or(0));
     }
-    let retained = total;
-    (
-        acc,
-        retained
-            .min(usize::MAX)
-            .saturating_add(peak.load(Ordering::SeqCst) * 0),
-    )
+    // Return the *measured* peak concurrency alongside the retained-handle
+    // count. This used to be `peak.load(..) * 0` (plus a no-op `.min(usize::MAX)`),
+    // which pinned the headline peak number to a constant and left the whole
+    // unbounded-vs-bounded comparison incapable of moving.
+    let peak_live = peak.load(Ordering::SeqCst);
+    (acc, total, peak_live)
 }
 
 async fn synthetic_bounded_joinset(
@@ -401,11 +400,12 @@ async fn synthetic_bounded_joinset(
     concurrency: usize,
     peak_counter: Arc<AtomicUsize>,
     live_counter: Arc<AtomicUsize>,
-) -> u64 {
+) -> (u64, usize) {
     use tokio::task::JoinSet;
     let mut next = 0usize;
     let mut acc = 0u64;
     let mut set = JoinSet::new();
+    let mut peak_retained = 0usize;
     // Admit at most `concurrency` futures; admit one per completion.
     while next < total || !set.is_empty() {
         while next < total && set.len() < concurrency {
@@ -421,11 +421,14 @@ async fn synthetic_bounded_joinset(
                 (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
             });
         }
+        // High-water mark of live handles — the metric this arm exists to
+        // contrast against the spawn-per-item arm's `total`.
+        peak_retained = peak_retained.max(set.len());
         if let Some(res) = set.join_next().await {
             acc = acc.wrapping_add(res.unwrap_or(0));
         }
     }
-    acc
+    (acc, peak_retained)
 }
 
 #[tokio::test]
@@ -439,18 +442,27 @@ async fn perf_fanout_synthetic() {
     let mut checksum_bounded = 0u64;
     for trial in 0..warmup() + trials() {
         let start = Instant::now();
-        let (acc, retained) = synthetic_spawn_per_item(total, concurrency).await;
+        let (acc, retained, peak_unbounded) = synthetic_spawn_per_item(total, concurrency).await;
         let wall = start.elapsed();
         checksum_unbounded = acc;
+        assert!(
+            peak_unbounded <= concurrency,
+            "spawn-per-item arm exceeded concurrency: {peak_unbounded} > {concurrency}"
+        );
+        assert_eq!(
+            retained, total,
+            "spawn-per-item arm must retain one handle per item"
+        );
         if trial >= warmup() {
             walls_unbounded.push(wall.as_secs_f64());
             println!(
-                "perf fanout-unbounded trial={} total={} concurrency={} wall_ms={} retained_handles={} checksum={:#x}",
+                "perf fanout-unbounded trial={} total={} concurrency={} wall_ms={} retained_handles={} peak_live={} checksum={:#x}",
                 trial,
                 total,
                 concurrency,
                 wall.as_millis(),
                 retained,
+                peak_unbounded,
                 acc
             );
         }
@@ -458,7 +470,8 @@ async fn perf_fanout_synthetic() {
         let peak = Arc::new(AtomicUsize::new(0));
         let live = Arc::new(AtomicUsize::new(0));
         let start = Instant::now();
-        let acc = synthetic_bounded_joinset(total, concurrency, peak.clone(), live.clone()).await;
+        let (acc, retained_bounded) =
+            synthetic_bounded_joinset(total, concurrency, peak.clone(), live.clone()).await;
         let wall = start.elapsed();
         checksum_bounded = acc;
         let peak_live = peak.load(Ordering::SeqCst);
@@ -466,14 +479,25 @@ async fn perf_fanout_synthetic() {
             peak_live <= concurrency,
             "bounded scheduler exceeded concurrency: {peak_live} > {concurrency}"
         );
+        // The whole point of the comparison: the bounded arm keeps live
+        // handles at the concurrency window instead of one per item.
+        assert!(
+            retained_bounded <= concurrency,
+            "bounded scheduler retained {retained_bounded} handles, expected <= {concurrency}"
+        );
+        assert!(
+            retained_bounded < retained,
+            "bounded scheduler retained {retained_bounded} handles, expected < {retained}"
+        );
         if trial >= warmup() {
             walls_bounded.push(wall.as_secs_f64());
             println!(
-                "perf fanout-bounded trial={} total={} concurrency={} wall_ms={} peak_live={} checksum={:#x}",
+                "perf fanout-bounded trial={} total={} concurrency={} wall_ms={} peak_retained_handles={} peak_live={} checksum={:#x}",
                 trial,
                 total,
                 concurrency,
                 wall.as_millis(),
+                retained_bounded,
                 peak_live,
                 acc
             );

@@ -10,6 +10,10 @@ pub struct RateLimitResult {
     pub rate_limit_value: Option<String>,
     pub requests_until_limited: usize,
     pub bypass_techniques: Vec<RateLimitBypassResult>,
+    /// Inconclusive-detection notes (interrupted transport, skipped bypass
+    /// testing). Not a finding on its own — see `lockout::LockoutResult`.
+    #[serde(default)]
+    pub indicators: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +41,7 @@ impl RateLimitTester {
             rate_limit_value: None,
             requests_until_limited: 0,
             bypass_techniques: Vec::new(),
+            indicators: Vec::new(),
         };
 
         for i in 0..50 {
@@ -70,15 +75,37 @@ impl RateLimitTester {
                         break;
                     }
                 }
-                Err(_) => {
-                    result.rate_limited = true;
-                    result.requests_until_limited = i + 1;
+                Err(e) => {
+                    // A transport error is not evidence of a rate limit: the
+                    // host may be down, have no listener, or be blocking us.
+                    // Recording it as `rate_limited = true` fabricates control
+                    // evidence in the report. Mirrors `lockout.rs`: log, mark
+                    // the detection inconclusive, stop.
+                    tracing::warn!(
+                        "Rate limit detection: request {} failed; stopping detection: {}",
+                        i + 1,
+                        e
+                    );
+                    result.indicators.push(format!(
+                        "Detection interrupted: connection failed at attempt {}",
+                        i + 1
+                    ));
                     break;
                 }
             }
         }
 
-        result.bypass_techniques = self.test_bypass_techniques(target).await;
+        // Bypass testing only means something once we have established the
+        // control is present. Testing an endpoint that never rate-limits
+        // produces five "successful bypasses" and a High-severity finding
+        // against a control that does not exist.
+        if result.rate_limited {
+            result.bypass_techniques = self.test_bypass_techniques(target).await;
+        } else {
+            result
+                .indicators
+                .push("Rate limit not observed; rate-limit bypass testing skipped".to_string());
+        }
 
         Ok(result)
     }
@@ -140,6 +167,7 @@ mod tests {
             rate_limit_value: None,
             requests_until_limited: 0,
             bypass_techniques: Vec::new(),
+            indicators: Vec::new(),
         };
         assert!(!result.rate_limited);
     }

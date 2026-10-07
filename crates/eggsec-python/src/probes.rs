@@ -1094,6 +1094,32 @@ async fn dns_query_impl(
             .map_err(|e| NetworkError::new_err(format!("Failed to receive DNS response: {}", e)))?;
 
             response_buf.truncate(n);
+
+            // `recv` returns whatever arrived; the header fields below index
+            // bytes 0..8 unconditionally. Without this minimum-length check a
+            // short (or hostile) datagram panics, and the release profile's
+            // `panic = "abort"` turns that into a process kill rather than a
+            // catchable PanicException.
+            const DNS_HEADER_LEN: usize = 12;
+            if response_buf.len() < DNS_HEADER_LEN {
+                return Err(NetworkError::new_err(format!(
+                    "DNS response too short: {} bytes (minimum {})",
+                    response_buf.len(),
+                    DNS_HEADER_LEN
+                )));
+            }
+
+            // A connected UDP socket can still receive an off-path datagram,
+            // so confirm the reply actually answers the query we sent before
+            // trusting any of its fields.
+            let response_id = u16::from_be_bytes([response_buf[0], response_buf[1]]);
+            if response_id != query_id {
+                return Err(NetworkError::new_err(format!(
+                    "DNS response query id mismatch: expected {}, got {}",
+                    query_id, response_id
+                )));
+            }
+
             Ok::<Vec<u8>, PyErr>(response_buf)
         });
 

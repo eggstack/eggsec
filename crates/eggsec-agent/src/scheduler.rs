@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Notify, RwLock};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -348,6 +348,10 @@ impl Default for TaskScheduler {
 pub struct TaskQueue {
     sender: mpsc::Sender<ScheduledTask>,
     receiver: Arc<RwLock<Option<mpsc::Receiver<ScheduledTask>>>>,
+    /// Signalled whenever a consumer returns the receiver to the slot, so a
+    /// concurrent `recv()` can wait for the slot instead of spinning or
+    /// reporting a spurious end-of-stream.
+    available: Arc<Notify>,
 }
 
 impl TaskQueue {
@@ -357,17 +361,36 @@ impl TaskQueue {
             Self {
                 sender: tx.clone(),
                 receiver: Arc::new(RwLock::new(Some(rx))),
+                available: Arc::new(Notify::new()),
             },
             tx,
         )
     }
 
     pub async fn recv(&self) -> Option<ScheduledTask> {
-        let mut receiver = self.receiver.write().await;
-        if let Some(rx) = receiver.as_mut() {
-            rx.recv().await
-        } else {
-            None
+        loop {
+            // Take the receiver out for the duration of the await instead of
+            // holding the write guard across `recv()`. The guard is only needed
+            // for `&mut`, and holding it across a blocking receive blocks every
+            // other caller on `write().await` until the message arrives — i.e.
+            // permanently, when the queue goes idle.
+            let mut receiver = {
+                let mut guard = self.receiver.write().await;
+                match guard.take() {
+                    Some(rx) => rx,
+                    None => {
+                        drop(guard);
+                        // Another consumer holds it; wait to be handed it back.
+                        self.available.notified().await;
+                        continue;
+                    }
+                }
+            };
+
+            let task = receiver.recv().await;
+            *self.receiver.write().await = Some(receiver);
+            self.available.notify_waiters();
+            return task;
         }
     }
 

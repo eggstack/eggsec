@@ -82,7 +82,7 @@ impl BinaryBufferPy {
         (*view).obj = std::ptr::null_mut(); // PyO3 will set this
         (*view).buf = ptr as *mut c_void;
         (*view).len = len;
-        (*view).readonly = 0; // mutable in principle, but we don't expose mutation
+        (*view).readonly = 1; // `data` is reachable only via `&self`: not writable
         (*view).itemsize = 1;
         (*view).format = b"b\0".as_ptr() as *mut _; // signed char
         (*view).ndim = 1;

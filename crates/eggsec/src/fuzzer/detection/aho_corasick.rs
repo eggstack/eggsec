@@ -59,6 +59,17 @@ static MATCHER: LazyLock<Option<AhoCorasick>> = LazyLock::new(|| {
 #[derive(Clone)]
 pub struct PatternMatcher;
 
+/// Round `idx` down to the nearest char boundary of `text`.
+///
+/// (`str::floor_char_boundary` is unstable; MSRV is 1.89.)
+fn floor_char_boundary(text: &str, idx: usize) -> usize {
+    let mut idx = idx.min(text.len());
+    while !text.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
 impl PatternMatcher {
     pub fn new() -> Self {
         Self
@@ -76,7 +87,12 @@ impl PatternMatcher {
             let pattern_idx = mat.pattern().as_usize();
             if let Some((pattern, category, severity)) = PATTERNS.get(pattern_idx) {
                 let start = mat.start().saturating_sub(50);
+                // `start - 50` generally lands mid-character in a multi-byte
+                // body; `str::get` would then return `None` and silently drop
+                // the primary evidence field for every non-ASCII response.
+                let start = floor_char_boundary(text, start);
                 let end = (mat.end() + 50).min(text.len());
+                let end = floor_char_boundary(text, end);
                 let context = text.get(start..end).map(|s| s.to_string());
 
                 matches.push(LeakMatch {

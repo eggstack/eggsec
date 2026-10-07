@@ -33,10 +33,17 @@ test-slow:
 # Run clippy (routine: engine + dependency-light leaf crates)
 # Phase E WS2: engine default is empty; lint both the empty library default
 # and the `cli` process-host surface (used by eggsec-cli/eggsec-tui).
+#
+# eggsec-tui / eggsec-cli (the process hosts) and the knowledge-corpus leaves
+# are listed explicitly: they had no clippy coverage at all, so `-D warnings`
+# had never gated them — including the crate with the most guard rules. Keep
+# this list in sync with the workspace members `make check` builds.
 clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
 	cargo clippy --lib -p eggsec --features cli -- -D warnings
 	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-report-model -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -p eggsec-transport-eggfetch -p eggsec-policy -- -D warnings
+	cargo clippy -p eggsec-tui -p eggsec-cli -- -D warnings
+	cargo clippy -p eggsec-secrets -p eggsec-payloads -p eggsec-service-db -p eggsec-udp-scan -- -D warnings
 
 # Lint domain/platform crates with their relevant features (deep checks only:
 # heavier closures, may need system prerequisites like libssl-dev).
@@ -108,6 +115,10 @@ check-deps:
 check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
+	# Build the *test* targets for the no-default-features profile too:
+	# `cargo check --workspace` only compiles library/binary targets, so a
+	# feature-gated `use eggsec::commands` in tests/ can break unnoticed.
+	cargo check -p eggsec --all-targets --no-default-features
 	cargo check -p eggsec
 	cargo check -p eggsec-cli
 	cargo check -p eggsec-cli --no-default-features

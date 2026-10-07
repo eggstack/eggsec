@@ -10,6 +10,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 #[cfg(feature = "stress-testing")]
 use tokio::net::UdpSocket;
+#[cfg(all(feature = "stress-testing", unix))]
+use tokio::task::JoinSet;
+
+/// Maximum live senders retained by a flood loop. Finished tasks are reaped as
+/// the set drains, so this is a live-task cap, not a total-tasks budget.
+#[cfg(feature = "stress-testing")]
+const MAX_IN_FLIGHT_SENDS: usize = 1024;
 
 #[cfg(feature = "stress-testing")]
 use super::metrics::StressMetrics;
@@ -176,7 +183,7 @@ async fn run_udp_flood_spoofed(
 
     let duration = Duration::from_secs(config.duration_secs);
     let start_time = Instant::now();
-    let interval = Duration::from_micros(1_000_000 / config.rate_pps.max(1));
+    let interval = Duration::from_micros((1_000_000 / config.rate_pps.max(1)).max(1));
 
     crate::platform::check_privileged("UDP flood")?;
 
@@ -210,9 +217,21 @@ async fn run_udp_flood_spoofed(
 
     let socket = Arc::new(socket);
 
-    let mut handles = Vec::new();
+    let mut in_flight = JoinSet::new();
 
     while start_time.elapsed() < duration {
+        // Bound the fan-out. Reaping finished senders keeps the live task
+        // count at the cap; retaining a handle per packet instead grows to
+        // ~30M tasks at the default scope caps (rate 100k/s × 300s), which is
+        // a guaranteed OOM.
+        while in_flight.len() >= MAX_IN_FLIGHT_SENDS {
+            match in_flight.join_next().await {
+                Some(Ok(())) => {}
+                Some(Err(e)) => tracing::warn!("UDP spoofed flood worker panicked: {e}"),
+                None => break,
+            }
+        }
+
         let src_ip = get_random_spoofed_ip(&spoof_range);
         let src_port = if config.random_source_port {
             rand::random::<u16>()
@@ -225,7 +244,7 @@ async fn run_udp_flood_spoofed(
         let socket = socket.clone();
         let metrics = metrics.clone();
 
-        let handle = tokio::spawn(async move {
+        in_flight.spawn(async move {
             let mut dst: libc::sockaddr_in = unsafe { std::mem::zeroed() };
             #[cfg(any(
                 target_os = "macos",
@@ -269,8 +288,6 @@ async fn run_udp_flood_spoofed(
             }
         });
 
-        handles.push(handle);
-
         if interval > Duration::ZERO {
             tokio::time::sleep(interval).await;
         }
@@ -278,19 +295,18 @@ async fn run_udp_flood_spoofed(
 
     // Drain bound: single-syscall workers always finish promptly, but a
     // wedged raw socket must not stall the flood past the 300s task cap.
-    let results =
-        tokio::time::timeout(Duration::from_secs(300), futures::future::join_all(handles))
-            .await
-            .map_err(|_| {
-                EggsecError::Runtime(
-                    "UDP spoofed flood worker drain timed out after 300s".to_string(),
-                )
-            })?;
-    for result in results {
-        if let Err(e) = result {
-            tracing::warn!("UDP spoofed flood worker panicked: {e}");
+    let drain = async {
+        while let Some(result) = in_flight.join_next().await {
+            if let Err(e) = result {
+                tracing::warn!("UDP spoofed flood worker panicked: {e}");
+            }
         }
-    }
+    };
+    tokio::time::timeout(Duration::from_secs(300), drain)
+        .await
+        .map_err(|_| {
+            EggsecError::Runtime("UDP spoofed flood worker drain timed out after 300s".to_string())
+        })?;
 
     match socket.lock() {
         Ok(guard) => {
@@ -361,7 +377,7 @@ async fn run_udp_flood_standard(
 ) -> Result<StressStats> {
     let start_time = Instant::now();
     let duration = Duration::from_secs(config.duration_secs);
-    let interval = Duration::from_micros(1_000_000 / config.rate_pps.max(1));
+    let interval = Duration::from_micros((1_000_000 / config.rate_pps.max(1)).max(1));
 
     let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let metrics = Arc::new(metrics.clone());
@@ -369,7 +385,7 @@ async fn run_udp_flood_standard(
     let target_addr = Arc::new(target_addr);
     let random_port = config.random_source_port;
 
-    let mut handles = Vec::new();
+    let mut in_flight = JoinSet::new();
 
     while start_time.elapsed() < duration {
         let permit = semaphore.clone().acquire_owned().await?;
@@ -383,7 +399,7 @@ async fn run_udp_flood_standard(
             None
         };
 
-        let handle = tokio::spawn(async move {
+        in_flight.spawn(async move {
             let socket = match create_udp_socket(port).await {
                 Ok(s) => s,
                 Err(_) => {
@@ -405,26 +421,27 @@ async fn run_udp_flood_standard(
             drop(permit);
         });
 
-        handles.push(handle);
-
         if interval > Duration::ZERO {
             tokio::time::sleep(interval).await;
         }
     }
 
     // Drain bound: socket workers are request-scoped, but a wedged send
-    // must not stall the flood past the 300s task cap.
-    let results =
-        tokio::time::timeout(Duration::from_secs(300), futures::future::join_all(handles))
-            .await
-            .map_err(|_| {
-                EggsecError::Runtime("UDP flood worker drain timed out after 300s".to_string())
-            })?;
-    for result in results {
-        if let Err(e) = result {
-            tracing::warn!("UDP flood worker panicked: {e}");
+    // must not stall the flood past the 300s task cap. `JoinSet` reaps each
+    // finished sender as the set drains, so handles are not retained
+    // one-per-packet for the whole flood.
+    let drain = async {
+        while let Some(result) = in_flight.join_next().await {
+            if let Err(e) = result {
+                tracing::warn!("UDP flood worker panicked: {e}");
+            }
         }
-    }
+    };
+    tokio::time::timeout(Duration::from_secs(300), drain)
+        .await
+        .map_err(|_| {
+            EggsecError::Runtime("UDP flood worker drain timed out after 300s".to_string())
+        })?;
 
     Ok(metrics.to_stats())
 }
