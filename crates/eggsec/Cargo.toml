@@ -73,7 +73,7 @@ quick-xml = { version = "0.41", features = ["serialize"] }
 ipnetwork.workspace = true
 hickory-resolver.workspace = true
 hostname.workspace = true
-sha2 = "0.10"
+sha2 = "0.11"
 md-5.workspace = true
 hmac = "0.12"
 hex.workspace = true

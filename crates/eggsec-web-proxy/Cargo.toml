@@ -100,7 +100,7 @@ parking_lot = "0.12"
 
 # HMAC/SHA256 for bundle signing
 hmac = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Hex encoding for signatures and protobuf
 hex = "0.4"
