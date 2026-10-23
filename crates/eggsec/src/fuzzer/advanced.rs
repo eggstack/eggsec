@@ -443,7 +443,7 @@ impl AdvancedFuzzer for WebSocketFuzzer {
                 .collect();
 
             let config = crate::websocket::WebSocketTestConfig {
-                url: self.url.clone(),
+                url: self.url().to_string(),
                 timeout_secs: 10,
                 injection_payloads,
                 test_connection: true,
