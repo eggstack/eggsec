@@ -118,7 +118,8 @@ The subsystem **does not own**:
 The engine is already frontend-neutral, and the workspace already contains
 most of the pieces a GUI needs. Milestones 001–005 have since turned those
 pieces into a working desktop frontend; what remains is coverage, export, and
-daemon lifecycle — not the foundation.
+daemon lifecycle — not the foundation. Milestones 006 and 007 are **planned and
+registered** (2026-10-23) but not yet implemented.
 
 **What exists today:**
 
@@ -194,11 +195,13 @@ daemon lifecycle — not the foundation.
    `ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs`), so a
    daemon-mediated confirmation flow cannot complete today. The GUI handles
    `PolicyDecisionRequired` defensively and offers no approval affordance.
-5. **The socket-path default is duplicated in four places** — the CLI's
+5. **The socket-path default is duplicated in six places** — the CLI's
    `--socket`, the daemon's `DaemonConfig::default`, the daemon binary's
-   `--socket-path`, and the GUI's own default — and there is no socket-path
-   environment variable. Collapsing the duplication belongs to a corrective
-   plan, not to this roadmap.
+   `--socket-path`, the GUI crate's own default, and the same literal in the
+   GUI's `frontend/app.js` and `frontend/index.html` — and there is no
+   socket-path environment variable. (The count was previously recorded as
+   four; it is six, and the GUI's own source comment understates it further.)
+   Collapsing the duplication belongs to a corrective plan, not to this roadmap.
 
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
@@ -482,6 +485,28 @@ opaque failure.
 
 Deferred work: visual refinement, accessibility conformance beyond defaults.
 
+Implementation plan: `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md`
+(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+
+Two findings recorded at plan-authoring time, because they shape what this
+milestone can deliver and they were measured rather than assumed:
+
+- **The capability list cannot answer the availability question.** The daemon's
+  published task kinds are a compile-time constant that is never feature-derived,
+  and `DaemonCapabilities` publishes no enabled-feature set, so a client cannot
+  tell whether a reachable daemon can execute a given operation. The plan
+  therefore adds an **additive** enabled-features read path and keeps a
+  denial-driven fallback for older daemons.
+- **Report data cannot cross the wire today.** The result envelope's payload is
+  empty and that is pinned by a test, so the plan routes report data over a new
+  read-only command and treats filling the pinned payload as an **ADR-gated stop
+  condition** rather than an implementation choice.
+
+The daemon-lifecycle choice this milestone owns is resolved in the plan as: the
+default remains "connect to a running daemon" with the precise start command,
+and spawn-and-supervise is **opt-in behind an operator-supplied executable path**,
+because nothing in the workspace installs `eggsec-daemon`.
+
 ### Milestone 7 — Packaging and platform qualification
 
 Class: operational
@@ -503,6 +528,23 @@ system prerequisites are documented; known limitations are recorded.
 
 Deferred work: signing, notarization, installers, update channels — all
 owned by the separate distribution workstream.
+
+Implementation plan: `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md`
+(**planned 2026-10-23**, `Primary class: operational`; not yet implemented).
+
+The plan is authored to be handed off **once M6 closes**; M6 is its hard
+dependency and that is stated in the plan rather than papered over. One finding
+recorded at plan-authoring time bounds the milestone's Windows row: the GUI
+**does not currently compile on Windows**, because the frontend client uses
+`tokio::net::UnixStream` unconditionally and the daemon's transport is a Unix
+domain socket. Windows is therefore a **named limitation to escalate**, not a
+qualification to claim. The platform matrix has one row per platform
+(Linux/macOS/Windows) and one column per required behaviour — build, launch,
+connect, submit, cancel, render, export — each cell carrying evidence or a
+justified gap, because `make check` never exercises a windowed application.
+`bundle.active` stays `false`, so this milestone hands over the binary and a
+reproducible build recipe rather than making a packaging decision that belongs
+to the distribution workstream.
 
 ## 8. Cross-cutting requirements
 
@@ -657,5 +699,5 @@ This roadmap is closed when:
 | 3 — Desktop GUI surface parity | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/003-desktop-gui-surface-parity.md` | `plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md` | — |
 | 4 — GUI shell skeleton | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/004-gui-shell-skeleton.md` | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | — |
 | 5 — Schema-driven forms and task dashboard | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard.md` | `plans/closure/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard-closure.md` | — |
-| 6 — Full operation coverage and report export | not started | — | — | M5 |
-| 7 — Packaging and platform qualification | not started | — | — | M6; distribution policy |
+| 6 — Full operation coverage and report export | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` | — (not yet closed) | M5 (met — M5 implemented 2026-10-23) |
+| 7 — Packaging and platform qualification | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | — (not yet closed) | M6 (**open** — M7 is gated on M6 closing); distribution policy |
