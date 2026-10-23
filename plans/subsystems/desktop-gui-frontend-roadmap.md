@@ -118,8 +118,9 @@ The subsystem **does not own**:
 The engine is already frontend-neutral, and the workspace already contains
 most of the pieces a GUI needs. Milestones 001–005 have since turned those
 pieces into a working desktop frontend; what remains is coverage, export, and
-daemon lifecycle — not the foundation. Milestones 006 through 009 are
-**planned and registered** (2026-10-23) but not yet implemented.
+daemon lifecycle — not the foundation. **Milestones 007, 008, and 009 were
+implemented on 2026-10-23** (007 conditionally closed, 008 and 009 closed);
+**milestone 006 remains planned and registered** but not yet implemented.
 
 **The supported-platform set is decided.** `ADR-0010` fixes the desktop GUI's
 platforms at **Linux and macOS** and records **Windows as out of scope**, with
@@ -192,11 +193,22 @@ unaffected.
    Milestone 005 renders a form for any published task kind and reports an
    operation as unavailable when the connected daemon cannot run it, but
    hiding unavailable operations rather than reporting them, and export
-   through `eggsec-output`, are milestone 006's work.
+   through `eggsec-output`, are milestone 006's work. **Milestone 008 has
+   since removed the underlying cause of the *inaccuracy***: the daemon now
+   publishes a capability list **derived from what its executor can actually
+   execute** (milestone 009), so a daemon can no longer advertise a
+   capability it rejects outright. Milestone 006's remaining work is the
+   *reporting* of feature-gated unavailability, which needs the additive
+   enabled-features handshake field.
 3. **The GUI does not manage the daemon's lifecycle.** It requires an
-   already-running `eggsec-daemon --full-executor` and names the exact start
-   command when the socket is unreachable. Spawning and supervising a daemon
-   is milestone 006's work.
+   already-running daemon and names the exact start command when the socket
+   is unreachable. Spawning and supervising a daemon is milestone 006's work.
+   **Milestones 008 and 009 have closed the two defects that made the
+   instruction unusable**: the daemon now has a documented, reproducible
+   build recipe for a profile that actually contains the engine's features,
+   and the documented start command names the cargo feature the binary must
+   be **built** with — the runtime `--full-executor` flag alone cannot add an
+   engine that was not compiled in.
 4. **Interactive approval is unwired in the daemon.** `ApprovePolicy` returns
    `ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs`), so a
    daemon-mediated confirmation flow cannot complete today. The GUI handles
@@ -215,6 +227,11 @@ unaffected.
    Milestone 006's coverage value ("the GUI reaches the engine's full feature
    set") is therefore unreachable without a daemon feature profile, which is
    **milestone 008's** work.
+   **CLOSED by milestone 008 (2026-10-23).** The daemon now has a `service`
+   cargo feature carrying 20 engine features, derived from the policy catalog
+   and machine-checked against the compiled binary; `full-executor` is its
+   deprecated alias. The profile's document is
+   `docs/DAEMON_FEATURE_PROFILE.md`.
 7. **Nothing installs the daemon binary, and `eggsec daemon start` advertises
    capabilities it cannot execute.** `cargo install --path crates/eggsec-cli`
    installs only `eggsec`; there is no `PATH` or sidecar convention for
@@ -225,6 +242,12 @@ unaffected.
    logic", which the code does not do. Milestone 009 owns the obtainability
    path and the start honesty fix; the CLI-side defect is visible to CLI users
    today, independently of this roadmap.
+   **CLOSED by milestone 009 (2026-10-23).** The published capability list is
+   now **derived from the executor's declaration**, so a rejecting executor
+   publishes nothing; the CLI's rejecting executor is deleted; the start path
+   waits for a real readiness signal and reports success only from a *ready*
+   outcome; and both start paths refuse to displace a live daemon. The
+   obtainability recipe is in `docs/DAEMON.md`.
 
 8. **The GUI's manual surface is not in the engine's permissive set.**
    `resolve_loaded_scope` treats only `RuntimeSurface::CliManual` and
@@ -237,6 +260,26 @@ unaffected.
    divergence**, not a design choice. It is an engine-side defect in the
    runtime bridge, outside the GUI crate, and it is not owned by any milestone
    in this roadmap. It is recorded here so it is not lost.
+9. **The desktop GUI's platform qualification is honest but incomplete.**
+   Milestone 007 produced the matrix, the build recipe, the prerequisite
+   probe, the CI matrix job, the runbook, and the distribution handoff
+   artifact — but only **one** behavioural cell is qualified (`macos` /
+   Build), `macos` / Launch is partially qualified, the **Linux row is not
+   qualified** (no Linux host was executed), the behavioural cells are not
+   qualified (no window-automation driver, and milestone 006 owns the daemon
+   lifecycle the runbook otherwise has to do by hand), and `Export` is
+   `pending M6`. The milestone is therefore **conditionally closed**. The
+   evidence path for each cell is recorded in the matrix's promotion table
+   and in `docs/GUI_PLATFORM_QUALIFICATION.md`; the `gui-platform` CI job on
+   `ubuntu-latest` and `macos-latest` is what promotes a cell.
+10. **The daemon's server still unlinks the socket path before binding.**
+    Milestone 009's pre-flight liveness check refuses to displace a live
+    daemon from both start paths, but the check narrows the window to a race
+    between two simultaneous starts; it does not close it, because
+    `run_server` still unlinks the path before binding
+    (`crates/eggsec-daemon/src/server.rs:89-95`). Server-side hardening —
+    refusing to bind over a live socket — changes the server's bind contract
+    and is explicitly deferred to a separate milestone.
 
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
@@ -568,10 +611,20 @@ Deferred work: signing, notarization, installers, update channels — all
 owned by the separate distribution workstream.
 
 Implementation plan: `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md`
-(**planned 2026-10-23**, `Primary class: operational`; not yet implemented).
+(**conditionally closed 2026-10-23**, `Primary class: operational`; closure
+`plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md`).
 
-The plan is authored to be handed off **once M6 closes**; M6 is its hard
-dependency and that is stated in the plan rather than papered over.
+**The milestone's infrastructure is implemented; its operational evidence is
+outstanding.** The qualification matrix, the reproducible build recipe, the
+prerequisite probe, the `gui-platform` CI job, the runbook, and the
+distribution handoff artifact all landed. The matrix is deliberately honest
+about what was and was not exercised: only `macos` / Build is **qualified**,
+`macos` / Launch is **partially qualified**, the Linux row is **not
+qualified** (no Linux host was executed here — the CI job is the named
+evidence path), the behavioural cells are **not qualified** (no
+window-automation driver, and M6 owns the daemon lifecycle the procedure
+otherwise has to do by hand), and `Export` is **`pending M006`**. M6 remains
+open, so the milestone is **conditionally closed** rather than closed.
 
 **The supported-platform set is now decided.** `ADR-0010` fixes it at **Linux
 (x86_64 glibc) and macOS (x86_64 and arm64)**, and records **Windows as out of
@@ -621,7 +674,18 @@ Deferred work: the profile's **runtime publication** belongs to milestone 006
 belongs to milestone 009.
 
 Implementation plan: `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md`
-(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+(**closed 2026-10-23**, `Primary class: capability`; closure
+`plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md`).
+
+**Implemented.** The profile contract lives in the engine at
+`crates/eggsec/src/config/daemon_profile.rs` — 20 included features, 30
+excluded, an absolute-no forbidden subset, a **derived** required set that
+reads the policy catalog, and a pure, fail-closed validator. The daemon's
+`service` cargo feature enables the profile and `full-executor` is its
+deprecated alias. The build recipe is `scripts/build-daemon-profile.sh` plus
+`make build-daemon-profile`, and the conformance test runs on both sides —
+statically in every `make check`, and at runtime against the **compiled**
+feature set.
 
 This is the one milestone in this roadmap whose **code surface is outside the
 GUI crate**. It is tracked here because milestone 006 depends on it and there is
@@ -655,7 +719,16 @@ Deferred work: the GUI's own packaging, and the distribution workstream's
 signing and installers.
 
 Implementation plan: `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md`
-(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+(**closed 2026-10-23**, `Primary class: capability`; closure
+`plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md`).
+
+**Implemented.** The capability lie is now unrepresentable: the executor
+declares its own support, the host derives its published list from that
+declaration, and a rejecting executor publishes nothing. The CLI's
+rejecting executor is gone; the start path waits for a **real readiness
+signal** and reports success only from a typed *ready* outcome; and both
+start paths refuse to displace a live daemon. The obtainability recipe is
+documented in `docs/DAEMON.md`.
 
 Like M8, this milestone's code surface is outside the GUI crate. It is tracked
 here because milestone 006's daemon-lifecycle work needs a daemon that can be
@@ -827,6 +900,6 @@ This roadmap is closed when:
 | 4 — GUI shell skeleton | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/004-gui-shell-skeleton.md` | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | — |
 | 5 — Schema-driven forms and task dashboard | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard.md` | `plans/closure/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard-closure.md` | — |
 | 6 — Full operation coverage and report export | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` | — (not yet closed) | M5 (met — M5 implemented 2026-10-23) |
-| 7 — Packaging and platform qualification | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | — (not yet closed) | M6 (**open**); M8, M9 (**open**); distribution policy |
-| 8 — Daemon feature profile and build recipe | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | — (not yet closed) | — |
-| 9 — Daemon obtainability and start honesty | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | — (not yet closed) | M8 (soft) |
+| 7 — Packaging and platform qualification | **conditionally closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | `plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md` | M6 (**open** — the `Export` column is `pending M006`); outstanding operational evidence named per cell in the qualification matrix |
+| 8 — Daemon feature profile and build recipe | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | `plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md` | — |
+| 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
