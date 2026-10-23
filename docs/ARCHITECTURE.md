@@ -321,7 +321,7 @@ DaemonClient → Runtime::submit(RunRequest)
 **Invariant**: All daemon-dispatched operations must pass through `approve_run_request_bundle()` before execution. The `ApprovedRunRequest` bundle couples the approval token with the specific request, preventing token reuse.
 **Close-session behavior**: Closing a session persists a final snapshot (with `closed=true` and cancelled tasks) but does **not** delete the session. History is preserved and accessible via `daemon history` / `daemon show`.
 
-**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
+**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind the daemon's `service` profile, whose deprecated `full-executor` alias selects the same profile) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support, so a rejecting executor cannot advertise a capability it cannot execute.
 
 ## 5. Side-Effecting Execution Path Inventory
 

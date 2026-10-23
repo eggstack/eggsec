@@ -232,7 +232,7 @@ The engine crate provides `EggsecRuntimeExecutor` which:
 3. Calls `approve_run_request_bundle()` for policy enforcement
 4. Calls `dispatch_approved_runtime_request()` for tool dispatch
 
-Without `full-executor`: `NoopExecutorStub` rejects all tasks.
+Without the daemon's `service` profile (deprecated alias `full-executor`): `NoopExecutorStub` rejects all tasks, and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support.
 
 ## Public API
 

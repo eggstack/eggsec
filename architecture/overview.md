@@ -67,7 +67,7 @@ nor hosted CI publishes a package.
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
-| `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.32 bundled); optional `http-api` SSE transport, optional `full-executor`. |
+| `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.32 bundled); optional `http-api` SSE transport, optional `service` profile (the GUI-serving engine feature set; `full-executor` is a deprecated alias for it). |
 | `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (16), `ServerMessage` (15), `ErrorCode` (11), RBAC client registry, published operation catalog. Depends on `eggsec-runtime` + `eggsec-policy`. |
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
 | `eggsec-gui` | Desktop GUI frontend | No | Tauri v2 desktop shell (2.11.x, exact pins). Daemon-only: no engine, daemon, CLI or TUI dep; no outbound HTTP; buildless frontend with zero npm dependencies. Deep dive: [desktop_gui.md](desktop_gui.md). |
@@ -216,7 +216,7 @@ The daemon architecture enables persistent sessions, background task execution, 
 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
-| Daemon | `crates/eggsec-daemon/` | Long-running host: session persistence (SQLite via rusqlite, bundled), client registry, Unix socket IPC, optional HTTP/SSE transport (`http-api`), optional full engine executor (`full-executor`) | [daemon.md](daemon.md) |
+| Daemon | `crates/eggsec-daemon/` | Long-running host: session persistence (SQLite via rusqlite, bundled), client registry, Unix socket IPC, optional HTTP/SSE transport (`http-api`), optional GUI-serving engine profile (`service`; `full-executor` is a deprecated alias) | [daemon.md](daemon.md) |
 | Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (16), `ServerMessage` (15), `ErrorCode` (11), `ClientRegistry` with roles/permissions; read-only publication of the operation catalog + derived request schema (`operations`); no persistence/TLS deps | [daemon.md](daemon.md) |
 | Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, sessions, event broadcasting; zero workspace deps. Optional `schema` feature derives a JSON Schema over the canonical request DTOs | [runtime.md](runtime.md) |
 | Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `RuntimeSurface`→`ExecutionSurface` (1:1 except `Unknown`→error), `RunRequest`/`TaskKind`→`OperationDescriptor`; `preflight_run_request()` preview, `approve_run_request()` issues `ApprovedOperation`; manual overrides honored only on ManualPermissive surfaces | [runtime_bridge.md](runtime_bridge.md) |

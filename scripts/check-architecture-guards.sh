@@ -2674,8 +2674,51 @@ if ! rg -q 'eggsec = \{ path = "\.\./eggsec", version = "0\.1\.0", features = \[
   echo "FAIL: eggsec-tui must depend on eggsec with explicit version + features=[\"cli\"]."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'full-executor = \["dep:eggsec", "eggsec/cli"\]' crates/eggsec-daemon/Cargo.toml 2>/dev/null; then
-  echo "FAIL: daemon full-executor must enable eggsec/cli explicitly (engine default is empty)."
+if [[ ! -f crates/eggsec-daemon/Cargo.toml ]]; then
+  echo "FAIL: crates/eggsec-daemon/Cargo.toml is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! python3 - crates/eggsec-daemon/Cargo.toml <<'PYEOF' 2>&1; then
+import sys, pathlib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    print("FAIL: python3 with tomllib (3.11+) is required to parse the daemon manifest.")
+    sys.exit(1)
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = tomllib.loads(path.read_text())
+except Exception as exc:
+    print(f"FAIL: {path} is not valid TOML: {exc}")
+    sys.exit(1)
+
+features = (data.get("features") or {})
+problems = []
+
+service = features.get("service")
+if not isinstance(service, list):
+    problems.append("the daemon must declare a `service` feature (the GUI-serving daemon profile)")
+else:
+    # `cli` is a HOST GATE, not a CLI surface: it gates the engine's
+    # `runtime_bridge`, `commands`, and `dispatch` modules, which is where
+    # `EggsecRuntimeExecutor` lives. The daemon cannot host the executor it
+    # is built around without it.
+    for required in ("dep:eggsec", "eggsec/cli"):
+        if required not in service:
+            problems.append(f"the daemon's `service` feature must enable `{required}`")
+
+if features.get("full-executor") != ["service"]:
+    problems.append(
+        "the daemon's `full-executor` feature must be exactly [\"service\"] (a deprecated alias)"
+    )
+
+if problems:
+    print("FAIL: the daemon must opt into the engine explicitly, through its profile:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
@@ -4855,6 +4898,486 @@ PYEOF
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: the GUI's task state bounds its log retention and reports what it drops."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 163. The daemon's GUI-serving profile is pinned to the engine's contract.
+# Milestone 008. The engine owns the feature list -- it is the single source
+# of truth -- and the daemon's manifest consumes it. Drift between the two
+# would silently ship a daemon with a different dependency closure than the
+# one the documentation and the conformance tests describe.
+#
+# Checks 161 and 162 are reserved for milestone 006, which owns the wire-side
+# publication of the enabled-feature set. They are deliberately absent here.
+echo ""
+echo "--- Check 163: the daemon's service profile matches the engine's contract ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-daemon/Cargo.toml ]]; then
+  echo "FAIL: crates/eggsec-daemon/Cargo.toml is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to compare the daemon manifest with the engine's profile."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-daemon/Cargo.toml crates/eggsec/src/config/daemon_profile.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    print("FAIL: python3 with tomllib (3.11+) is required to parse the daemon manifest.")
+    sys.exit(1)
+
+manifest_path, module_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+problems = []
+
+try:
+    manifest = tomllib.loads(manifest_path.read_text())
+except Exception as exc:
+    print(f"FAIL: {manifest_path} is not valid TOML: {exc}")
+    sys.exit(1)
+
+try:
+    module = module_path.read_text()
+except OSError as exc:
+    print(f"FAIL: cannot read {module_path}: {exc}")
+    sys.exit(1)
+
+match = re.search(
+    r"pub static DAEMON_SERVICE_PROFILE[^=]*=\s*&\[(.*?)\];",
+    module,
+    re.S,
+)
+if not match:
+    print(f"FAIL: {module_path} declares no DAEMON_SERVICE_PROFILE list.")
+    sys.exit(1)
+
+declared = set(re.findall(r'"([a-z0-9\-]+)"', match.group(1)))
+if not declared:
+    print(f"FAIL: {module_path} declares an empty DAEMON_SERVICE_PROFILE list.")
+    sys.exit(1)
+
+features = manifest.get("features") or {}
+service = features.get("service")
+if not isinstance(service, list):
+    problems.append("the daemon manifest declares no `service` feature list")
+else:
+    enabled = {
+        item.split("/", 1)[1]
+        for item in service
+        if isinstance(item, str) and item.startswith("eggsec/")
+    }
+    missing = sorted(declared - enabled)
+    extra = sorted(enabled - declared)
+    if missing:
+        problems.append(
+            "the daemon's `service` feature omits engine features the contract lists: "
+            + ", ".join(missing)
+        )
+    if extra:
+        problems.append(
+            "the daemon's `service` feature enables engine features the contract does "
+            "not list: " + ", ".join(extra)
+        )
+
+if features.get("full-executor") != ["service"]:
+    problems.append(
+        "the daemon's `full-executor` feature must be exactly [\"service\"] (a deprecated alias)"
+    )
+
+if problems:
+    print("FAIL: the daemon's service profile drifted from the engine's contract:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon's service profile matches the engine's DAEMON_SERVICE_PROFILE."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 164. The CLI hosts no rejecting daemon executor. Milestone 009.
+#
+# The CLI's `daemon start` used to host an executor that rejected every task,
+# so the daemon it started advertised capabilities it could not execute. The
+# lie was the defect; the fix makes it unrepresentable by removing the
+# rejecting executor from the CLI entirely.
+echo ""
+echo "--- Check 164: the CLI carries no rejecting daemon executor ---"
+SECTION_FAIL=0
+if [[ ! -d crates/eggsec-cli/src ]]; then
+  echo "FAIL: crates/eggsec-cli/src is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-cli/src <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+root = pathlib.Path(sys.argv[1])
+problems = []
+
+for path in sorted(root.rglob("*.rs")):
+    text = path.read_text()
+    # The production half of the file is everything before the first
+    # `#[cfg(test)]` block; a test may name the rejected shape to prove it
+    # is gone.
+    production = text.split("#[cfg(test)]", 1)[0]
+    if re.search(r"struct\s+NoopExecutor\b", production):
+        problems.append(f"{path} declares a `NoopExecutor` in its production code")
+    if "RuntimeError::UnsupportedTaskKind" in production:
+        problems.append(
+            f"{path} rejects tasks with `RuntimeError::UnsupportedTaskKind` in its production code"
+        )
+
+if problems:
+    print("FAIL: the CLI carries a rejecting daemon executor:")
+    for problem in problems:
+        print(f"      {problem}")
+    print("      the CLI's daemon start path must host the engine executor, not a stub")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CLI carries no rejecting daemon executor."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 165. The daemon host derives its published capabilities. Milestone 009.
+#
+# The `Capabilities` reply used to publish a hardcoded capability constant.
+# It must publish the host's DERIVED list -- the executor's declaration
+# intersected with the daemon's conservative policy -- so a host can never
+# advertise a capability its executor rejects outright.
+echo ""
+echo "--- Check 165: the daemon host derives its published capabilities ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-daemon/src/host.rs ]]; then
+  echo "FAIL: crates/eggsec-daemon/src/host.rs is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-daemon/src/host.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+production = text.split("#[cfg(test)]", 1)[0]
+
+marker = "ClientCommand::Capabilities {"
+index = production.find(marker)
+if index < 0:
+    print(f"FAIL: {path} has no `ClientCommand::Capabilities` arm.")
+    sys.exit(1)
+
+# Brace-match the arm so the check covers the arm and nothing else.
+start = production.find("{", index)
+depth = 0
+end = -1
+for position in range(start, len(production)):
+    char = production[position]
+    if char == "{":
+        depth += 1
+    elif char == "}":
+        depth -= 1
+        if depth == 0:
+            end = position
+            break
+if end < 0:
+    print(f"FAIL: {path} has an unterminated `ClientCommand::Capabilities` arm.")
+    sys.exit(1)
+
+arm = production[index:end]
+FORBIDDEN = (
+    "RuntimeCapabilities::default()",
+    "daemon_conservative()",
+    "full_lab()",
+)
+problems = [f"the arm publishes `{token}`" for token in FORBIDDEN if token in arm]
+if problems:
+    print(f"FAIL: {path} publishes a capability constant instead of a derived list:")
+    for problem in problems:
+        print(f"      {problem}")
+    print("      the arm must publish the host's derived task-kind list")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon host derives its published capabilities."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 166. The CLI's daemon start path waits for a real readiness signal.
+# Milestone 009.
+#
+# The old path slept for a fixed fraction of a second and then printed
+# "Daemon started" whether or not the daemon had bound the socket. The
+# readiness decision must be a bounded probe, not a fixed sleep, and it must
+# never scrape the server's stdout.
+echo ""
+echo "--- Check 166: the CLI's daemon start path waits for a real readiness signal ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-cli/src/daemon_cli.rs ]]; then
+  echo "FAIL: crates/eggsec-cli/src/daemon_cli.rs is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-cli/src/daemon_cli.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+production = text.split("#[cfg(test)]", 1)[0]
+problems = []
+
+if "Daemon listening on" in production:
+    problems.append(
+        "the start path scrapes the server's stdout (`Daemon listening on`) for readiness"
+    )
+
+if re.search(r"sleep\(\s*Duration::from_millis", production):
+    problems.append(
+        "the start path uses a sub-second literal sleep for readiness"
+    )
+
+if re.search(r"sleep\(\s*Duration::from_secs\(0\)", production):
+    problems.append("the start path uses a zero-second sleep for readiness")
+
+# A named bound must exist, and it must be at least a second.
+bounds = re.findall(
+    r"(?:pub\s+)?const\s+([A-Z0-9_]+)\s*:\s*Duration\s*=\s*Duration::from_(secs|millis)\((\d+)\)",
+    production,
+)
+readiness_bounds = [
+    (name, unit, amount)
+    for name, unit, amount in bounds
+    if "READINESS" in name or "TIMEOUT" in name
+]
+if not readiness_bounds:
+    problems.append(
+        "the start path declares no named readiness timeout constant"
+    )
+for name, unit, amount in readiness_bounds:
+    seconds = int(amount) if unit == "secs" else int(amount) / 1000
+    if seconds < 1:
+        problems.append(
+            f"the readiness bound `{name}` is {amount} {unit} -- below the one-second floor"
+        )
+
+if problems:
+    print(f"FAIL: {path} does not wait for a real readiness signal:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CLI's daemon start path waits for a real readiness signal."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 167. The daemon's obtainability recipe is documented. Milestone 009.
+#
+# Nothing in the workspace installs the daemon, so the recipe is the only way
+# an operator obtains it. A recipe that omits the cargo feature produces a
+# binary that accepts `--full-executor` and silently falls back to a no-op
+# executor.
+echo ""
+echo "--- Check 167: the daemon's obtainability recipe names the cargo feature ---"
+SECTION_FAIL=0
+DAEMON_DOC="docs/DAEMON.md"
+if [[ ! -f "$DAEMON_DOC" ]]; then
+  echo "FAIL: $DAEMON_DOC is missing (the daemon's obtainability recipe must be documented)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$DAEMON_DOC" <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+problems = []
+
+recipes = [
+    line
+    for line in text.splitlines()
+    if "cargo install" in line and "crates/eggsec-daemon" in line
+]
+if not recipes:
+    problems.append(f"{path} documents no `cargo install` recipe for the daemon")
+else:
+    if not any(
+        re.search(r"--features\s+(service|full-executor)\b", line) for line in recipes
+    ):
+        problems.append(
+            f"{path}'s daemon install recipe names no cargo feature -- a build without one "
+            "accepts `--full-executor` and falls back to a no-op executor"
+        )
+
+if problems:
+    print(f"FAIL: the daemon's obtainability recipe is incomplete:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon's obtainability recipe names the cargo feature."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 168. The desktop GUI's platform qualification is machine-checked.
+# Milestone 007.
+#
+# "It compiles on my machine" is not a qualification. The matrix must state,
+# per platform and per behaviour, whether the behaviour was observed and on
+# what evidence -- and a platform that is out of scope must say so with the
+# decision that excludes it. A cell that carries a status but no explanation
+# is not a qualification either; the explanation is the evidence or the root
+# cause.
+#
+# The bundler stays off because the installers belong to the distribution
+# workstream -- unless an accepted ADR supersedes that decision.
+echo ""
+echo "--- Check 168: the desktop GUI's platform qualification is machine-checked ---"
+SECTION_FAIL=0
+GUI_QUAL="docs/GUI_PLATFORM_QUALIFICATION.md"
+if [[ ! -f "$GUI_QUAL" ]]; then
+  echo "FAIL: $GUI_QUAL is missing (the GUI's platform qualification must be recorded)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_QUAL" crates/eggsec-gui/tauri.conf.json <<'PYEOF' 2>&1; then
+import json, re, sys, pathlib
+
+doc_path, conf_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+problems = []
+
+# The status vocabulary is closed. A cell that invents a status is not a
+# qualification.
+ALLOWED = {
+    "qualified",
+    "partially qualified",
+    "not qualified",
+    "pending M6",
+    "out of scope",
+}
+
+# The schema is fixed: one platform per row, one behaviour per column. A
+# matrix that drifts from the schema is not checkable.
+EXPECTED_HEADER = "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |"
+COLUMNS = ("Build", "Launch", "Connect", "Submit", "Cancel", "Render", "Export")
+REQUIRED_PLATFORMS = ("linux", "macos", "windows")
+
+try:
+    lines = doc_path.read_text().splitlines()
+except OSError as exc:
+    print(f"FAIL: cannot read {doc_path}: {exc}")
+    sys.exit(1)
+
+header_index = None
+for index, line in enumerate(lines):
+    if line.strip().startswith("| Platform |"):
+        header_index = index
+        break
+
+if header_index is None:
+    print(f"FAIL: {doc_path} has no platform matrix.")
+    sys.exit(1)
+
+if lines[header_index].strip() != EXPECTED_HEADER:
+    print(f"FAIL: {doc_path} matrix header must be exactly:")
+    print(f"      {EXPECTED_HEADER}")
+    sys.exit(1)
+
+rows = {}
+for line in lines[header_index + 2:]:
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        break
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    if len(cells) != len(COLUMNS) + 1:
+        problems.append(
+            f"a matrix row has {len(cells)} cells, not {len(COLUMNS) + 1}: {stripped[:80]}"
+        )
+        continue
+    platform = cells[0].strip("`").strip()
+    rows[platform] = cells[1:]
+
+for platform in REQUIRED_PLATFORMS:
+    if platform not in rows:
+        problems.append(f"the matrix has no `{platform}` row")
+
+for platform, cells in rows.items():
+    for column, cell in zip(COLUMNS, cells):
+        match = re.match(r"^\*\*(.+?)\*\*\s*—\s*(.+)$", cell)
+        if not match:
+            problems.append(
+                f"the `{platform}` / {column} cell is not `**status** — explanation`"
+            )
+            continue
+        status = match.group(1).strip()
+        if status not in ALLOWED:
+            problems.append(
+                f"the `{platform}` / {column} cell has the unknown status `{status}`"
+            )
+
+if "windows" in rows:
+    for column, cell in zip(COLUMNS, rows["windows"]):
+        match = re.match(r"^\*\*(.+?)\*\*\s*—\s*(.+)$", cell)
+        if not match:
+            continue
+        if match.group(1).strip() != "out of scope":
+            problems.append(f"the `windows` / {column} cell is not `out of scope`")
+        elif not re.search(r"ADR-\d+", cell):
+            problems.append(
+                f"the `windows` / {column} cell does not cite the decision (ADR-nnn) that excludes it"
+            )
+
+# The bundler stays off: the installers belong to the distribution
+# workstream. An accepted ADR may supersede that decision, but the ADR must
+# exist -- naming one that does not is not a supersession.
+try:
+    conf = json.loads(conf_path.read_text())
+    bundle_active = ((conf.get("bundle") or {}).get("active"))
+except Exception as exc:
+    problems.append(f"{conf_path} could not be parsed: {exc}")
+    bundle_active = None
+
+if bundle_active is not False:
+    cited = set(re.findall(r"ADR-\d+", "\n".join(lines)))
+    superseding = [
+        adr for adr in cited if (pathlib.Path("plans/adrs") / f"{adr}.md").is_file()
+    ]
+    if not superseding:
+        problems.append(
+            f"{conf_path} enables the Tauri bundler (`bundle.active` is {bundle_active!r}) and "
+            "no existing ADR under plans/adrs/ supersedes the decision; the installers belong "
+            "to the distribution workstream"
+        )
+
+if problems:
+    print("FAIL: the desktop GUI's platform qualification is not machine-checked:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the desktop GUI's platform qualification is machine-checked."
 else
   FAIL=$((FAIL + 1))
 fi

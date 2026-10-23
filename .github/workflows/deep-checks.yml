@@ -75,6 +75,73 @@ jobs:
       - name: Check compilation
         run: cargo check -p eggsec
 
+  # The desktop GUI's platform qualification (milestone 007).
+  #
+  # WINDOWS IS EXCLUDED BY DECISION (ADR-0010), not by oversight: the desktop
+  # GUI's supported platforms are Linux and macOS. The measured reason is that
+  # the GUI's UNCONDITIONAL dependency `eggsec-frontend-client` imports the
+  # Unix-domain-socket transport without a cfg(unix) gate
+  # (crates/eggsec-frontend-client/src/daemon.rs:9 and :56), so
+  # `cargo check -p eggsec-frontend-client --target x86_64-pc-windows-msvc`
+  # fails with E0432/E0433/E0599 and the GUI does not compile for Windows at
+  # all. A Windows leg here would be permanently red rather than informative.
+  # Adding it is gated on the daemon-transport milestone ADR-0010 names: a
+  # Windows daemon transport (named pipes or equivalent local IPC) changes the
+  # KIND of transport rather than adding a read path, so it requires an ADR.
+  gui-platform:
+    name: GUI platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: gui-platform-${{ matrix.os }}
+      # The Linux webview SDK. The package list is the workspace's own subset
+      # (the GitHub-hosted image pre-installs the build toolchain and
+      # libssl-dev, which is why `build-essential`, `curl`, `wget`, `file`,
+      # `libxdo-dev`, and `libssl-dev` are absent from it). The full Tauri
+      # list, and what the omission costs on a bare distribution, is in
+      # docs/GUI_BUILD.md.
+      - name: Install the Linux webview prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      # The probe reports BUILDABLE or NOT BUILDABLE; it never says "skipped",
+      # because a qualification cell needs an answer, not an absence of one.
+      - name: Probe the GUI shell prerequisites
+        run: bash scripts/check_gui_prereqs.sh
+      # The UNGATED check, not the gated `make check` line: on Linux the gated
+      # line skips when the webview SDK is absent, and this job's whole point
+      # is to prove the SDK is present AND the shell compiles.
+      - name: Desktop GUI shell profile (ungated)
+        run: make check-gui
+      # Both test profiles: the `shell` feature gates commands.rs and shell.rs,
+      # so the non-shell path has to be exercised too. The GUI's tests are
+      # headless-safe (no socket, no window, no subprocess), so they run
+      # unattended with no display.
+      - name: GUI test suite (shell profile)
+        run: cargo test -p eggsec-gui --features shell --lib
+      - name: GUI test suite (no-shell profile)
+        run: cargo test -p eggsec-gui --no-default-features --lib
+      - name: Build the release binary and its metadata sidecar
+        run: make gui-release
+      # The sidecar and the checksum are what let a matrix cell cite a CI run
+      # URL instead of a claim.
+      - name: Upload the build metadata and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gui-release-${{ matrix.os }}
+          path: |
+            dist/gui/eggsec-gui.build.json
+            dist/gui/SHA256SUMS
+          if-no-files-found: error
+
   # Phase F: platform integration maturity (scheduled/manual only, never PR CI).
   # Fixture layer always runs (no root/hardware). Live layers report SKIP with
   # the named prerequisite when caps/devices are absent — never red, never

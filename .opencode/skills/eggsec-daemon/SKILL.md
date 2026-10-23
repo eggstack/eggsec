@@ -26,11 +26,60 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 - Optional: loopback HTTP/SSE behind the `http-api` feature (daemon crate)
 
 The desktop GUI (`crates/eggsec-gui`) connects to this daemon over the Unix
-socket and nothing else — it never links the daemon crate. It requires an
-`eggsec-daemon --full-executor`: `eggsec daemon start` and a default-built
-`eggsec-daemon` host a **no-op executor** that answers every command correctly
-and rejects every task, which the GUI reports as "the daemon advertises no
-task kinds" rather than presenting a submit button that cannot work.
+socket and nothing else — it never links the daemon crate. It requires a
+daemon built with the engine executor **compiled in**: `--full-executor` is a
+*runtime* flag over the daemon's `service` *cargo* feature (its deprecated
+`full-executor` alias selects the same profile), so a binary built without the
+cargo feature accepts the flag and falls back to a **no-op executor** that
+publishes an **empty** task-kind list and rejects every task. The GUI reports
+that condition as "the daemon advertises no task kinds" rather than presenting
+a submit button that cannot work.
+
+`eggsec daemon start` is no longer in that state: the CLI's start path hosts
+the **engine** executor, so a CLI-hosted daemon advertises and can execute the
+conservative task kinds. It does **not** persist sessions — the daemon binary
+is the persistent one.
+
+## Obtaining the daemon
+
+```bash
+# The daemon binary, with the engine executor compiled in.
+cargo install --path crates/eggsec-daemon --features service --locked
+
+# The CLI, with the `daemon`, `session`, and `task` subcommands.
+cargo install --path crates/eggsec-cli --features daemon-client --locked
+```
+
+`full-executor` is a deprecated alias for `service`; `service` is the canonical
+spelling. The resulting daemon defaults to the socket path
+`/tmp/eggsec-daemon.sock`, the data directory `$HOME/.local/share/eggsec/daemon`,
+10 max clients, and the `info` log level. The recipe does not produce a
+packaged, signed, or auto-updating artefact, and it does not cover Windows
+(`ADR-0010`: the daemon's transport is a Unix domain socket). See
+`docs/DAEMON.md` for the full recipe and its limits.
+
+## Capability honesty
+
+The published task-kind list is **derived**, never declared beside the
+executor: it is the executor's declared support
+(`RuntimeTaskExecutor::supported_task_kinds()`) intersected with the daemon's
+conservative policy, computed once at construction. A daemon that cannot
+execute anything therefore publishes **nothing**. A *published* kind whose
+engine feature is off is a different matter — it is denied at dispatch with
+`FeatureMissing`, not `UnsupportedTaskKind`.
+
+## Starting a daemon honestly
+
+- **Pre-flight**: before binding, a start path connects to the socket path and
+  asks for `Health`. A daemon that answers owns the path: the start is
+  refused, the socket is left untouched, and the command exits non-zero. An
+  unreachable socket (a stale file left by a crashed daemon) is *not* live.
+  The check is a **connection**, never a `stat`.
+- **Readiness**: the wait polls `Health` (and `Capabilities`) until the daemon
+  answers, bounded by a named timeout. Nothing depends on the daemon's log
+  line — a log format is not a contract. The success message names the socket
+  path, the protocol version, and the advertised task-kind count; it never
+  claims that every advertised capability is executable.
 
 ## Client Contract
 

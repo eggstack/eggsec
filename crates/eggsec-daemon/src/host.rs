@@ -8,7 +8,10 @@
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-use eggsec_runtime::{ClientId, Runtime, RuntimeConfig, RuntimeError, RuntimeTaskExecutor};
+use eggsec_runtime::{
+    ClientId, Runtime, RuntimeCapabilities, RuntimeConfig, RuntimeError, RuntimeTaskExecutor,
+    TaskCapability,
+};
 
 use crate::client_registry::{
     check_permission, command_permission, ClientInfo, ClientKind, ClientRegistry, ClientRole,
@@ -77,9 +80,27 @@ pub struct DaemonHost {
     client_registry: std::sync::Mutex<ClientRegistry>,
     session_access: std::sync::Mutex<FxHashMap<eggsec_runtime::SessionId, SessionAccess>>,
     store: Arc<dyn DaemonStore>,
-    /// Whether the executor is a no-op stub (rejects all tasks).
-    /// Used to report honest capabilities to clients.
-    executor_is_noop: bool,
+    /// The task kinds this host publishes, derived at construction from the
+    /// executor's declaration intersected with the daemon's conservative
+    /// policy.
+    ///
+    /// The list is derived rather than declared so a host cannot advertise a
+    /// capability its executor rejects outright.
+    published_task_kinds: Vec<TaskCapability>,
+}
+
+/// Intersect an executor's declared support with the daemon's conservative
+/// policy.
+///
+/// The policy owns the published set: an executor may declare less than the
+/// policy allows (the daemon then publishes the smaller set), but the daemon
+/// never widens its own policy because an executor asked for it.
+fn published_task_kinds(declared: &[TaskCapability]) -> Vec<TaskCapability> {
+    RuntimeCapabilities::daemon_conservative()
+        .task_kinds
+        .into_iter()
+        .filter(|cap| declared.iter().any(|d| d.name == cap.name))
+        .collect()
 }
 
 impl DaemonHost {
@@ -88,6 +109,7 @@ impl DaemonHost {
         executor: impl RuntimeTaskExecutor,
         store: Arc<dyn DaemonStore>,
     ) -> Self {
+        let declared = executor.supported_task_kinds();
         let runtime = Runtime::new(RuntimeConfig::default(), executor);
         Self {
             runtime: Arc::new(runtime),
@@ -95,7 +117,7 @@ impl DaemonHost {
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop: false,
+            published_task_kinds: published_task_kinds(&declared),
         }
     }
 
@@ -106,14 +128,18 @@ impl DaemonHost {
             capabilities: eggsec_runtime::RuntimeCapabilities::noop(),
             ..Default::default()
         };
-        let runtime = Runtime::new(runtime_config, NoopExecutorStub);
+        let executor = NoopExecutorStub;
+        // The stub declares no support, so the derived list is empty: a
+        // rejecting executor can never end up advertising a capability.
+        let declared = executor.supported_task_kinds();
+        let runtime = Runtime::new(runtime_config, executor);
         Self {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop: true,
+            published_task_kinds: published_task_kinds(&declared),
         }
     }
 
@@ -126,15 +152,15 @@ impl DaemonHost {
         config: DaemonConfig,
         runtime: Arc<Runtime>,
         store: Arc<dyn DaemonStore>,
-        executor_is_noop: bool,
     ) -> Self {
+        let declared = runtime.supported_task_kinds();
         Self {
             runtime,
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop,
+            published_task_kinds: published_task_kinds(&declared),
         }
     }
 
@@ -368,16 +394,17 @@ impl DaemonHost {
             },
 
             ClientCommand::Capabilities { request_id } => {
-                let runtime_caps = if self.executor_is_noop {
-                    eggsec_runtime::RuntimeCapabilities {
-                        task_kinds: vec![],
-                        transports: vec!["in-process".into()],
-                        supports_cancellation: true,
-                        supports_multiple_sessions: true,
-                        supports_multiple_active_tasks: false,
-                    }
-                } else {
-                    eggsec_runtime::RuntimeCapabilities::default()
+                // The published list is the host's stored, derived list -- not
+                // a capability constant chosen at the call site. A rejecting
+                // executor therefore publishes nothing, and a real one
+                // publishes exactly what it declared within the daemon's
+                // conservative policy.
+                let runtime_caps = eggsec_runtime::RuntimeCapabilities {
+                    task_kinds: self.published_task_kinds.clone(),
+                    transports: vec!["in-process".into()],
+                    supports_cancellation: true,
+                    supports_multiple_sessions: true,
+                    supports_multiple_active_tasks: false,
                 };
                 ServerMessage::Capabilities {
                     request_id,
@@ -1124,6 +1151,70 @@ impl DaemonHost {
 
         check_permission(&kind, &role, &surface, perm)
             .map_err(|msg| (ErrorCode::PermissionDenied, msg))
+    }
+}
+
+/// How long a liveness probe waits for the daemon to answer `Health`.
+///
+/// The probe is a round trip over a local Unix socket. A daemon that cannot
+/// answer within this bound is wedged, not slow, and a start path that
+/// waited longer would hang the operator's shell.
+pub const PREFLIGHT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The outcome of a liveness probe against a daemon socket path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DaemonLiveness {
+    /// A daemon answered `Health` on this path.
+    Live {
+        /// The protocol version the live daemon reported.
+        protocol_version: u32,
+    },
+    /// Nothing answered on this path within the probe's bound: no socket, a
+    /// stale socket file left by a crashed daemon, or a daemon that did not
+    /// answer in time.
+    NotLive,
+}
+
+/// Probe a socket path for a live daemon.
+///
+/// The probe is a **connection** plus a `Health` exchange, never a `stat`:
+/// a socket file left behind by a crashed daemon is indistinguishable from a
+/// live one by file existence, and only a connection tells them apart.
+/// `Health` needs no client declaration and writes nothing, so the probe
+/// creates no session, no task, and no audit record.
+pub async fn probe_daemon_liveness(
+    socket_path: &str,
+    timeout: std::time::Duration,
+) -> DaemonLiveness {
+    let probe = async {
+        let mut client = match crate::client::DaemonClient::connect(socket_path).await {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::debug!(path = %socket_path, error = %error, "No daemon answered on the socket path");
+                return DaemonLiveness::NotLive;
+            }
+        };
+        match client.health().await {
+            Ok(crate::protocol::ServerMessage::Health {
+                protocol_version, ..
+            }) => DaemonLiveness::Live { protocol_version },
+            Ok(other) => {
+                tracing::debug!(path = %socket_path, response = ?other, "Socket answered with a non-Health message");
+                DaemonLiveness::NotLive
+            }
+            Err(error) => {
+                tracing::debug!(path = %socket_path, error = %error, "Health exchange failed");
+                DaemonLiveness::NotLive
+            }
+        }
+    };
+
+    match tokio::time::timeout(timeout, probe).await {
+        Ok(outcome) => outcome,
+        Err(_) => {
+            tracing::warn!(path = %socket_path, timeout_secs = timeout.as_secs(), "Liveness probe timed out");
+            DaemonLiveness::NotLive
+        }
     }
 }
 
@@ -2859,7 +2950,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "full-executor")]
+    #[cfg(feature = "service")]
     mod full_executor_tests {
         use super::*;
         use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
@@ -3548,6 +3639,171 @@ mod tests {
             "task should be cancelled after close"
         );
     }
+
+    /// A stub executor that declares an exact set of task kinds.
+    ///
+    /// It exists so the published list can be driven from both sides of the
+    /// declaration: a narrower set than the policy and a wider one.
+    struct DeclaringExecutor {
+        declared: Vec<TaskCapability>,
+    }
+
+    impl DeclaringExecutor {
+        fn new(names: &[&str]) -> Self {
+            Self {
+                declared: names
+                    .iter()
+                    .map(|name| TaskCapability::new(*name, *name))
+                    .collect(),
+            }
+        }
+    }
+
+    impl RuntimeTaskExecutor for DeclaringExecutor {
+        fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+            self.declared.clone()
+        }
+
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+        }
+    }
+
+    /// Read the task-kind names a host publishes.
+    async fn published_task_kind_names(host: &DaemonHost) -> Vec<String> {
+        let response = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "published".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match response {
+            ServerMessage::Capabilities { capabilities, .. } => capabilities
+                .runtime
+                .task_kinds
+                .iter()
+                .map(|capability| capability.name.clone())
+                .collect(),
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that declares no support publishes no task kinds: the
+    /// "20 advertised, 0 executable" state is unreachable.
+    #[tokio::test]
+    async fn an_executor_that_declares_no_support_publishes_no_task_kinds() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&[]),
+            crate::store::noop_store(),
+        );
+        assert!(published_task_kind_names(&host).await.is_empty());
+    }
+
+    /// The published list is the declared support intersected with the
+    /// daemon's conservative policy -- no more, no less.
+    #[tokio::test]
+    async fn the_published_list_is_the_declared_support_intersected_with_the_policy() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&["port-scan"]),
+            crate::store::noop_store(),
+        );
+        assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
+    }
+
+    /// A kind outside the conservative policy is never published, even when
+    /// the executor declares it: the policy owns the published set.
+    #[tokio::test]
+    async fn a_declared_kind_outside_the_policy_is_not_published() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&["port-scan", "stress-test"]),
+            crate::store::noop_store(),
+        );
+        assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
+    }
+
+    /// The default declaration keeps the conservative set: a real daemon
+    /// publishes exactly what it published before the declaration seam.
+    #[tokio::test]
+    async fn an_executor_that_declares_nothing_keeps_the_conservative_set() {
+        let host = test_host();
+        let published = published_task_kind_names(&host).await;
+        let conservative = RuntimeCapabilities::daemon_conservative();
+        assert_eq!(published.len(), conservative.task_kinds.len());
+        assert!(published.len() > 1, "the conservative set is not empty");
+        for capability in &conservative.task_kinds {
+            assert!(
+                published.contains(&capability.name),
+                "missing conservative task kind: {}",
+                capability.name
+            );
+        }
+    }
+
+    /// A no-op host still publishes an empty list, now by derivation rather
+    /// than by a separate branch.
+    #[tokio::test]
+    async fn a_noop_host_still_publishes_an_empty_list() {
+        let host = DaemonHost::new_noop(DaemonConfig::default(), crate::store::noop_store());
+        assert!(published_task_kind_names(&host).await.is_empty());
+    }
+
+    /// The honesty invariant as a property: for every host construction
+    /// path, the published list is empty **iff** the executor declares no
+    /// support. Advertising more than the executor can execute is
+    /// impossible.
+    #[tokio::test]
+    async fn the_start_path_never_publishes_a_capability_it_cannot_execute() {
+        let declaring = DeclaringExecutor::new(&["port-scan", "fuzz"]);
+        let conservative_count = RuntimeCapabilities::daemon_conservative().task_kinds.len();
+        let hosts: Vec<(DaemonHost, usize)> = vec![
+            (
+                DaemonHost::new(
+                    DaemonConfig::default(),
+                    DeclaringExecutor::new(&[]),
+                    crate::store::noop_store(),
+                ),
+                0,
+            ),
+            (
+                DaemonHost::new(
+                    DaemonConfig::default(),
+                    DeclaringExecutor::new(&["port-scan"]),
+                    crate::store::noop_store(),
+                ),
+                1,
+            ),
+            (test_host(), conservative_count),
+            (
+                DaemonHost::new_noop(DaemonConfig::default(), crate::store::noop_store()),
+                0,
+            ),
+        ];
+        for (host, expected) in hosts {
+            let published = published_task_kind_names(&host).await;
+            assert_eq!(published.len(), expected);
+            assert_eq!(
+                published.is_empty(),
+                expected == 0,
+                "the published list must be empty exactly when the executor declares no support"
+            );
+        }
+        // The declaring executor's own declaration is what the host derives
+        // from: the two agree by construction.
+        assert_eq!(declaring.declared.len(), 2);
+    }
 }
 
 /// No-op executor stub used by `DaemonHost::new_noop`.
@@ -3555,6 +3811,12 @@ mod tests {
 struct NoopExecutorStub;
 
 impl RuntimeTaskExecutor for NoopExecutorStub {
+    /// Declares no support, so the host's derived published list is empty:
+    /// a host that rejects every task cannot advertise one.
+    fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        Vec::new()
+    }
+
     fn execute(
         &self,
         _task_id: eggsec_runtime::TaskId,

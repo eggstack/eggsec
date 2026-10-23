@@ -194,15 +194,31 @@ could do anything.
 
 ### The no-op executor condition
 
-The GUI requires an already-running `eggsec-daemon --full-executor`. It does
-**not** spawn, supervise, or stop a daemon (`crates/eggsec-gui/src/shell.rs:12-16`).
+The GUI requires an already-running `eggsec-daemon` with the engine executor
+**compiled in**. It does **not** spawn, supervise, or stop a daemon
+(`crates/eggsec-gui/src/shell.rs:12-16`).
 
-`eggsec daemon start` and a default-built `eggsec-daemon` both host a no-op
-executor that rejects every task — the CLI's start path uses a `NoopExecutor`
-that returns `UnsupportedTaskKind`
-(`crates/eggsec-cli/src/daemon_cli.rs:584-605`), and the daemon crate's
-`full-executor` feature is opt-in (`crates/eggsec-daemon/Cargo.toml`). The GUI
-therefore does two things instead of offering a submit button that cannot work:
+The daemon binary's `--full-executor` is a **runtime** flag over a **cargo**
+feature: the binary must be *built* with the daemon's `service` profile (its
+deprecated `full-executor` alias selects the same profile) for the flag to
+have any effect. A binary built without it accepts the flag, warns, and falls
+back to a no-op executor that publishes an **empty** task-kind list and rejects
+every task (`crates/eggsec-daemon/src/main.rs`). See
+[docs/DAEMON.md](../docs/DAEMON.md#obtaining-the-daemon) for the obtainability
+recipe:
+
+```bash
+cargo install --path crates/eggsec-daemon --features service --locked
+```
+
+`eggsec daemon start` is no longer in that state: the CLI's start path hosts
+the **engine** executor
+(`crates/eggsec-cli/src/daemon_cli.rs`), so a CLI-hosted daemon advertises
+and can execute the conservative task kinds. What it does **not** do is
+persist sessions — the daemon binary is the persistent one.
+
+The GUI therefore does two things instead of offering a submit button that
+cannot work:
 
 - Its connection diagnostic names the socket path and the exact command that
   starts a usable daemon (`crates/eggsec-gui/src/connection.rs:51`).
@@ -382,7 +398,8 @@ packages:
 - **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`,
   `patchelf`, and the `libayatana-appindicator3-dev` / `libxdo-dev` packages
   for the tray.
-- **macOS / Windows**: the system webview is present; no extra packages.
+- **macOS**: the system webview is present; no extra packages.
+- **Windows**: out of scope — see below.
 
 The `--no-default-features` profile builds the GUI crate without the shell —
 the `tauri` crate is not in the graph, `build.rs` skips `tauri_build::build()`
@@ -391,6 +408,58 @@ panic — `crates/eggsec-gui/build.rs:8-10`), and `run()` returns
 `GuiError::ShellNotBuilt`. That profile is what `make check` and
 `make check-msrv` build, so the no-shell build stays green without the webview
 SDK installed.
+
+### The supported platforms and the measured floor
+
+The desktop GUI is supported on **Linux and macOS**. **Windows is out of
+scope** — `plans/adrs/ADR-0010-gui-supported-platform-scope.md` decides it,
+and the measured reason is that the GUI's *unconditional* dependency
+`eggsec-frontend-client` imports the Unix-domain-socket transport without a
+`cfg(unix)` gate (`crates/eggsec-frontend-client/src/daemon.rs:9`, `:56`), so
+`cargo check -p eggsec-frontend-client --target x86_64-pc-windows-msvc` fails
+with E0432/E0433/E0599 and the GUI does not compile for Windows at all.
+Re-entry is gated on a Windows daemon transport (named pipes or equivalent
+local IPC), which is a daemon-subsystem change and needs its own ADR.
+
+The **Linux platform floor** is Ubuntu 22.04 / Debian 12 or newer:
+`webkit2gtk-4.1` implies it (`ADR-0009`). Older distributions are below the
+floor, and the `ADR-0009` egui fallback is the sanctioned escape hatch. The
+workspace's own gate is looser than the build — `Makefile:21-30` accepts
+`webkit2gtk-4.1` **or** `webkit2gtk-4.0` — so a 4.0-only host can pass the
+gate and then fail to compile. `make check-gui` is the ungated check.
+
+### The qualification matrix
+
+What was actually built, launched, and exercised — per platform, per
+behaviour — is recorded in
+[`docs/GUI_PLATFORM_QUALIFICATION.md`](../docs/GUI_PLATFORM_QUALIFICATION.md),
+with one evidence file per run under `docs/evidence/gui-qualification/`. The
+matrix is the authoritative statement of platform support; the CI job that
+promotes a cell is `gui-platform` in `.github/workflows/deep-checks.yml`
+(`ubuntu-latest` and `macos-latest`; Windows is excluded by `ADR-0010`).
+
+### The bundler and the distribution hand-off
+
+`bundle.active` stays `false` (`crates/eggsec-gui/tauri.conf.json:26-28`).
+The roadmap and `ADR-0007` place installers, signing, and notarization in the
+separate distribution workstream, and enabling the bundler would make a plain
+`make check` emit installers as a side effect. Milestone 007 produces the
+binary and the reproducible build recipe (`scripts/build_gui_release.sh`,
+which emits the binary plus a build-metadata sidecar); the distribution
+workstream inherits the artefact and decides whether to enable the bundler or
+ship a raw binary. See
+[`docs/GUI_DISTRIBUTION_HANDOFF.md`](../docs/GUI_DISTRIBUTION_HANDOFF.md).
+
+### Resident footprint
+
+Measured on macOS 25.6.0 (`aarch64-apple-darwin`), at rest with the webview
+loaded: the application process plus the three WKWebView XPC helpers sum to
+125 760 KiB (122.8 MiB) of RSS — 79 760 KiB for the application, 18 512 KiB
+for `com.apple.WebKit.GPU`, 7 616 KiB for `com.apple.WebKit.Networking`, and
+19 872 KiB for `com.apple.WebKit.WebContent`. The sum double-counts the
+WebKit framework pages the helpers share, so it is an upper bound rather than
+a private-footprint figure. There is no Linux measurement, and this is an
+idle window rather than a running assessment.
 
 ## Known Gaps
 
@@ -403,7 +472,7 @@ These are deliberate and documented, not oversights.
 - **The GUI does not manage the daemon's lifecycle.** It requires an
   already-running `eggsec-daemon --full-executor` and never spawns,
   supervises, or stops one.
-- **The socket-path default is duplicated in four places.** The default
+- **The socket-path default is duplicated in six places.** The default
   `/tmp/eggsec-daemon.sock` is hardcoded independently in the CLI
   (`crates/eggsec/src/cli/mod.rs:249`), the daemon's config
   (`crates/eggsec-daemon/src/config.rs:22`), the daemon's main

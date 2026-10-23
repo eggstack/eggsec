@@ -331,8 +331,8 @@ cargo test -p eggsec-daemon --features full-executor
 
 | Profile | Required System Dep | Install (Debian/Ubuntu) |
 |---------|-------------------|------------------------|
-| `packet-inspection` | libpcap-dev | `apt install libpcap-dev` |
-| `nse` | libssl-dev | `apt install libssl-dev` |
+| `packet-inspection` | none — pure-Rust `pnet` | (none required) |
+| `nse` | C toolchain (`cc`, `perl`, `make`) — OpenSSL is vendored | `apt install build-essential perl` |
 | `nse-ssh2` | libssh2-dev | `apt install libssh2-dev` |
 | `wireless` / `wireless-advanced` | wireless-tools (iwlist) | `apt install wireless-tools` |
 | `grpc-api` | protobuf-compiler | `apt install protobuf-compiler` |

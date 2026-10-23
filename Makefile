@@ -1,7 +1,7 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-gui check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-gui check-gui-prereqs gui-release check-daemon-profile build-daemon-profile check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
 
 # ── Desktop GUI shell profile ─────────────────────────────────────────────
 #
@@ -15,6 +15,9 @@
 # swallowed. `make check-gui` is the ungated escape hatch: it always runs and
 # reports cargo's own error.
 GUI_SHELL_PREREQ_HINT = Linux: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config
+
+# Output directory for the GUI release build (M007). Git-ignored.
+GUI_RELEASE_OUT ?= dist/gui
 
 # Runs "$(1)" when the platform webview prerequisite is present; otherwise
 # prints a SKIP line naming the prerequisite and succeeds.
@@ -68,7 +71,11 @@ clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
 	cargo clippy --lib -p eggsec --features cli -- -D warnings
 	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-report-model -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -p eggsec-transport-eggfetch -p eggsec-policy -- -D warnings
-	cargo clippy -p eggsec-tui -p eggsec-cli -- -D warnings
+	cargo clippy -p eggsec-tui -- -D warnings
+	# The CLI's `daemon` / `session` / `task` subcommands live behind the
+	# `daemon-client` feature, so the plain `-p eggsec-cli` lint above never
+	# compiles them. Lint the feature on.
+	cargo clippy -p eggsec-cli --features daemon-client -- -D warnings
 	cargo clippy -p eggsec-secrets -p eggsec-payloads -p eggsec-service-db -p eggsec-udp-scan -- -D warnings
 	# The operation-schema module is behind a feature, so the plain
 	# `-p eggsec-runtime` lint above never compiles it. Lint the feature on.
@@ -81,7 +88,7 @@ clippy:
 	$(call GUI_SHELL_GATE,cargo clippy -p eggsec-gui --features shell -- -D warnings)
 
 # Lint domain/platform crates with their relevant features (deep checks only:
-# heavier closures, may need system prerequisites like libssl-dev).
+# heavier closures; the `nse` closure needs a C toolchain for its vendored OpenSSL).
 # The standalone NSE runtime owns its own lint gate in eggstack/eggsec-nse CI.
 clippy-domain:
 	cargo clippy -p eggsec-db-lab --features db-drivers -- -D warnings
@@ -165,6 +172,10 @@ check:
 	cargo check -p eggsec
 	cargo check -p eggsec-cli
 	cargo check -p eggsec-cli --no-default-features
+	# The CLI's daemon client surface lives behind `daemon-client`, so the
+	# checks above never compile the `daemon` / `session` / `task` subcommands.
+	cargo check -p eggsec-cli --features daemon-client
+	cargo test -p eggsec-cli --features daemon-client
 	$(MAKE) check-deps
 	$(MAKE) clippy
 	cargo test -p eggsec --doc
@@ -188,6 +199,41 @@ check-gui:
 	@echo "Desktop GUI shell profile (prerequisite: $(GUI_SHELL_PREREQ_HINT))."
 	cargo check -p eggsec-gui --features shell
 	cargo clippy -p eggsec-gui --features shell -- -D warnings
+
+# Desktop GUI prerequisite probe: reports whether the shell profile can be
+# built on this host. It REPORTS, it does not install anything and it does
+# not fail the build -- `make check-gui` is the gate that fails.
+check-gui-prereqs:
+	bash scripts/check_gui_prereqs.sh
+
+# Desktop GUI release build (M007). Produces the binary plus its build
+# metadata sidecar in $(GUI_RELEASE_OUT). It performs no signing, no
+# bundling, no installer and no publication -- the distribution workstream
+# owns those.
+gui-release:
+	bash scripts/build_gui_release.sh --out $(GUI_RELEASE_OUT)
+
+# Daemon feature profile `service` (M008): the GUI-serving profile. The
+# static half pins the manifest to the documented list; the runtime half
+# pins the COMPILED feature set to the same list. The profile needs a C
+# toolchain (vendored OpenSSL under `nse`), so it is a deep check rather
+# than part of `make check`.
+DAEMON_PROFILE_OUT ?= dist/daemon-profile
+
+.PHONY: build-daemon-profile
+build-daemon-profile:
+	bash scripts/build-daemon-profile.sh --profile service --out $(DAEMON_PROFILE_OUT)
+
+.PHONY: check-daemon-profile
+# This gate is `cargo check`, not `clippy -D warnings`. The profile compiles
+# engine modules the default build never reaches (packet, stress, wireless,
+# database, tool-api), and those modules carry pre-existing clippy debt that
+# no milestone has cleaned up. The profile BUILD must be green; its lint debt
+# is tracked separately rather than silently gated here.
+check-daemon-profile:
+	cargo check -p eggsec-daemon --features service
+	cargo test -p eggsec --features cli --test feature_matrix
+	cargo test -p eggsec-daemon --features service --test feature_profile
 
 # Optional broad validation (pre-release, not required for merge)
 # Note: dependency policy (`check-deps`) already runs inside `check`; this
@@ -225,6 +271,10 @@ check-feature-profiles:
 	# eggsec-tui/full aggregate in Deep Checks.
 	cargo check -p eggsec-tui --features db-pentest,web-proxy,c2
 	cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast
+	# The daemon's GUI-serving profile (`service`). It carries `nse`, which
+	# vendors OpenSSL and needs a C toolchain, so it belongs here rather
+	# than in `make check`.
+	$(MAKE) check-daemon-profile
 
 # Release validation (local only, no publication)
 release-check:
@@ -246,6 +296,10 @@ help:
 	@echo "  make check           - Full mandatory Rust CI contract (format, lint, test, guards, deps)"
 	@echo "  make check-deps      - Dependency advisory/license/source policy (cargo deny)"
 	@echo "  make check-gui       - Desktop GUI shell profile (check + clippy, ungated)"
+	@echo "  make check-gui-prereqs - Report whether the GUI shell can be built here"
+	@echo "  make gui-release     - Desktop GUI release build + metadata sidecar"
+	@echo "  make check-daemon-profile - Daemon `service` profile conformance (deep check)"
+	@echo "  make build-daemon-profile - Build the daemon `service` profile"
 	@echo "  make check-python    - Python CI check (one build, all checks)"
 	@echo "  make test            - Unit tests only (default)"
 	@echo "  make check-full      - Optional broad validation (pre-release)"

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tokio_util::sync::CancellationToken;
 
+use crate::capabilities::{RuntimeCapabilities, TaskCapability};
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskStatus};
 use crate::ids::{ClientId, SessionId, TaskId};
 use crate::request::{RunRequest, RuntimeSurface};
@@ -54,6 +55,19 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>,
     >;
+
+    /// The task kinds this executor can execute.
+    ///
+    /// The default keeps the pre-declaration behaviour: an executor that says
+    /// nothing is treated as able to run the daemon's conservative set, so
+    /// every existing implementor keeps publishing what it published. An
+    /// executor that rejects every task MUST declare the empty set instead
+    /// -- otherwise a host would advertise capabilities the executor cannot
+    /// execute, which is the one state this declaration exists to make
+    /// unrepresentable.
+    fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        RuntimeCapabilities::daemon_conservative().task_kinds
+    }
 }
 
 struct RuntimeState {
@@ -75,12 +89,19 @@ struct RuntimeState {
 /// lifecycle state.
 pub struct Runtime {
     state: Arc<Mutex<RuntimeState>>,
+    /// The executor's declared support, captured at construction.
+    ///
+    /// It lives outside the state mutex so a host can read it synchronously
+    /// while building its own derived capability list, without taking an
+    /// async lock in a constructor.
+    supported_task_kinds: Vec<TaskCapability>,
 }
 
 impl Runtime {
     /// Create a new runtime with the given configuration and executor.
     pub fn new(config: RuntimeConfig, executor: impl RuntimeTaskExecutor) -> Self {
         let (event_tx, _) = broadcast::channel(config.event_channel_capacity);
+        let supported_task_kinds = executor.supported_task_kinds();
         Self {
             state: Arc::new(Mutex::new(RuntimeState {
                 sessions: HashMap::new(),
@@ -88,7 +109,16 @@ impl Runtime {
                 event_tx,
                 executor: Arc::new(executor),
             })),
+            supported_task_kinds,
         }
+    }
+
+    /// The task kinds the executor behind this runtime declares it can run.
+    ///
+    /// A host derives its published capability list from this, so the
+    /// published list can never claim more than the executor can execute.
+    pub fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        self.supported_task_kinds.clone()
     }
 
     /// Create a new session bound to the given execution surface.
@@ -681,6 +711,95 @@ mod tests {
     use crate::event::LogLevel;
     use crate::request::{PortScanParams, RuntimeSurface, TaskKind};
     use std::time::Duration;
+
+    /// An executor that declares an exact set of task kinds.
+    struct DeclaringExecutor {
+        declared: Vec<TaskCapability>,
+    }
+
+    impl RuntimeTaskExecutor for DeclaringExecutor {
+        fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+            self.declared.clone()
+        }
+
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: RunRequest,
+            _context: RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                    + Send
+                    + 'static,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+        }
+    }
+
+    /// The default declaration preserves the conservative set, so an executor
+    /// that says nothing keeps publishing what it published before the
+    /// declaration seam existed.
+    #[test]
+    fn the_default_declaration_is_the_conservative_set() {
+        struct DefaultExecutor;
+        impl RuntimeTaskExecutor for DefaultExecutor {
+            fn execute(
+                &self,
+                _task_id: TaskId,
+                _request: RunRequest,
+                _context: RuntimeExecutionContext,
+                _sink: RuntimeEventSink,
+                _cancel: CancellationToken,
+            ) -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                        + Send
+                        + 'static,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+            }
+        }
+
+        let declared = DefaultExecutor.supported_task_kinds();
+        assert_eq!(
+            declared.len(),
+            RuntimeCapabilities::daemon_conservative().task_kinds.len()
+        );
+        assert!(!declared.is_empty());
+    }
+
+    /// The runtime reports the executor's declaration, so a host can derive
+    /// its published capability list from it.
+    #[test]
+    fn the_runtime_reports_the_executors_declaration() {
+        let runtime = Runtime::new(
+            RuntimeConfig::default(),
+            DeclaringExecutor {
+                declared: vec![TaskCapability::new("port-scan", "Port scanning")],
+            },
+        );
+        let declared = runtime.supported_task_kinds();
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0].name, "port-scan");
+    }
+
+    /// A rejecting executor declares the empty set, so a host built on it
+    /// cannot advertise a capability it cannot execute.
+    #[test]
+    fn a_rejecting_executor_declares_the_empty_set() {
+        let runtime = Runtime::new(
+            RuntimeConfig::default(),
+            DeclaringExecutor {
+                declared: Vec::new(),
+            },
+        );
+        assert!(runtime.supported_task_kinds().is_empty());
+    }
 
     /// A test executor that immediately completes with a text outcome.
     struct ImmediateExecutor;

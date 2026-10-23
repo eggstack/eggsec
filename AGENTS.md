@@ -39,7 +39,7 @@ cargo check -p eggsec --features <mobile|db-pentest|web-proxy|wireless|nse|evasi
 make release-check                              # local release validation, no publication
 ```
 
-System-dep features: `wireless` (wireless-tools), `packet-inspection` (libpcap-dev), `nse` (libssl-dev), `nse-ssh2` (libssh2-dev), `grpc-api` (protobuf-compiler, descriptor only — code is checked in). `http-api` is an `eggsec-daemon` feature, not an engine feature. `full` aggregates are curated, not exhaustive — the oracle is `make check-features-individual`. Feature inventory: `docs/FEATURE_MATRIX.md`.
+System-dep features: `wireless` (wireless-tools), `nse-ssh2` (libssh2-dev), `grpc-api` (protobuf-compiler, descriptor only — code is checked in). `packet-inspection` and `stress-testing` need **no** system library (they use pure-Rust `pnet`), and `nse` **vendors** OpenSSL, so it needs a C toolchain (`cc`, `perl`, `make`) rather than a system `libssl-dev`. `http-api` is an `eggsec-daemon` feature, not an engine feature. `full` aggregates are curated, not exhaustive — the oracle is `make check-features-individual`. Feature inventory: `docs/FEATURE_MATRIX.md`.
 
 ## Enforcement (critical)
 

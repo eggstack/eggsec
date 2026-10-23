@@ -40,7 +40,7 @@ tokio::net::UnixStream`.
 
 This became a governance problem rather than a build problem. The subsystem
 roadmap says "the supported platform matrix" in five places
-(`plans/subsystems/desktop-gui-frontend-roadmap.md:399`, `:514`, `:519`,
+(`plans/subsystems/desktop-gui-frontend-roadmap.md:442`, `:514`, `:519`,
 `:526`, `:646`) and **never defines it**; the definition is deferred to
 "distribution policy (operational)" — a decision owned outside this repository.
 Milestone 007's exit condition is therefore written as "each supported platform

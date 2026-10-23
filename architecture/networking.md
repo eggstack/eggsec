@@ -210,7 +210,7 @@ Packet module does not use `ProbeIntent`/`ProbeRisk`. It is outside the `ScanPro
 | Packet dump | None (file parsing only) |
 | Traceroute (UDP) | None (standard UDP socket) |
 | Traceroute (ICMP) | `stress-testing` or `packet-inspection` + unix + root (uses `surge_ping`) |
-| Build | `libpcap-dev` for pnet on some platforms |
+| Build | none — `pnet` is pure Rust; live capture needs the runtime privilege |
 
 ## Platform Integration (Phase F)
 

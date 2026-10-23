@@ -649,7 +649,13 @@ The desktop GUI is a [Tauri v2](https://tauri.app) application in `crates/eggsec
 
 - Rust 1.89 or later (workspace MSRV; verify with `make check-msrv`)
 - The platform webview development packages — **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `patchelf`, plus `libayatana-appindicator3-dev` and `libxdo-dev` for the tray; **macOS / Windows**: the system webview is already present, so no extra packages.
-- An already-running `eggsec-daemon --full-executor` — the GUI does not start, supervise, or stop a daemon.
+- An already-running `eggsec-daemon` with the engine executor compiled in — the GUI does not start, supervise, or stop a daemon. The binary must be **built** with the daemon's cargo feature (`--full-executor` is a *runtime* flag over a *cargo* feature, so the flag alone does not compile an engine in):
+
+  ```bash
+  cargo install --path crates/eggsec-daemon --features service --locked
+  ```
+
+  See [docs/DAEMON.md](docs/DAEMON.md#obtaining-the-daemon) for the obtainability recipe, the resulting defaults, and what the recipe does not cover.
 
 ### Build and Run
 

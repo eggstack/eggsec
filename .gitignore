@@ -9,6 +9,11 @@ release/
 # only as an editor hint)
 crates/*/gen/schemas/
 
+# Desktop GUI release output (the binary plus its build-metadata sidecar).
+# scripts/build_gui_release.sh writes here by default; the artefacts are
+# build products, never source.
+/dist/
+
 # Pre-built binaries
 /eggsec
 eggsec.exe

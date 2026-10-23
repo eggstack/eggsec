@@ -45,9 +45,10 @@ pub fn gui_session_scope() -> SessionScope {
 
 /// The command that starts a daemon the GUI can actually use.
 ///
-/// `eggsec daemon start` and a default-built `eggsec-daemon` both host a
-/// no-op executor that rejects every task, so the `--full-executor` flag is
-/// what makes a daemon usable.
+/// The daemon must be BUILT with the engine executor compiled in:
+/// `--full-executor` is a runtime flag over the daemon's `service` cargo
+/// feature, so a binary built without the cargo feature accepts the flag
+/// and falls back to a no-op executor that rejects every task.
 pub fn daemon_start_command(socket_path: &str) -> String {
     format!("eggsec-daemon --full-executor --socket-path {socket_path}")
 }
@@ -61,8 +62,10 @@ pub fn unreachable_diagnostic(socket_path: &str, error: &DaemonClientError) -> S
     format!(
         "cannot reach the Eggsec daemon at {socket_path}: {error}\n\n\
          Start a usable daemon with:\n  {}\n\n\
-         `eggsec daemon start` and a default-built `eggsec-daemon` host a no-op \
-         executor that rejects every task, so the --full-executor flag is required.",
+         `eggsec daemon start` hosts the engine executor, so a CLI-hosted \
+         daemon is usable; the daemon binary must be BUILT with the `service` \
+         cargo feature (its deprecated `full-executor` alias selects the same \
+         profile) for the --full-executor flag to have any effect.",
         daemon_start_command(socket_path)
     )
 }
@@ -204,7 +207,14 @@ mod tests {
         let diagnostic = unreachable_diagnostic("/tmp/eggsec.sock", &error);
         assert!(diagnostic.contains("/tmp/eggsec.sock"));
         assert!(diagnostic.contains("eggsec-daemon --full-executor --socket-path /tmp/eggsec.sock"));
-        assert!(diagnostic.contains("no-op executor"));
+        // The runtime flag alone cannot add an engine that was not compiled
+        // in, so the diagnostic has to name the BUILD-time requirement too.
+        // Without it the operator would build a default daemon, pass the
+        // flag, and get a daemon that rejects every task.
+        assert!(
+            diagnostic.contains("`service` cargo feature"),
+            "the diagnostic must name the cargo feature the daemon must be built with: {diagnostic}"
+        );
     }
 
     #[test]

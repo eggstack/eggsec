@@ -15,19 +15,28 @@ Two crates provide the persistent session host and its IPC wire format: `eggsec-
 | Unix socket server, command dispatch, event fan-out | `eggsec-daemon` |
 | SQLite persistence, schema migration, startup recovery | `eggsec-daemon` |
 | Optional HTTP/SSE transport | `eggsec-daemon` (`http-api` feature) |
-| Optional full engine executor | `eggsec-daemon` (`full-executor` feature) |
+| Optional engine executor (the GUI-serving daemon profile) | `eggsec-daemon` (`service` feature; `full-executor` is its deprecated alias) |
 
 ## Location & Feature Gating
 
 | Crate | Path | Dependencies | Features |
 |-------|------|-------------|----------|
 | `eggsec-daemon-protocol` | `crates/eggsec-daemon-protocol/` | `eggsec-runtime` + `eggsec-policy` (no persistence, transport, or TUI deps) | None |
-| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.32 (bundled)`, `tokio`, `tokio-util`, `serde`, `serde_json`, `tracing`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`, `anyhow`, `clap`; optional `eggsec` | `http-api` (axum + async-stream + futures), `full-executor` (`dep:eggsec` + `eggsec/cli`) |
+| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.32 (bundled)`, `tokio`, `tokio-util`, `serde`, `serde_json`, `tracing`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`, `anyhow`, `clap`; optional `eggsec` | `http-api` (axum + async-stream + futures), `service` (the engine profile: `dep:eggsec` + `eggsec/cli` + the daemon's engine feature set), `full-executor` (deprecated alias for `service`) |
+
+The `service` feature is the **profile**: the engine feature set a
+GUI-serving daemon compiles. The engine owns the list
+(`eggsec::config::daemon_profile::DAEMON_SERVICE_PROFILE`) and the daemon's
+manifest must name exactly it. `full-executor` is kept as a deprecated alias
+(`full-executor = ["service"]`) so existing invocations keep working. The
+daemon's **runtime** flag `--full-executor` is a different mechanism: it
+turns the compiled-in executor on, and a binary built without the cargo
+feature accepts the flag and falls back to a no-op executor with a warning.
 
 Architecture guards enforce:
 - `eggsec-daemon` has no TUI dependencies (`ratatui`/`crossterm`)
 - Transport deps (`axum`, `async-stream`, `futures`) are optional behind `http-api`
-- Engine dep (`eggsec`) is optional behind `full-executor`
+- Engine dep (`eggsec`) is optional behind the `service` profile
 - Default dependencies: `eggsec-runtime` + `eggsec-daemon-protocol` only
 
 ## Architecture
@@ -331,7 +340,7 @@ Three-tier resolution for `GetPersistedSnapshot` (`host.rs:915-1019`):
 
 - **TUI attach mode**: `eggsec-tui` connects as a daemon client via `eggsec-frontend-client`'s `DaemonRuntimeClient` (the shared frontend runtime-client contract), creates sessions, submits tasks, and streams events
 - **CLI daemon commands**: `eggsec daemon history` and `eggsec daemon show <id>` use `ListPersistedSessions`/`GetPersistedSnapshot` via `DaemonClient`
-- **Engine runtime_bridge**: `EggsecRuntimeExecutor` (behind `full-executor`) bridges runtime DTOs to engine dispatch
+- **Engine runtime_bridge**: `EggsecRuntimeExecutor` (behind the `service` cargo feature, whose deprecated `full-executor` alias selects the same profile) bridges runtime DTOs to engine dispatch
 - **Python daemon-client**: provisional `eggsec.daemon` module uses `eggsec-daemon-protocol` types
 
 ## SQLite Schema (`store/sqlite.rs:10-31`)
@@ -390,12 +399,16 @@ A desktop GUI session is therefore auditable as `desktop-gui-manual` and a TUI s
 - `daemon/server.rs`: Unix socket round-trips, subscribe event delivery, multi-subscriber fan-out, shutdown signal, invalid JSON handling
 - `daemon/client.rs`: client library round-trips (health, create session, declare, close)
 - `daemon/http.rs`: HTTP route tests, SSE delivery, auth enforcement, bind validation
+- `daemon/host.rs`: the capability-honesty tests — the published list is the declared support ∩ the policy; a rejecting executor publishes nothing; the default declaration keeps the conservative set
+- `crates/eggsec-daemon/tests/daemon_start_honesty.rs`: the pre-flight liveness check (live, stale, hung), the socket's ownership and removal, the concurrent-start race, the protocol version, and the `Capabilities` message shape
+- `daemon/src/main.rs`: the daemon binary's start path refuses to displace a live daemon
+- `eggsec-cli/src/daemon_cli.rs`: the CLI's start path — the readiness wait's bound, the "no success when the socket did not bind" property, the stale-socket start, and the shutdown-token cancellation
 - Local smoke test: `scripts/smoke-daemon-local.sh`
 
 ## Invariants & Gotchas
 
 1. **No TUI deps in daemon**: architecture guard enforces zero `ratatui`/`crossterm` imports
-2. **Transport/engine deps stay feature-gated**: `http-api` and `full-executor` are opt-in
+2. **Transport/engine deps stay feature-gated**: `http-api` and the `service` profile (deprecated alias `full-executor`) are opt-in
 3. **Persistence timeout**: all fire-and-forget persistence tasks bounded by `PERSISTENCE_TASK_TIMEOUT` (30s)
 4. **ApprovePolicy is unsupported**: returns `ErrorCode::Unsupported` with audit trail
 5. **Socket file cleanup**: `run_server` removes socket on exit; `main.rs` removes on startup
@@ -403,6 +416,9 @@ A desktop GUI session is therefore auditable as `desktop-gui-manual` and a TUI s
 7. **Subscribe handled at transport level**: `handle_command` returns error for Subscribe; actual streaming is in `server.rs` and `http.rs`
 8. **Schema version mismatch**: refuses to load when stored > current; logs warning on downgrade migration
 9. **Client ID tracking per connection**: Unix socket handler captures `client_id` from `DeclareClient` response; subsequent commands on same connection carry that ID
+10. **The published capability list is derived, not declared**: it is the executor's declared support (`RuntimeTaskExecutor::supported_task_kinds()`) intersected with the daemon's conservative policy, computed once at construction. A daemon that cannot execute anything therefore publishes **nothing** — the "advertises twenty, executes none" state is unrepresentable. A *published* kind whose engine feature is off is a different matter: it is denied at dispatch with `FeatureMissing`, not `UnsupportedTaskKind`
+11. **Readiness is a protocol check, never a log scrape**: a start path proves the daemon is up by connecting and exchanging `Health`, bounded by a named timeout. Nothing depends on the daemon's `"Daemon listening on …"` log line — a log format is not a contract
+12. **The pre-flight liveness check belongs to the start paths**: before binding, a start path connects to the socket path and asks for `Health`. A daemon that answers owns the path: the start is refused, the socket is left untouched, and the command exits non-zero. The check is a **connection**, never a `stat` — a socket file left behind by a crashed daemon is indistinguishable from a live one by file existence. `run_server` still unlinks the socket path before binding, so the server-side hardening (refusing to bind over a *live* socket) is deferred to a daemon-subsystem milestone
 
 ## See Also
 

@@ -49,9 +49,9 @@ crates/eggsec-gui/
   `EnforcedDispatcher`, `Scope`, or `tool.execute()`, and never constructs an
   `ApprovedExecution` bundle. Every dispatch happens in the daemon, under the
   daemon's own enforcement.
-- **The GUI does not depend on `eggsec-daemon`.** The daemon's `full-executor`
-  feature pulls the engine, so a GUI that embedded a daemon would link the
-  engine and break the boundary. The GUI therefore connects to an
+- **The GUI does not depend on `eggsec-daemon`.** The daemon's `service` feature
+  (its deprecated `full-executor` alias) pulls the engine, so a GUI that embedded
+  a daemon would link the engine and break the boundary. The GUI therefore connects to an
   already-running daemon over its Unix socket.
 - **No outbound HTTP.** The GUI enables neither `tauri`'s `rustls-tls` nor
   `native-tls` (`crates/eggsec-gui/Cargo.toml:56`), so the whole
@@ -220,19 +220,40 @@ query for the GUI; do not gate GUI rendering on it.
 
 ## The daemon expectation
 
-The GUI requires an already-running `eggsec-daemon --full-executor`. It does
-not spawn, supervise, or stop a daemon.
+The GUI requires an already-running `eggsec-daemon` with the engine executor
+**compiled in**. It does not spawn, supervise, or stop a daemon.
 
-`eggsec daemon start` and a default-built `eggsec-daemon` host a **no-op
-executor** that rejects every task, so the GUI's diagnostic names the exact
-start command (`crates/eggsec-gui/src/connection.rs:51`) and the GUI reports
-the no-op-executor condition — the daemon advertises no task kinds
+`--full-executor` is a *runtime* flag over the daemon's `service` *cargo*
+feature (its deprecated `full-executor` alias selects the same profile), so
+the binary must be **built** with that feature:
+
+```bash
+cargo install --path crates/eggsec-daemon --features service --locked
+```
+
+A binary built without the cargo feature accepts the flag and falls back to a
+**no-op executor** that publishes an **empty** task-kind list, so the GUI's
+diagnostic names the exact start command
+(`crates/eggsec-gui/src/connection.rs:51`) and the GUI reports the
+no-op-executor condition — the daemon advertises no task kinds
 (`crates/eggsec-gui/src/connection.rs:160`) — rather than offering a submit
 button that cannot work.
 
+`eggsec daemon start` is no longer in that state: the CLI's start path hosts
+the **engine** executor, so a CLI-hosted daemon advertises and can execute
+the conservative task kinds. It does **not** persist sessions — the daemon
+binary is the persistent one. See `docs/DAEMON.md` for the obtainability
+recipe and its limits.
+
 ## Platform prerequisites and build profiles
 
-- macOS and Windows use the system webview; Linux needs `webkit2gtk-4.1`,
+- Supported platforms: **Linux and macOS**. **Windows is out of scope** —
+  `plans/adrs/ADR-0010-gui-supported-platform-scope.md` decides it, and the
+  measured reason is that the GUI's unconditional `eggsec-frontend-client`
+  dependency imports the Unix-domain-socket transport without a `cfg(unix)`
+  gate, so the GUI does not compile for Windows. Re-entry needs a Windows
+  daemon transport, which is a daemon-subsystem change with its own ADR.
+- macOS uses the system webview; Linux needs `webkit2gtk-4.1`,
   which sets the supported floor at Ubuntu 22.04 / Debian 12 or newer.
 - The crate compiles in two profiles:
   - `--features shell` (the default) — the full desktop application. This is
@@ -245,6 +266,17 @@ button that cannot work.
 - `build.rs` gates `tauri_build::build()` on `CARGO_FEATURE_SHELL` because
   the `tauri` crate's build metadata does not exist when the shell feature is
   off (`crates/eggsec-gui/build.rs:8`).
+- **What was actually built and exercised** per platform, per behaviour, is
+  recorded in `docs/GUI_PLATFORM_QUALIFICATION.md`, with one evidence file per
+  run under `docs/evidence/gui-qualification/`. That matrix — not a claim —
+  is the authoritative statement of platform support; the `gui-platform` CI
+  job is what promotes a cell.
+- `bundle.active` stays `false`. Installers, signing, and notarization belong
+  to the separate distribution workstream; the handoff artefact and its
+  known limitations are in `docs/GUI_DISTRIBUTION_HANDOFF.md`.
+- The daemon the GUI connects to has its own engine-feature profile and build
+  recipe, documented in `docs/DAEMON_FEATURE_PROFILE.md`. The GUI's
+  prerequisites and the daemon's are deliberately kept apart.
 
 ## Build, test, run
 

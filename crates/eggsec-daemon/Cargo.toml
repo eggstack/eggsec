@@ -13,9 +13,43 @@ path = "src/main.rs"
 [features]
 default = []
 http-api = ["dep:axum", "dep:async-stream", "dep:futures"]
-# Full executor needs engine CLI types (`runtime_bridge` is cli-gated).
-# Phase E WS2: engine default is empty, so enable `cli` explicitly here.
-full-executor = ["dep:eggsec", "eggsec/cli"]
+# The GUI-serving daemon profile: the engine features a daemon that serves
+# the desktop GUI enables. The list is owned by the engine
+# (`eggsec::config::daemon_profile::DAEMON_SERVICE_PROFILE`) and pinned by
+# `crates/eggsec/tests/feature_matrix.rs`.
+#
+# `cli` is a HOST GATE, not a CLI surface: it gates the engine's
+# `runtime_bridge`, `commands`, and `dispatch` modules, which is where
+# `EggsecRuntimeExecutor` lives. Without it the daemon cannot host the
+# executor it is built around.
+service = [
+  "dep:eggsec",
+  "eggsec/advanced-hunting",
+  "eggsec/c2",
+  "eggsec/cli",
+  "eggsec/compliance",
+  "eggsec/database",
+  "eggsec/db-pentest",
+  "eggsec/evasion",
+  "eggsec/external-integrations",
+  "eggsec/finding-workflow",
+  "eggsec/headless-browser",
+  "eggsec/nse",
+  "eggsec/packet-inspection",
+  "eggsec/postex",
+  "eggsec/stress-testing",
+  "eggsec/tool-api",
+  "eggsec/vuln-management",
+  "eggsec/web-proxy",
+  "eggsec/websocket",
+  "eggsec/wireless",
+  "eggsec/wireless-advanced",
+]
+# Deprecated alias for `service`. Kept so every existing invocation and
+# documentation reference keeps working; it now produces the profile daemon.
+# The daemon's RUNTIME flag `--full-executor` is a different mechanism and
+# is unaffected by this alias.
+full-executor = ["service"]
 
 [dependencies]
 eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }

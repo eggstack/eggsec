@@ -21,7 +21,118 @@ See [docs/DAEMON_PARITY.md](DAEMON_PARITY.md) for the full local-vs-daemon parit
 
 ## Capabilities
 
-The daemon's default capabilities are **conservative** — when `full-executor` is enabled but lab mode is not configured, only a safe subset of task kinds is advertised (excluding hazardous families such as stress, packet, wireless-deauth, postex, c2, and evasion). Full capabilities require explicit `--full-executor` configuration.
+The daemon publishes a **conservative** task-kind list — a safe subset that
+excludes the hazardous families (stress, packet, wireless-deauth, postex, c2,
+evasion). The published list is **derived**, never declared beside the
+executor:
+
+> published task kinds = the executor's declared support ∩ the daemon's conservative policy
+
+A daemon that cannot execute anything therefore publishes **nothing**: the
+"advertises twenty, executes none" state is unreachable by construction. The
+declared support comes from the executor itself
+(`RuntimeTaskExecutor::supported_task_kinds()`), so a rejecting executor
+publishes an empty list and a real one publishes the conservative set.
+
+Published is not the same as executable. A published kind whose *engine
+feature* is off is denied at dispatch with `FeatureMissing`, not
+`UnsupportedTaskKind` — the feature-level gap is real, and
+[Obtaining the daemon](#obtaining-the-daemon) says which build compiles which
+features.
+
+## Obtaining the daemon
+
+The daemon is a separate cargo package with its own binary, so it installs on
+its own. Two invocations cover the whole story: the daemon binary, and the CLI
+that talks to it.
+
+```bash
+# The daemon binary, with the engine executor compiled in.
+cargo install --path crates/eggsec-daemon --features service --locked
+
+# The deprecated alias for the same profile. `service` is the canonical
+# spelling; `full-executor` still works and still produces the same binary.
+cargo install --path crates/eggsec-daemon --features full-executor --locked
+
+# The CLI, with the `daemon`, `session`, and `task` subcommands.
+cargo install --path crates/eggsec-cli --features daemon-client --locked
+```
+
+`--locked` builds against the workspace lockfile, so the recipe is
+reproducible.
+
+### The cargo feature is not the runtime flag
+
+`--full-executor` is a **runtime flag** on the daemon binary. `service` (and
+its deprecated alias `full-executor`) is a **cargo feature** the binary is
+**built** with. They are different mechanisms:
+
+- A binary **built** with `--features service` has the engine executor
+  compiled in. The runtime `--full-executor` flag then turns that executor
+  on.
+- A binary **built without** the cargo feature still accepts the runtime
+  `--full-executor` flag, warns, and falls back to a no-op executor: it
+  publishes an **empty** task-kind list and rejects every task. The flag
+  alone cannot add an engine that was not compiled in.
+
+The same split applies to the CLI: `daemon-client` is **not** in the CLI's
+default feature set, so `cargo install --path crates/eggsec-cli --locked`
+produces a CLI **without** the `daemon`, `session`, and `task` subcommands.
+
+### What the resulting daemon uses by default
+
+| Setting | Default |
+|---------|---------|
+| Socket path | `/tmp/eggsec-daemon.sock` |
+| Data directory | `$HOME/.local/share/eggsec/daemon` |
+| Max clients | 10 |
+| Log level | `info` |
+
+### The honest limitation
+
+An advertised capability is not a promise that this build can execute it.
+
+- The **daemon binary** built with `--features service` links the engine's
+  daemon service profile, so the capabilities that profile names are compiled
+  in.
+- The **CLI-hosted** daemon (`eggsec daemon start`) links the engine with the
+  `cli` feature only. In that build 8 of the 20 advertised capabilities are
+  feature-gated off and are denied at dispatch with `FeatureMissing` — not
+  `UnsupportedTaskKind`. Milestone 008 owns the daemon's engine profile and
+  milestone 006 owns the client-side resolution of that gap.
+- A daemon **built without** the cargo feature is a third thing again: it
+  publishes an **empty** task-kind list and rejects every task.
+
+### What this recipe does not cover
+
+| Not covered | Why | Owner |
+|---|---|---|
+| A **packaged** artifact (`.deb`, `.rpm`, `.pkg`, Homebrew formula, installer) | Packaging is the distribution workstream's | M007 → distribution workstream |
+| **Signing** or **notarization** | Same | M007 → distribution workstream |
+| **Update channels** or a version-pinned release feed | Same | M007 → distribution workstream |
+| **Windows** | `ADR-0010`: the daemon's transport is a Unix domain socket, so the daemon and the GUI do not compile for Windows | A daemon-subsystem transport milestone, with its own ADR |
+| A **`PATH` guarantee** | `cargo install` writes to `$CARGO_HOME/bin` (default `~/.cargo/bin`), which the project does **not** promise. **No component looks for the daemon there** — not the GUI, not the CLI | Standing rule |
+| A **feature-complete** daemon | The CLI-hosted daemon links the engine with the `cli` feature only, so 8 of the 20 advertised capabilities are feature-gated off in that build | **M008** (profile) and **M006** (publication) |
+| **Session persistence** for the CLI-hosted daemon | The CLI's start path uses `noop_store()` | The daemon binary |
+
+`cargo install` is a build recipe, not a distribution channel: there is no
+signed artifact, no installer, and no update feed behind it.
+
+### Starting a daemon honestly
+
+Both start paths refuse to displace a daemon that is already serving the
+socket path, and both report success only after the daemon answers `Health`:
+
+- The **pre-flight** connects to the socket path and asks for `Health`. A
+  daemon that answers owns the path: the start is refused, the socket is left
+  untouched, and the command exits non-zero. An unreachable socket (a stale
+  file left by a crashed daemon) is *not* live — the start proceeds and the
+  server's own unlink clears it.
+- The **readiness wait** polls `Health` (and `Capabilities`) until the daemon
+  answers, bounded by a named timeout. The success message names the socket
+  path, the protocol version, and the number of advertised task kinds; it
+  never claims that every advertised capability is executable, and it states
+  that the CLI-hosted daemon does not persist sessions.
 
 ## Transport
 
@@ -61,7 +172,8 @@ The daemon advertises its available transports to clients via `DaemonCapabilitie
 ## CLI Commands
 
 ```bash
-# Start daemon with persistence (default)
+# Start a daemon in the foreground. This hosts the engine executor, but it
+# does NOT persist sessions — the daemon binary is the persistent one.
 eggsec daemon start
 
 # List all persisted sessions

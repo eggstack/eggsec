@@ -57,7 +57,7 @@ Concretely, one bounded outcome with three parts:
 
 This milestone's code surface is **outside the GUI crate** — the CLI, the
 daemon, the runtime, and the engine. That is deliberate and is recorded in the
-roadmap (`plans/subsystems/desktop-gui-frontend-roadmap.md:660-662`): the GUI
+roadmap (`plans/subsystems/desktop-gui-frontend-roadmap.md:733-735`): the GUI
 is blocked on a daemon it cannot obtain and cannot trust, and no daemon
 subsystem roadmap exists to carry the work.
 
@@ -68,7 +68,7 @@ subsystem roadmap exists to carry the work.
 **Closed hard dependencies: none.** The roadmap records milestone 8 as a
 **soft** dependency — "the obtainable daemon is more useful with a real
 feature profile, but the honesty fix does not depend on it"
-(`plans/subsystems/desktop-gui-frontend-roadmap.md:638-639`). M009 therefore
+(`plans/subsystems/desktop-gui-frontend-roadmap.md:702-703`). M009 therefore
 does not wait for M008, and it does not pre-empt M008: the feature profile is
 M008's deliverable, and M009's recipe will name M008's profile as the
 richer build once it exists.
@@ -92,7 +92,7 @@ discoverable by any documented flow
 (`plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md:528-531`,
 §7 Work package C items 2 and 9), and milestone 007's qualification run needs
 a daemon it can actually start
-(`plans/subsystems/desktop-gui-frontend-roadmap.md:552-553`). Both are
+(`plans/subsystems/desktop-gui-frontend-roadmap.md:595-596`). Both are
 blocked on the two defects this milestone closes.
 
 ---
@@ -290,8 +290,8 @@ enables it (`rg -n 'daemon-client' .github/workflows/` → no match).
 
 | Concern | Owner | Why M009 must not touch it |
 |---|---|---|
-| The daemon's **feature profile** (which engine features a GUI-serving daemon compiles in) | **M008** — `plans/subsystems/desktop-gui-frontend-roadmap.md:596-624` | M009's recipe names a profile; it does not define one. Guard 104 pins the current profile text (`scripts/check-architecture-guards.sh:2677-2680`) and changing it is M008's business |
-| The daemon's **runtime publication** of enabled features (the additive `enabled_features` handshake field) | **M006** — `plans/subsystems/desktop-gui-frontend-roadmap.md:619-621`; `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md:641-681` | M009 MUST NOT change the daemon protocol or `DaemonCapabilities` |
+| The daemon's **feature profile** (which engine features a GUI-serving daemon compiles in) | **M008** — `plans/subsystems/desktop-gui-frontend-roadmap.md:649-677` | M009's recipe names a profile; it does not define one. Guard 104 pins the current profile text (`scripts/check-architecture-guards.sh:2677-2680`) and changing it is M008's business |
+| The daemon's **runtime publication** of enabled features (the additive `enabled_features` handshake field) | **M006** — `plans/subsystems/desktop-gui-frontend-roadmap.md:672-674`; `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md:641-681` | M009 MUST NOT change the daemon protocol or `DaemonCapabilities` |
 | The **capability → availability** resolution on the client side | **M006** — `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md:875-930` | Presence is not availability (§4) |
 
 **The doctrine M009's honesty invariant is written against.** M006's plan
@@ -336,7 +336,7 @@ them as stop conditions for the exit conditions they block (§14).
 | Failure | Evidence | Blocks |
 |---|---|---|
 | `make check-deps` fails on advisories. The engine-side entries are `zip 2.4.2` (RUSTSEC-2026-0367, -0368, -0369 — three, not two) and the `rustls 0.21.12` family via `tokio-rustls 0.24.1` → `tiberius 0.12.3` → `eggsec`. **Seven advisory entries are reachable only through the GUI's Tauri closure** and are attributable to `crates/eggsec-gui`: `glib 0.18.5` (RUSTSEC-2024-0429), `glib-macros 0.18.5` → `proc-macro-error 1.0.4` (RUSTSEC-2024-0370), and the five `unic-*` crates (RUSTSEC-2025-0081, -0075, -0080, -0100, -0098). `bans ok, licenses ok, sources ok`. | `Cargo.lock` pins `zip 2.4.2` and `rustls 0.21.12`; `deny.toml:25-37` records ignores for the *webpki* advisories on that path but not for the `zip` triple; the full per-advisory table is in `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` §3.9 | the `make check` contract, and therefore M9's closure |
-| `cargo check --workspace --all-features` fails with `E0616: field 'url' of struct 'WebSocketFuzzer' is private` | `WebSocketFuzzer.url` is `pub(crate)` in `crates/eggsec-payloads/src/websocket.rs:41-45`; the engine reads it at `crates/eggsec/src/fuzzer/advanced.rs:446` | `make check-features-individual`, which the roadmap requires before closure (`plans/subsystems/desktop-gui-frontend-roadmap.md:768-771`) |
+| `cargo check --workspace --all-features` fails with `E0616: field 'url' of struct 'WebSocketFuzzer' is private` | `WebSocketFuzzer.url` is `pub(crate)` in `crates/eggsec-payloads/src/websocket.rs:41-45`; the engine reads it at `crates/eggsec/src/fuzzer/advanced.rs:446` | `make check-features-individual`, which the roadmap requires before closure (`plans/subsystems/desktop-gui-frontend-roadmap.md:841-844`) |
 | `make check-python` was not run (needs `.venv-ci/`) | — | nothing in M009; recorded for completeness |
 
 Recording a `deny.toml` exception is a **maintainer decision** (owner +
@@ -449,12 +449,12 @@ review-by date), not an implementation task M009 may take on itself.
 
 - **The daemon's feature profile.** Which engine features a GUI-serving
   daemon compiles in is **M008's** deliverable
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:596-624`). M009's recipe
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:649-677`). M009's recipe
   names the profile that exists today and points at M008's for the richer
   one.
 - **Any change to the daemon protocol or to `DaemonCapabilities`.** The
   runtime publication of enabled features is **M006's** deliverable
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:619-621`). If the
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:672-674`). If the
   honesty fix turns out to require a protocol change, M009 **stops and
   escalates** (§14).
 - **Narrowing the published capability list by engine feature.** That is the
@@ -462,9 +462,9 @@ review-by date), not an implementation task M009 may take on itself.
 - **Packaging, signing, notarization, installers, and update channels.**
   Those belong to the separately-managed distribution workstream, which
   milestone 007 hands the binary and a reproducible build recipe
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:557`, `plans/adrs/ADR-0010-gui-supported-platform-scope.md:190-193`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:600`, `plans/adrs/ADR-0010-gui-supported-platform-scope.md:190-193`).
 - **The GUI's own packaging.** `bundle.active` stays `false`
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:592-594`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:645-647`).
 - **A Windows obtainability path.** `ADR-0010` fixes the desktop GUI's
   supported platforms at Linux and macOS and records Windows as out of scope
   because the daemon's transport is a Unix domain socket
@@ -479,7 +479,7 @@ review-by date), not an implementation task M009 may take on itself.
   change with its own blast radius (every daemon start path, including
   third-party ones). M009 puts the guard in the **start commands**, which is
   where the roadmap places it
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:631-652`), and records
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:695-716`), and records
   the server-side hardening as deferred work (§9).
 - **Adding session persistence to the CLI-hosted daemon.** The CLI's daemon
   uses `noop_store()` today (`crates/eggsec-cli/src/daemon_cli.rs:52`).
@@ -487,7 +487,7 @@ review-by date), not an implementation task M009 may take on itself.
   create a second persistence path. The daemon binary is the persistent
   daemon.
 - **Collapsing the socket-path duplication** (six literals; roadmap
-  `plans/subsystems/desktop-gui-frontend-roadmap.md:204-210`). A separate
+  `plans/subsystems/desktop-gui-frontend-roadmap.md:216-222`). A separate
   corrective milestone.
 - **Fixing the inherited `make check-deps` advisory failures or the
   inherited `--all-features` compile error** (§3.10).
@@ -542,7 +542,7 @@ the template's generic buckets.
   `noop_store()`; the daemon binary keeps its SQLite store
   (`crates/eggsec-daemon/src/store/sqlite.rs`). No persisted representation
   changes, so no milestone in this subsystem requires a data migration
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:666-672`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:739-745`).
 - **No new persisted artefact.** M009 deliberately does **not** introduce a
   PID file or a lock file (§3.5). A lock file would be the natural way to
   make "one daemon per socket" enforceable across processes, but it is a new
@@ -764,7 +764,7 @@ which is why M009 can implement it without an ADR.
 **The boundary, stated first.** The **distribution workstream** owns signing,
 notarization, installers, and update channels for the **GUI**; milestone 007
 hands that workstream the binary and a reproducible build recipe
-(`plans/subsystems/desktop-gui-frontend-roadmap.md:557`, `:567-568`;
+(`plans/subsystems/desktop-gui-frontend-roadmap.md:600`, `:567-568`;
 `plans/adrs/ADR-0010-gui-supported-platform-scope.md:190-193`). **M009's scope
 is the daemon binary's build-and-install path** — which cargo features it
 must be compiled with, the exact reproducible invocation, the default paths
@@ -1437,7 +1437,7 @@ The agent must **stop and report** rather than improvise when:
   auto-updating artifact, M009 **stops**: signing, notarization,
   installers, and update channels belong to the separately-managed
   distribution workstream, which milestone 007 feeds
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:557`, `:567-568`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:600`, `:567-568`).
 - **The inherited failures are hit.** `make check-deps` failing on the
   inherited advisories, or `cargo check --workspace --all-features` failing
   with `E0616: field 'url' of struct 'WebSocketFuzzer' is private`, are

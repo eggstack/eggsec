@@ -84,7 +84,11 @@ pub fn usage() -> String {
            (default: {DEFAULT_SOCKET_PATH})\n  \
            -h, --help        Show this message\n\n\
          The GUI connects to an already-running daemon. Start one with:\n  \
-           eggsec-daemon --full-executor --socket-path {DEFAULT_SOCKET_PATH}\n"
+           eggsec-daemon --full-executor --socket-path {DEFAULT_SOCKET_PATH}\n\n\
+           The daemon binary must be BUILT with the `service` cargo feature \
+           (its deprecated `full-executor` alias selects the same profile); the \
+           --full-executor flag alone cannot add an engine that was not \
+           compiled in.\n"
     )
 }
 

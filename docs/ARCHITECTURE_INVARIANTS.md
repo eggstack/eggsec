@@ -72,7 +72,7 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 29. **Runtime bridge direction**: `eggsec` depends on `eggsec-runtime` (not reverse). The `runtime_bridge` module converts `eggsec-runtime` DTOs (`RuntimeSurface`, `RunRequest`, `TaskKind`) to engine types (`ExecutionSurface`, `OperationDescriptor`, `EnforcementContext`). `Unknown` surface always errors. Strict surfaces never honor manual overrides through the bridge.
 
-30. **Daemon engine dependency**: `eggsec-daemon` depends on `eggsec` (engine) only behind the `full-executor` feature flag. Without it, `NoopExecutorStub` rejects all tasks. The `EggsecRuntimeExecutor` must not hold `Arc<Runtime>` to avoid circular ownership.
+30. **Daemon engine dependency**: `eggsec-daemon` depends on `eggsec` (engine) only behind the `service` profile (deprecated alias: `full-executor`). Without it, `NoopExecutorStub` rejects all tasks and the daemon publishes an **empty** task-kind list, because the published list is derived from the executor's declared support. The `EggsecRuntimeExecutor` must not hold `Arc<Runtime>` to avoid circular ownership.
 
 ## Runtime Bridge Invariants
 
