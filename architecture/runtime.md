@@ -19,7 +19,9 @@ Frontend-neutral async runtime for task lifecycle management. Provides the bridg
 
 | Crate | Path | Dependencies |
 |-------|------|-------------|
-| `eggsec-runtime` | `crates/eggsec-runtime/` | `serde`, `serde_json`, `thiserror`, `tokio`, `tokio-util`, `tracing`, `uuid` — **zero workspace deps** |
+| `eggsec-runtime` | `crates/eggsec-runtime/` | `serde`, `serde_json`, `thiserror`, `tokio`, `tokio-util`, `tracing`, `uuid` — **zero workspace deps**; optional `schemars` behind the off-by-default `schema` feature |
+
+The `schema` feature (off by default) exposes `src/schema.rs`: `task_kind_schemas()` returns one entry per `TaskKind` variant (30) with its wire `kind` discriminator, its canonical `operation_id`, its `capability_name`, and a JSON Schema for that variant's params struct; `task_kind_schema()` returns the whole `TaskKind` schema in its adjacently-tagged wire shape. The schema is **derived** from the canonical request DTOs, never hand-written, and it is **descriptive only** — no authorization, dispatch, scope, or policy path consults it.
 
 Architecture guard: zero TUI, transport, persistence, or engine dependencies. Enforced by `scripts/check-architecture-guards.sh`.
 
@@ -32,13 +34,14 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `runtime_config` | `src/runtime_config.rs` | `RuntimeConfig`, `SessionOptions` (submission/lifecycle tuning) |
 | `runtime_sink` | `src/runtime_sink.rs` | `RuntimeEventReceiver`, `RuntimeEventSink`, broadcast helpers (events/backpressure) |
 | `session` | `src/session.rs` | `RuntimeSession`, `RuntimeExecutionContext`, `SessionScope`, `SessionSnapshot`, `TaskSnapshot`, `SessionSummary` |
-| `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (10 variants), `RunRequest`, payload structs |
+| `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (11 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
 | `capabilities` | `src/capabilities.rs` | `RuntimeCapabilities`, `TaskCapability` |
 | `ids` | `src/ids.rs` | `SessionId`, `TaskId`, `ClientId` — UUID newtypes with serde/display |
 | `error` | `src/error.rs` | `RuntimeError` (13 variants) |
 | `dispatcher` | `src/dispatcher.rs` | `TaskDispatcher` trait (unused by runtime; legacy interface) |
 | `cancel` | `src/cancel.rs` | `race_with_cancel` helper + `CancellationToken` re-export (cancellation boundary) |
+| `schema` | `src/schema.rs` | **Feature-gated (`schema`)**: `TaskKindSchema`, `task_kind_schemas()`, `task_kind_schema()` — the derived JSON Schema over the canonical request DTOs |
 
 ### Core Types
 
@@ -57,7 +60,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `SessionScope` | `session.rs:58` | Scope metadata: `is_explicit`, `source`, `path` |
 | `RunRequest` | `request.rs:99` | Task submission: `task_kind`, `requested_by`, `surface`, `labels` |
 
-### RuntimeSurface — 10 variants (`request.rs:21`)
+### RuntimeSurface — 11 variants (`request.rs:21`)
 
 | # | Variant | Label | Automated |
 |---|---------|-------|:---------:|
@@ -65,12 +68,13 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | 2 | `CliManualStrict` | `cli-manual-strict` | No |
 | 3 | `TuiManual` | `tui-manual` | No |
 | 4 | `TuiManualStrict` | `tui-manual-strict` | No |
-| 5 | `Ci` | `ci` | Yes |
-| 6 | `McpServer` | `mcp-server` | Yes |
-| 7 | `RestApi` | `rest-api` | Yes |
-| 8 | `GrpcApi` | `grpc-api` | Yes |
-| 9 | `SecurityAgent` | `security-agent` | Yes |
-| 10 | `Unknown` | `unknown` (default) | — |
+| 5 | `DesktopGuiManual` | `desktop-gui-manual` | No |
+| 6 | `Ci` | `ci` | Yes |
+| 7 | `McpServer` | `mcp-server` | Yes |
+| 8 | `RestApi` | `rest-api` | Yes |
+| 9 | `GrpcApi` | `grpc-api` | Yes |
+| 10 | `SecurityAgent` | `security-agent` | Yes |
+| 11 | `Unknown` | `unknown` (default) | — |
 
 ### TaskKind — 30 variants (`request.rs:64`)
 
@@ -290,4 +294,4 @@ All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25; full re-verification 2026-10-06 (TaskKind 30 variants incl. `Resume`)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25; full re-verification 2026-10-06 (TaskKind 30 variants incl. `Resume`); 2026-10-23 (`RuntimeSurface` 10 → 11 variants with `DesktopGuiManual`; optional `schema` feature added)*

@@ -404,6 +404,120 @@ mod tests {
         (host, socket_path, shutdown)
     }
 
+    /// The desktop GUI's own client path, end to end against a live daemon
+    /// host over the real Unix socket.
+    ///
+    /// This is the GUI crate's boundary exercised from the daemon's side:
+    /// the GUI cannot depend on the daemon crate, so the test that proves
+    /// the two fit together lives here. It covers the client's own identity
+    /// — its `Gui` kind, its `gui-` request-id namespace, and its
+    /// `DesktopGuiManual` session — and the catalog the GUI renders.
+    #[tokio::test]
+    async fn the_gui_client_path_works_end_to_end() {
+        use eggsec_frontend_client::{ClientIdentity, DaemonRuntimeClient, RuntimeClient};
+
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let socket_path = format!("/tmp/eggsec-gui-test-{}.sock", uuid::Uuid::new_v4());
+        let host = Arc::new(DaemonHost::new(
+            DaemonConfig {
+                socket_path: socket_path.clone(),
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        ));
+        let shutdown = CancellationToken::new();
+
+        let host_clone = host.clone();
+        let shutdown_clone = shutdown.clone();
+        tokio::spawn(async move {
+            run_server(host_clone, shutdown_clone).await.unwrap();
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let client = DaemonRuntimeClient::connect(
+            &socket_path,
+            ClientIdentity {
+                kind: eggsec_daemon_protocol::client_registry::ClientKind::Gui,
+                label: "eggsec-gui".to_owned(),
+                request_prefix: "gui-".to_owned(),
+            },
+        )
+        .await
+        .expect("the GUI client connects");
+
+        // The daemon accepts the GUI's declaration and answers its
+        // handshake.
+        let health = client.health().await.expect("the daemon answers health");
+        assert_eq!(
+            health.protocol_version,
+            eggsec_daemon_protocol::protocol::DAEMON_PROTOCOL_VERSION
+        );
+
+        let capabilities = client
+            .daemon_capabilities()
+            .await
+            .expect("the daemon answers capabilities");
+        assert!(
+            capabilities.operation_schema,
+            "the daemon publishes the operation schema the GUI renders"
+        );
+
+        let catalog = client
+            .describe_operations()
+            .await
+            .expect("the daemon publishes the catalog");
+        assert_eq!(catalog.task_kinds.len(), 30);
+        assert!(!catalog.operations.is_empty());
+
+        // The GUI opens its own surface, with the scope it constructs
+        // itself.
+        let session_id = client
+            .create_session(
+                eggsec_runtime::RuntimeSurface::DesktopGuiManual,
+                Some(eggsec_runtime::session::SessionScope {
+                    is_explicit: false,
+                    source: "gui-default".to_owned(),
+                    path: None,
+                }),
+                vec![],
+            )
+            .await
+            .expect("the daemon opens a desktop-GUI session");
+
+        let snapshot = client
+            .snapshot(session_id)
+            .await
+            .expect("the GUI session resolves");
+        assert_eq!(snapshot.session_id, session_id);
+
+        // The audit trail records the GUI's surface label, not a blanket
+        // "daemon".
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual")
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual"),
+            "a GUI session must be auditable as desktop-gui-manual, got {surfaces:?}"
+        );
+
+        shutdown.cancel();
+        let _ = std::fs::remove_file(&socket_path);
+    }
+
     async fn connect(
         socket_path: &str,
     ) -> (

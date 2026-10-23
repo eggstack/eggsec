@@ -13,14 +13,16 @@ The keywords MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normative
 
 ## 1. Product definition
 
-Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. The engine crate `eggsec` is lib-only (no binary); the binary shell is `eggsec-cli`.
+Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, desktop GUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. The engine crate `eggsec` is lib-only (no binary); the binary shell is `eggsec-cli`.
 
 The same enforcement and dispatch architecture MUST support all surfaces without creating separate products:
 
 ```text
-CLI / TUI (manual) ── permissive profile, operator overrides allowed
+CLI / TUI / desktop GUI (manual) ── permissive profile, operator overrides allowed
 REST / MCP / agent / CI (strict) ── no overrides, fail closed
 ```
+
+The desktop GUI is a **frontend**, not a second product: it reaches the engine through the same daemon protocol and the same enforcement gate as every other surface, and it MUST NOT introduce a second authorization path.
 
 Manual surfaces evaluate through `EnforcementContext` with operator overrides permitted. Strict surfaces evaluate through the same context with no overrides and dispatch only on `Allow`.
 
@@ -60,7 +62,7 @@ These invariants MUST hold across all releases and implementation strategies:
 
 ## 5. Crate ownership
 
-The workspace has 20 crates (see `architecture/overview.md` for the verified table). Durable ownership rules:
+The workspace has 25 crates (see `architecture/overview.md` for the verified table). Durable ownership rules:
 
 - `eggsec-core`: shared primitives only. Zero internal deps.
 - `eggsec-tool-core`: protocol-neutral tool DTOs. No auth methods.
@@ -71,6 +73,8 @@ The workspace has 20 crates (see `architecture/overview.md` for the verified tab
 - `eggsec-transport-eggfetch`: `HttpTransport` over published `eggfetch-core`. The engine owns the adapter; policy never depends on transport.
 - `eggsec-db-lab`, `eggsec-web-proxy`, `eggsec-mobile-lab`, `eggsec-nse`: domain crates. They MUST NOT authorize — the caller enforces.
 - `eggsec-runtime`, `eggsec-daemon`, `eggsec-daemon-protocol`, `eggsec-ui-model`: task lifecycle, session host, IPC types, view DTOs. `eggsec-daemon` default deps are `eggsec-runtime` + `eggsec-daemon-protocol` only.
+- `eggsec-frontend-client`: the frontend-neutral runtime-client contract shared by every interactive frontend. It depends on `eggsec-runtime` + `eggsec-daemon-protocol` only — no frontend framework and not the engine — so a second frontend can reuse the contract without inheriting a TUI. It is not an enforcement surface. Authorized by `plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md`.
+- `eggsec-gui`: desktop GUI frontend. A leaf **application** crate (not a published library) that reaches the engine only through the daemon protocol. It owns presentation, interaction, and client-side adaptation — no authorization, dispatch, scope resolution, or operation semantics. It depends on `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol`, and `eggsec-ui-model` only; it MUST NOT link the engine, the daemon, the CLI, or the TUI, and it performs no outbound HTTP — all engine traffic goes over the daemon's Unix socket. Its shell framework (Tauri v2, pinned to the 2.11.x line by exact requirements so the closure stays on the workspace's MSRV) is confined to this crate. The engine, daemon, and runtime crates MUST NOT depend on it. Authorized by `plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md` and `plans/adrs/ADR-0009-gui-shell-technology-selection.md`; roadmap `plans/subsystems/desktop-gui-frontend-roadmap.md`.
 - `eggsec-agent`: coordination (registry, scheduler, lifecycle, cron). `eggsec-python`: PyO3/maturin bindings.
 
 ## 6. Dispatch, runtime, and wire identity
@@ -106,6 +110,7 @@ The workspace has 20 crates (see `architecture/overview.md` for the verified tab
 ## 10. Frontend rules
 
 - TUI: use `.get(i)` not `chunks[i]`; input/nav handlers check `!self.is_running()`; `reset()` clears all state; no `println!/eprintln!/print!/eprint!/dbg!` outside `#[cfg(test)]` in production `eggsec-tui`; recoverable errors go through notification/per-tab-error/popup state; single terminal writer; `copy-cli` emits only flags the real Clap tree accepts; fuzz HTTP-session flag is `--http-session`; `TerminalSession` owns terminal setup/teardown with idempotent cleanup + silent `Drop` fallback; daemon sync paths reuse the ambient runtime via `runner::block_on_ambient` (never nested `Runtime::new`); no `Stdio::inherit()` in `eggsec-tui`.
+- Desktop GUI: it MUST NOT link the engine crate or import `EnforcementContext`, `EnforcedDispatcher`, `Scope`, or `tool.execute()`; it MUST NOT construct an `ApprovedExecution` bundle; it MUST NOT perform outbound HTTP to remote hosts — all engine traffic goes through the daemon over its local transport; its local transport MUST be loopback-bound, and its content-security policy MUST forbid remote origins; it MUST NOT persist credentials in its own state or logs; it MUST NOT hold authoritative task state (the daemon owns truth, and a GUI restart re-attaches rather than restoring); and its shell framework MUST NOT appear outside the GUI crate.
 
 ## 11. Acceptance criteria
 

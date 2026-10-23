@@ -11,6 +11,12 @@ use eggsec_runtime::{ClientId, RuntimeSurface};
 pub enum ClientKind {
     Cli,
     Tui,
+    /// A desktop GUI frontend (the Tauri shell).
+    ///
+    /// Additive on the wire: a daemon that predates this variant fails to
+    /// deserialize the `DeclareClient` command and rejects the client, which
+    /// is a fail-closed outcome rather than a silent misclassification.
+    Gui,
     DaemonInternal,
     Mcp,
     Rest,
@@ -74,6 +80,10 @@ pub fn command_permission(cmd: &ClientCommand) -> CommandPermission {
         ClientCommand::ApprovePolicy { .. } => CommandPermission::Approver,
         ClientCommand::ListPersistedSessions { .. }
         | ClientCommand::GetPersistedSnapshot { .. } => CommandPermission::DeclaredClient,
+        // The operation catalog and request schema are daemon-wide
+        // descriptive state, not session state: a client must have declared
+        // its identity, but it needs no session and no session role.
+        ClientCommand::DescribeOperations { .. } => CommandPermission::DeclaredClient,
     }
 }
 
@@ -179,7 +189,14 @@ pub fn check_permission(
             ),
         },
         CommandPermission::Approver => match session_surface {
-            RuntimeSurface::TuiManual | RuntimeSurface::CliManual => match client_role {
+            // Manual surfaces accept an approval from an unrelated controller.
+            // `DesktopGuiManual` is manual by classification in
+            // `eggsec-policy`, so it belongs here with the other manual
+            // surfaces — otherwise the RBAC matrix and the policy crate
+            // disagree about which surfaces are manual.
+            RuntimeSurface::TuiManual
+            | RuntimeSurface::CliManual
+            | RuntimeSurface::DesktopGuiManual => match client_role {
                 ClientRole::Owner | ClientRole::Controller | ClientRole::Approver => Ok(()),
                 ClientRole::Observer => {
                     Err("permission-denied: observers cannot approve policies".into())
@@ -472,7 +489,11 @@ mod tests {
 
     #[test]
     fn manual_surface_approver_allowed() {
-        let surfaces = vec![RuntimeSurface::TuiManual, RuntimeSurface::CliManual];
+        let surfaces = vec![
+            RuntimeSurface::TuiManual,
+            RuntimeSurface::CliManual,
+            RuntimeSurface::DesktopGuiManual,
+        ];
         for surface in &surfaces {
             assert!(
                 check_permission(
@@ -485,6 +506,60 @@ mod tests {
                 "Approver should be allowed on manual surface {:?}",
                 surface
             );
+        }
+    }
+
+    /// The desktop GUI is a manual surface, so an unrelated controller may
+    /// approve a policy on it exactly as on the CLI and TUI. This mirrors the
+    /// classification `eggsec-policy` makes for `DesktopGuiManual`; the two
+    /// must not drift.
+    #[test]
+    fn desktop_gui_manual_surface_accepts_controller_approval() {
+        assert!(
+            check_permission(
+                &ClientKind::Gui,
+                &ClientRole::Controller,
+                &RuntimeSurface::DesktopGuiManual,
+                CommandPermission::Approver,
+            )
+            .is_ok(),
+            "a controller must be able to approve on the desktop GUI's manual surface"
+        );
+        assert!(
+            check_permission(
+                &ClientKind::Gui,
+                &ClientRole::Observer,
+                &RuntimeSurface::DesktopGuiManual,
+                CommandPermission::Approver,
+            )
+            .is_err(),
+            "an observer must not be able to approve on the desktop GUI's manual surface"
+        );
+    }
+
+    /// The GUI's client kind is additive on the wire: it must round-trip
+    /// through serde under the enum's own tag, and it must not disturb the
+    /// existing variants.
+    #[test]
+    fn client_kind_gui_round_trips_through_serde() {
+        let json = serde_json::to_string(&ClientKind::Gui).expect("serializable");
+        assert!(json.contains("Gui"), "unexpected wire form: {json}");
+        let back: ClientKind = serde_json::from_str(&json).expect("deserializable");
+        assert_eq!(back, ClientKind::Gui);
+
+        // The pre-existing kinds keep their wire forms.
+        for kind in [
+            ClientKind::Cli,
+            ClientKind::Tui,
+            ClientKind::DaemonInternal,
+            ClientKind::Mcp,
+            ClientKind::Rest,
+            ClientKind::Agent,
+            ClientKind::Unknown,
+        ] {
+            let json = serde_json::to_string(&kind).expect("serializable");
+            let back: ClientKind = serde_json::from_str(&json).expect("deserializable");
+            assert_eq!(back, kind);
         }
     }
 

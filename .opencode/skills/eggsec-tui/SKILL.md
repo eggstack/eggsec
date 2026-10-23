@@ -45,10 +45,6 @@ crates/eggsec-tui/src/
 │   ├── runtime_adapter/ # Phase 4: runtime event reducer
 │   │   └── mod.rs       # TuiRuntimeAdapter, TuiAction, reduce/apply pattern
 │   └── theme_runtime.rs # Theme loader lifecycle helpers
-├── runtime_client/   # Phase 8: remote attach mode
-│   ├── mod.rs             # TuiRuntimeClient trait, RuntimeEventReceiverHandle
-│   ├── embedded.rs        # EmbeddedRuntimeClient (in-process Runtime)
-│   └── daemon.rs          # DaemonRuntimeClient (Unix socket to eggsec-daemon)
 ├── tabs/         # Individual tab implementations (33 tabs)
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
 │   ├── spec.rs         # TabSpec registry (title, stable_id, category, risk, capabilities)
@@ -102,10 +98,14 @@ Daemon-backed execution reaches the same executor owner via `runtime_bridge` bun
 → `execute_approved`.
 
 ### Remote Attach Mode (Phase 8)
-The TUI supports two runtime backends via the `TuiRuntimeClient` trait:
+The TUI supports two runtime backends via the `RuntimeClient` trait, which lives in
+the frontend-neutral `eggsec-frontend-client` crate (not in this crate):
 
 - **Embedded** (default): `EmbeddedRuntimeClient` wraps `Arc<Runtime>` — full typed `TaskResult` rendering via `result_rx`.
 - **Daemon** (remote): `DaemonRuntimeClient` connects to `eggsec-daemon` via Unix socket. Uses envelope rendering fallback (`TuiAction::TabCompletedEnvelope`) since typed `TaskResult` is unavailable.
+
+The client contract is shared with every other interactive frontend, so the TUI
+must not grow its own copy. See the `eggsec-frontend-client` skill.
 
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`
 

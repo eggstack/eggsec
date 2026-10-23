@@ -1,0 +1,26 @@
+[package]
+name = "eggsec-frontend-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Frontend-neutral runtime client contract shared by Eggsec interactive frontends"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "runtime", "client", "frontend"]
+categories = ["development-tools"]
+
+[dependencies]
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
+eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol", version = "0.1.0" }
+# Frontend-neutral client: UnixStream (net), lines/write/flush (io-util),
+# oneshot/mpsc/Mutex/RwLock (sync), spawn (rt), request timeout (time).
+# No rt-multi-thread and no macros.
+tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "net"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+rustc-hash = { workspace = true }

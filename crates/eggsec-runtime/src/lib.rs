@@ -8,6 +8,8 @@ pub mod request;
 pub mod runtime;
 pub mod runtime_config;
 pub mod runtime_sink;
+#[cfg(feature = "schema")]
+pub mod schema;
 pub mod session;
 
 pub use cancel::race_with_cancel;

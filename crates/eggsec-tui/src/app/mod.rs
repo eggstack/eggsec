@@ -48,8 +48,6 @@ pub(crate) use overlay::OverlayController;
 pub(crate) mod notifications;
 
 use crate::help::{CommandPalette, HelpManager};
-use crate::runtime_client::RuntimeEventReceiverHandle;
-use crate::runtime_client::TuiRuntimeClient;
 use crate::session::{SessionConfig, SessionManager};
 use crate::state::SharedHistory;
 use crate::tabs;
@@ -63,6 +61,7 @@ use eggsec::config::{
     OperationDescriptor,
 };
 use eggsec::types::OutputFormat;
+use eggsec_frontend_client::{RuntimeClient, RuntimeEventReceiverHandle};
 use rustc_hash::FxHashSet;
 
 /// Generates simple delegation methods on App that forward to the current tab's
@@ -141,7 +140,7 @@ pub struct App {
     /// Current runtime mode (embedded or daemon).
     pub(crate) runtime_mode: RuntimeMode,
     /// Runtime client for daemon mode. `None` when in embedded mode.
-    pub(crate) runtime_client: Option<std::sync::Arc<dyn TuiRuntimeClient + Send + Sync>>,
+    pub(crate) runtime_client: Option<std::sync::Arc<dyn RuntimeClient + Send + Sync>>,
 }
 
 /// Canonical runtime binding for the TUI.
@@ -388,7 +387,15 @@ impl App {
             // `#[tokio::main]`, where a nested `Runtime::new` panics).
             // See `runner::block_on_ambient`.
             match runner::block_on_ambient(async {
-                crate::runtime_client::DaemonRuntimeClient::connect(&socket).await
+                eggsec_frontend_client::DaemonRuntimeClient::connect(
+                    &socket,
+                    eggsec_frontend_client::ClientIdentity {
+                        kind: eggsec_frontend_client::ClientKind::Tui,
+                        label: "eggsec-tui".to_owned(),
+                        request_prefix: "tui-".to_owned(),
+                    },
+                )
+                .await
             }) {
                 Ok(Ok(client)) => {
                     self.runtime_client = Some(std::sync::Arc::new(client));

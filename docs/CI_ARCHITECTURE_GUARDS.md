@@ -133,6 +133,7 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - `eggsec-output` has no reverse dependencies on engine or runtime.
 - `eggsec-daemon` has no TUI dependencies; engine dependency is optional/feature-gated.
 - `eggsec-daemon` transport crates are feature-gated optional dependencies.
+- `eggsec-frontend-client` has no frontend framework (`ratatui`/`crossterm`) and no engine dependency (guard Check 153).
 - Engine crate has no TUI or daemon dependencies.
 - CLI TUI dependency is feature-gated.
 - TUI has no canonical `TaskConfig`/`TaskResult` enums or `match task_kind` execution dispatchers.
@@ -204,6 +205,20 @@ Static grep checks in `scripts/check-architecture-guards.sh` (requires ripgrep) 
 - Fuzzer fan-out stays bounded (Check 140): `crates/eggsec/src/fuzzer/engine/execution.rs` schedules through a bounded `JoinSet` admission loop (`in_flight.len() < concurrency`) with no `tokio::sync::Semaphore`, `DashMap`, or `join_all` retained-handle shape.
 - Worker capacity stays truthful (Check 141): `crates/eggsec/src/distributed/worker.rs` carries `CapacityTracker` with `try_reserve`/`request_size` and the zero-concurrency rejection; the fixed `mpsc::channel::<Task>(100)` buffer (which let queued work exceed budget) is gone.
 - Load-test prototype stays compiled once per run (Check 142): `crates/eggsec/src/loadtest/executor.rs` dispatches `prototype.clone()` in the worker loop with no `self.template.scoped_request` per-request rebuild.
+
+### Desktop-GUI + Operation-Schema Publication Invariants (2026-10-23, guards Checks 151–154)
+- The published schema stays off the authorization path (Check 151): the derived schema in `eggsec-runtime` (`schema` feature) and the daemon's `DescribeOperations` publication are descriptive only. The engine's dispatch/bridge halves, the policy kernel, and the engine's config/policy/scope files may not reach for `schemars`, `eggsec_runtime::schema`, `describe_operations`, or `DescribeOperations`, and neither `crates/eggsec/Cargo.toml` nor `crates/eggsec-policy/Cargo.toml` may gain a `schemars` dependency — so the schema is unreachable from an enforcement path by construction.
+- No hand-written parameter table (Check 152): only `crates/eggsec-runtime/src/request.rs` owns the canonical request DTOs. No other frontend-neutral crate (`eggsec-core`, `eggsec-tool-core`, `eggsec-output`, `eggsec-ui-model`, `eggsec-report-model`, `eggsec-daemon-protocol`, `eggsec-policy`, `eggsec-frontend-client`) may define a `*Params` struct.
+- The frontend-client crate stays framework-free (Check 153): `crates/eggsec-frontend-client/Cargo.toml` must exist and must not reference `eggsec`, `eggsec-tui`, `ratatui`, or `crossterm`; `crates/eggsec-frontend-client/src` must not reference `ratatui`, `crossterm`, `eggsec_tui`, or `eggsec::`.
+- The desktop GUI stays a manual surface (Check 154): both `RuntimeSurface::DesktopGuiManual` and `ExecutionSurface::DesktopGuiManual` must exist, `runtime_bridge/surface.rs` must map the variant in **both** directions, and the variant must stay on the manual side of `honors_manual_override()` and `is_agent_controlled()`.
+
+### Desktop-GUI Shell Invariants (2026-10-23, guards Checks 155–160)
+- The GUI crate links no engine (Check 155): `crates/eggsec-gui/Cargo.toml` must not name `eggsec`, `eggsec-daemon`, `eggsec-cli`, or `eggsec-tui`, and no file under `crates/eggsec-gui/src/` may import them. `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol`, and `eggsec-ui-model` are the allowed set. This is the `ADR-0007` daemon-only boundary: the desktop GUI reaches the engine only through the daemon's Unix socket, so it can never become a second composition root.
+- The shell framework stays inside the GUI crate (Check 156): no crate other than `crates/eggsec-gui` may declare a `tauri` dependency. The root `Cargo.toml`'s `[workspace.dependencies]` version pins are allowed — they are the single place the exact Tauri versions are declared.
+- The GUI declares no second TLS stack (Check 157): `crates/eggsec-gui/Cargo.toml` must not enable `rustls-tls` or `native-tls`, and must not depend on `reqwest`, `rustls`, or `native-tls` directly. The GUI performs no outbound HTTP, so those crates stay out of its closure entirely and the workspace's ring-only TLS invariant holds with no exception.
+- The GUI's CSP forbids remote origins (Check 158): `crates/eggsec-gui/tauri.conf.json`'s `app.security.csp` must contain no wildcard source, and no `*` in `connect-src`, `script-src`, or `default-src`.
+- The GUI has no per-operation form code (Check 159): the guard reads the task-kind variant names from `crates/eggsec-runtime/src/request.rs` and fails if the GUI's Rust sources or its frontend name any of them. The form must be generated from the published schema, so a task kind the engine has not published yet gets a form with no GUI change, and no hand-written table of operation names may creep in.
+- The GUI retains no unbounded event log (Check 160): `crates/eggsec-gui/src/tasks.rs` must declare both the per-task retention cap (`MAX_LOG_LINES_PER_TASK`) and the forward-flush cap (`MAX_LOG_LINES_PER_FLUSH`), and the `LogRing` struct must be a capped ring rather than a `Vec<LogLine>` that grows without bound. Unbounded retention is a disqualifying defect, not a tuning problem.
 
 ### NSE Subsystem Invariants
 - The standalone [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions) owns runtime-internal checks: resolver-only script/module loading, per-run `NseRunReport.libraries`, profile/executor construction, library registry consistency, capability wrappers, and runtime corpus assertions.

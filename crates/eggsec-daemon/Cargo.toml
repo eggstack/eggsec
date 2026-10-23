@@ -43,6 +43,13 @@ futures = { version = "0.3", optional = true }
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["json", "rustls-no-provider"], default-features = false }
 eggsec = { path = "../eggsec", version = "0.1.0" }
+# Test-only: lets the daemon's own tests compare the published operation
+# description against the canonical catalog it claims to be read from.
+eggsec-policy = { path = "../eggsec-policy", version = "0.1.0" }
+# Test-only: exercises the desktop GUI's own client path — its client kind,
+# its request-id namespace, and its `DesktopGuiManual` session — against a
+# live daemon host over the real Unix socket.
+eggsec-frontend-client = { path = "../eggsec-frontend-client", version = "0.1.0" }
 # Ring provider for the reqwest test client (`rustls-no-provider` requires an
 # explicitly installed process-level crypto provider).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

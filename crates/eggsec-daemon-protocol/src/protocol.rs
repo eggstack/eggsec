@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::client_registry::ClientKind;
+use crate::operations::DescribeOperationsResponse;
 
 /// Protocol version for daemon IPC compatibility negotiation.
 ///
@@ -47,6 +48,17 @@ pub struct TransportCapability {
 pub struct DaemonCapabilities {
     pub runtime: RuntimeCapabilities,
     pub transports: Vec<TransportCapability>,
+    /// Whether this daemon can publish the operation catalog and the derived
+    /// request schema via `ClientCommand::DescribeOperations`.
+    ///
+    /// `#[serde(default)]` so a newer daemon's capabilities still decode
+    /// against an older client's `DaemonCapabilities`, and so this daemon's
+    /// capabilities still decode against a client built before the flag
+    /// existed. A client that sees `false` — or that receives
+    /// `ErrorCode::UnsupportedCommand` from a daemon too old to know the
+    /// command — degrades to a static form set rather than failing.
+    #[serde(default)]
+    pub operation_schema: bool,
 }
 
 /// Error codes returned by the daemon in response to client commands.
@@ -154,6 +166,23 @@ pub enum ClientCommand {
         request_id: String,
         session_id: SessionId,
     },
+    /// Describe every canonical operation and the derived request schema.
+    ///
+    /// Read-only and additive: it creates no session, mutates no task state,
+    /// and takes part in no authorization decision. It carries no fields
+    /// beyond its own identity so it can be issued before any session exists.
+    ///
+    /// The response carries the operation catalog as read from
+    /// `OperationMetadata` plus a JSON Schema derived from the canonical
+    /// request DTOs. Both are descriptive: a client that renders a form from
+    /// this payload gains no capability the engine would not otherwise grant.
+    ///
+    /// A daemon that does not know this command answers
+    /// `ErrorCode::UnsupportedCommand`; a client MUST treat that as "schema
+    /// unavailable" and degrade to a static form set rather than fail.
+    DescribeOperations {
+        request_id: String,
+    },
 }
 
 impl ClientCommand {
@@ -174,6 +203,7 @@ impl ClientCommand {
             | Self::CloseSession { request_id, .. }
             | Self::ApprovePolicy { request_id, .. }
             | Self::ListPersistedSessions { request_id }
+            | Self::DescribeOperations { request_id }
             | Self::GetPersistedSnapshot { request_id, .. } => request_id,
         }
     }
@@ -211,6 +241,7 @@ impl ClientCommand {
             Self::CloseSession { .. } => "close-session",
             Self::ApprovePolicy { .. } => "approve-policy",
             Self::ListPersistedSessions { .. } => "list-persisted-sessions",
+            Self::DescribeOperations { .. } => "describe-operations",
             Self::GetPersistedSnapshot { .. } => "get-persisted-snapshot",
         }
     }
@@ -288,6 +319,11 @@ pub enum ServerMessage {
     PersistedSnapshot {
         request_id: String,
         snapshot: Option<SessionSnapshot>,
+    },
+    /// The canonical operation catalog plus the derived request schema.
+    Operations {
+        request_id: String,
+        operations: DescribeOperationsResponse,
     },
 }
 
@@ -640,15 +676,44 @@ mod tests {
             capabilities: DaemonCapabilities {
                 runtime: RuntimeCapabilities::default(),
                 transports: vec![],
+                operation_schema: true,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
         let back: ServerMessage = serde_json::from_str(&json).unwrap();
         if let ServerMessage::Capabilities { capabilities, .. } = back {
             assert!(capabilities.runtime.supports_cancellation);
+            assert!(capabilities.operation_schema);
         } else {
             panic!("wrong variant");
         }
+    }
+
+    /// A client built before the capability flag existed must still decode a
+    /// newer daemon's capabilities: the field defaults to `false` rather than
+    /// failing the whole handshake.
+    #[test]
+    fn daemon_capabilities_decode_without_the_operation_schema_flag() {
+        let json = r#"{"runtime":{"task_kinds":[],"transports":[],"supports_cancellation":true,"supports_multiple_sessions":true,"supports_multiple_active_tasks":false},"transports":[]}"#;
+        let capabilities: DaemonCapabilities = serde_json::from_str(json).unwrap();
+        assert!(!capabilities.operation_schema);
+    }
+
+    /// The new command is additive: it carries only its own identity, and it
+    /// round-trips on the flat `#[serde(tag = "type")]` encoding every other
+    /// command already uses.
+    #[test]
+    fn describe_operations_command_roundtrips() {
+        let cmd = ClientCommand::DescribeOperations { request_id: rid() };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"DescribeOperations","request_id":"req-001"}"#
+        );
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, ClientCommand::DescribeOperations { .. }));
+        assert_eq!(back.request_id(), "req-001");
+        assert_eq!(back.discriminant(), "describe-operations");
     }
 
     #[test]

@@ -5,7 +5,7 @@ use eggsec_runtime::{
     SessionId, SessionSnapshot, SessionSummary, TaskId,
 };
 
-use super::{RuntimeClientFuture, RuntimeEventReceiverHandle, TuiRuntimeClient};
+use crate::{RuntimeClient, RuntimeClientFuture, RuntimeEventReceiverHandle};
 
 /// Runtime client that wraps an in-process `Runtime` directly.
 pub struct EmbeddedRuntimeClient {
@@ -22,7 +22,7 @@ impl EmbeddedRuntimeClient {
     }
 }
 
-impl TuiRuntimeClient for EmbeddedRuntimeClient {
+impl RuntimeClient for EmbeddedRuntimeClient {
     fn capabilities(&self) -> RuntimeClientFuture<RuntimeCapabilities> {
         Box::pin(async move { Ok(RuntimeCapabilities::default()) })
     }

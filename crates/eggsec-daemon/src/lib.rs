@@ -1,4 +1,5 @@
 pub use eggsec_daemon_protocol::client_registry;
+pub use eggsec_daemon_protocol::operations;
 pub use eggsec_daemon_protocol::protocol;
 
 pub mod client;

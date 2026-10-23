@@ -1,7 +1,33 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-gui check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+
+# ── Desktop GUI shell profile ─────────────────────────────────────────────
+#
+# The `shell` feature carries the Tauri v2 dependency, so compiling it needs
+# the platform webview SDK. Linux needs the webkit2gtk development packages;
+# macOS and Windows ship the webview with the OS, so the gate is open there.
+#
+# The gate follows the discipline of scripts/check-features-individual.sh:
+# an ABSENT prerequisite is a SKIP with the reason named, while a PRESENT
+# prerequisite whose build breaks is a hard FAIL -- the build error is never
+# swallowed. `make check-gui` is the ungated escape hatch: it always runs and
+# reports cargo's own error.
+GUI_SHELL_PREREQ_HINT = Linux: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config
+
+# Runs "$(1)" when the platform webview prerequisite is present; otherwise
+# prints a SKIP line naming the prerequisite and succeeds.
+define GUI_SHELL_GATE
+@if [ "$$(uname -s)" != "Linux" ]; then \
+	$(1); \
+elif command -v pkg-config >/dev/null 2>&1 \
+	&& { pkg-config --exists webkit2gtk-4.1 2>/dev/null || pkg-config --exists webkit2gtk-4.0 2>/dev/null; }; then \
+	$(1); \
+else \
+	echo "SKIP: desktop GUI shell profile (prerequisite absent: $(GUI_SHELL_PREREQ_HINT))."; \
+fi
+endef
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -44,6 +70,15 @@ clippy:
 	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-report-model -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -p eggsec-transport-eggfetch -p eggsec-policy -- -D warnings
 	cargo clippy -p eggsec-tui -p eggsec-cli -- -D warnings
 	cargo clippy -p eggsec-secrets -p eggsec-payloads -p eggsec-service-db -p eggsec-udp-scan -- -D warnings
+	# The operation-schema module is behind a feature, so the plain
+	# `-p eggsec-runtime` lint above never compiles it. Lint the feature on.
+	cargo clippy -p eggsec-runtime --features schema -- -D warnings
+	# The daemon protocol and the frontend client are the wire contract for
+	# every frontend; they carry published types, so they are linted too.
+	cargo clippy -p eggsec-daemon-protocol -p eggsec-frontend-client -- -D warnings
+	# The desktop GUI shell (Tauri) is a separate profile that needs the
+	# platform webview SDK, so it is gated on that prerequisite.
+	$(call GUI_SHELL_GATE,cargo clippy -p eggsec-gui --features shell -- -D warnings)
 
 # Lint domain/platform crates with their relevant features (deep checks only:
 # heavier closures, may need system prerequisites like libssl-dev).
@@ -96,6 +131,10 @@ check-msrv:
 	cargo +1.89 check -p eggsec-transport
 	cargo +1.89 check -p eggsec-transport-eggfetch
 	cargo +1.89 check -p eggsec --no-default-features
+	# The desktop GUI shell profile under the declared MSRV. Same
+	# prerequisite gate as `make check`: absent -> SKIP, present but
+	# broken -> FAIL.
+	$(call GUI_SHELL_GATE,cargo +1.89 check -p eggsec-gui --features shell)
 
 # Dependency advisory/license/source policy (Phase F supply-chain hardening).
 # Canonical gate: `deny.toml` via cargo-deny over the full workspace closure
@@ -115,6 +154,10 @@ check-deps:
 check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
+	# The desktop GUI shell profile (Tauri). The workspace check above
+	# covers the GUI's non-shell profile only; the shell profile needs the
+	# platform webview SDK, so it is gated on that prerequisite.
+	$(call GUI_SHELL_GATE,cargo check -p eggsec-gui --features shell)
 	# Build the *test* targets for the no-default-features profile too:
 	# `cargo check --workspace` only compiles library/binary targets, so a
 	# feature-gated `use eggsec::commands` in tests/ can break unnoticed.
@@ -137,6 +180,14 @@ check:
 	cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
 	cargo test -p eggsec-tui --lib --no-fail-fast
 	bash scripts/check-architecture-guards.sh
+
+# Desktop GUI shell profile (Tauri), UNGATED: it always runs, so a broken
+# shell build is a hard failure and a host without the webview SDK gets
+# cargo's own error message instead of a silent skip.
+check-gui:
+	@echo "Desktop GUI shell profile (prerequisite: $(GUI_SHELL_PREREQ_HINT))."
+	cargo check -p eggsec-gui --features shell
+	cargo clippy -p eggsec-gui --features shell -- -D warnings
 
 # Optional broad validation (pre-release, not required for merge)
 # Note: dependency policy (`check-deps`) already runs inside `check`; this
@@ -194,6 +245,7 @@ help:
 	@echo "Primary (run these):"
 	@echo "  make check           - Full mandatory Rust CI contract (format, lint, test, guards, deps)"
 	@echo "  make check-deps      - Dependency advisory/license/source policy (cargo deny)"
+	@echo "  make check-gui       - Desktop GUI shell profile (check + clippy, ungated)"
 	@echo "  make check-python    - Python CI check (one build, all checks)"
 	@echo "  make test            - Unit tests only (default)"
 	@echo "  make check-full      - Optional broad validation (pre-release)"

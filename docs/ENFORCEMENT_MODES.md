@@ -2,7 +2,7 @@
 
 Eggsec intentionally supports two usage families with distinct enforcement postures:
 
-- **Manual operator posture** (CLI/TUI): Human-directed security assessment. Operators may proceed through warnings and explicit confirmations where appropriate. This mode is designed to remain productive and should not inherit agent-grade strictness by default.
+- **Manual operator posture** (CLI/TUI/desktop GUI): Human-directed security assessment. Operators may proceed through warnings and explicit confirmations where appropriate. This mode is designed to remain productive and should not inherit agent-grade strictness by default.
 - **Automated agent posture** (MCP, security agent, CI, REST, gRPC): Programmatic noninteractive execution. Strict, explicitly scoped, non-overridable. Manual overrides are never honored.
 
 The contract below is the source of truth for how enforcement behaves per execution surface. All later implementation phases must follow this contract to prevent drift in either direction: over-hardening manual use, or under-hardening agent use.
@@ -11,7 +11,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 
 | Term | Definition |
 |------|------------|
-| **Execution surface** | Where the request originates. `ExecutionSurface` has 9 variants: `CliManual`, `TuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
+| **Execution surface** | Where the request originates. `ExecutionSurface` has 10 variants: `CliManual`, `TuiManual`, `DesktopGuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
 | **Execution profile** | Enforcement behavior, represented by `ExecutionProfile` (`ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`). |
 | **Manual permissive** | Human-directed default mode (`ManualPermissive`). Warnings and confirmation prompts are available; operator may override low-risk classes. |
 | **Manual guarded** | Strict human mode (`ManualGuarded`). Equivalent to CLI `--strict-scope` and future TUI guarded toggle. No discretion path. |
@@ -30,6 +30,7 @@ The contract below is the source of truth for how enforcement behaves per execut
 | CLI `--strict-scope` | Manual guarded | `ManualGuarded` | Yes (networked operations) | No | No (treated as deny) | No | No (single evaluation) |
 | TUI default | Manual permissive | `ManualPermissive` | No (warnings for safe scope misses) | Yes | Yes (with matching `ManualOverride`) | Yes | No (single evaluation) |
 | TUI guarded | Manual guarded | `ManualGuarded` | Yes (networked operations) | No | No (treated as deny) | No | No (single evaluation) |
+| Desktop GUI | Manual permissive | `ManualPermissive` | No (warnings for safe scope misses) | Yes | Yes (with matching `ManualOverride`) | Yes | No (single evaluation) |
 | MCP server | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 | Security agent | Agent strict | `AgentStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 | CI | Agent strict | `CiStrict` | Yes (target/networked operations) | No (treated as deny) | No (treated as deny) | No | No (single evaluation) |
@@ -37,7 +38,13 @@ The contract below is the source of truth for how enforcement behaves per execut
 | gRPC API | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 | Daemon HTTP | Agent strict | `McpStrict` | Yes (networked operations) | No (treated as deny) | No (treated as deny) | No | Yes |
 
-**Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, REST, or gRPC. Agent strict behavior must not become the default for normal CLI/TUI manual use.
+**Key invariant**: `ManualPermissive` behavior must not bleed into MCP, security agent, CI, REST, or gRPC. Agent strict behavior must not become the default for normal CLI/TUI/desktop-GUI manual use.
+
+**Desktop GUI posture**: the desktop GUI is a **manual** surface — a peer of the CLI and TUI default postures, not a new policy class. `ExecutionSurface::DesktopGuiManual` derives the same `ManualPermissive` profile, honors operator overrides, and is never agent-controlled. There is no strict GUI variant, and the GUI reuses the existing `manual_exposable` exposure flag rather than adding a second exposure flag, so it introduces no new policy semantics.
+
+**Desktop GUI posture, cross-checked against the daemon**: the GUI's session carries the runtime surface `RuntimeSurface::DesktopGuiManual`, and the daemon's manual-approval arm in `check_permission` lists `DesktopGuiManual` alongside `TuiManual` and `CliManual` (`crates/eggsec-daemon-protocol/src/client_registry.rs:191-204`). That is what keeps the daemon's RBAC matrix and `eggsec-policy`'s classification in agreement about which surfaces are manual — a GUI session that the policy crate treats as manual but the daemon treats as strict would be a silent divergence.
+
+The cross-check is about *classification*, not about approvals being available. `ApprovePolicy` remains unwired: the daemon answers it with `ErrorCode::Unsupported`, so no approval is granted either way. The GUI therefore handles `PolicyDecisionRequired` defensively and offers **no approval affordance** — there is no button that could do anything. The GUI's own enforcement path is the daemon's: it never evaluates policy, never resolves scope, and never dispatches an operation itself. See `architecture/desktop_gui.md`.
 
 **REST enforcement specifics**: REST API now constructs `EnforcementContext::for_surface(ExecutionSurface::RestApi, ...)` and dispatches every tool call through `enforcement.evaluate()` before execution. Only `EnforcementOutcome::Allow` permits dispatch. `Warn`, `RequireConfirmation`, and `Deny` all result in HTTP 403 Forbidden with a structured `RestPolicyErrorResponse` (code: `POLICY_DENIED`, includes serialized `PolicyDecision`). REST is noninteractive and programmatic — warning-class ambiguity must not dispatch. Metadata `rest_exposable` flags are enforced before policy evaluation; non-exposed tools fail closed. `RestState` carries `EnforcementContext` instead of `Option<Scope>`.
 
@@ -108,7 +115,7 @@ The following conditions produce hard denial and must **never** be converted to 
 These invariants hold across all execution paths:
 
 1. **Manual permissive isolation**: Manual permissive behavior must not bleed into MCP, security agent, CI, REST, or gRPC.
-2. **Agent strict isolation**: Agent strict behavior must not become the default for normal CLI/TUI manual use.
+2. **Agent strict isolation**: Agent strict behavior must not become the default for normal CLI/TUI/desktop-GUI manual use.
 3. **Override scope**: Manual override flags are only honored in `ManualPermissive` contexts.
 4. **Scope provenance**: Scope provenance for automated networked execution must come from `LoadedScope`, not raw `Scope`.
 5. **Shared evaluation**: Every dispatch path must eventually flow through `EnforcementContext::evaluate()`.
@@ -192,12 +199,12 @@ Key invariants locked by tests:
 
 Phase 8 added a comprehensive enforcement matrix test suite (`crates/eggsec/tests/enforcement_matrix.rs`) that systematically tests all execution surfaces against scope states, risk tiers, capabilities, and override handling. The matrix protects the dual-mode contract by catching:
 
-1. Manual CLI/TUI becoming too strict to be useful.
+1. Manual CLI/TUI/GUI becoming too strict to be useful.
 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 
-**172 tests** covering:
+**173 tests** covering:
 
-- **Surface mapping invariants**: All 9 `ExecutionSurface` variants map to correct `ExecutionProfile`.
+- **Surface mapping invariants**: `ExecutionSurface` variants map to the correct `ExecutionProfile` (10 variants in the enum; the matrix's own surface list covers all 10).
 - **Manual permissive invariants**: Safe ops allow, scope misses require confirmation, `assume_yes` is narrow, denied capabilities hard-deny, missing features hard-deny.
 - **Manual guarded invariants**: Scope misses deny, overrides ignored, high-risk with policy allows.
 - **MCP invariants**: Missing scope denies, no confirmation path, baseline capabilities allowed, non-baseline requires explicit allow.
@@ -238,7 +245,7 @@ Phase 2 verified and hardened the enforcement invariants established in earlier 
 
 Phase 2 confirmed that all acceptance criteria from the Phase 2 plan are satisfied by existing test infrastructure:
 
-- **Enforcement matrix**: 172 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
+- **Enforcement matrix**: 173 tests in `enforcement_matrix.rs` covering manual permissive, manual guarded, and strict automated surfaces.
 - **Override isolation**: Automated surfaces cannot use manual override flags to proceed.
 - **Scope provenance**: Automated operations requiring explicit scope fail without explicit manifest provenance.
 - **Approval token mismatch**: `dispatch_checked` rejects tool mismatch, target mismatch, and allows alias match.
@@ -269,7 +276,7 @@ Phase 12 hardened enforcement from convention (call sites expected to evaluate f
 ### Approval Methods
 
 - `EnforcementContext::approve(surface, descriptor)` - Strict: only `Allow` produces a token. `Warn`, `RequireConfirmation`, and `Deny` all fail with `EnforcementError`. Used by REST, MCP, Agent, CI.
-- `EnforcementContext::approve_manual(surface, descriptor, manual_override)` - Manual permissive: supports `Warn` (approved with warning) and `RequireConfirmation` when matching override flags are present. Strict/automated surfaces reject overrides. Used by CLI/TUI.
+- `EnforcementContext::approve_manual(surface, descriptor, manual_override)` - Manual permissive: supports `Warn` (approved with warning) and `RequireConfirmation` when matching override flags are present. Strict/automated surfaces reject overrides. Used by CLI/TUI/desktop GUI.
 
 ### Dispatch Flow
 
@@ -305,7 +312,7 @@ Every meaningful enforcement decision produces a normalized `EnforcementAuditEve
 
 - `event_id`: UUID v4 per decision
 - `timestamp`: UTC timestamp
-- `surface`: `ExecutionSurface` (CliManual, TuiManual, CliManualStrict, TuiManualStrict, McpServer, SecurityAgent, Ci, RestApi, GrpcApi)
+- `surface`: `ExecutionSurface` (CliManual, TuiManual, DesktopGuiManual, CliManualStrict, TuiManualStrict, McpServer, SecurityAgent, Ci, RestApi, GrpcApi)
 - `profile`: `ExecutionProfile` (ManualPermissive, ManualGuarded, McpStrict, AgentStrict, CiStrict)
 - `operation_id`: canonical operation name
 - `target`: optional target string

@@ -9,9 +9,25 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::{oneshot, Mutex};
 
-use eggsec_daemon_protocol::protocol::{ClientCommand, ServerMessage};
+use eggsec_daemon_protocol::operations::DescribeOperationsResponse;
+use eggsec_daemon_protocol::protocol::{ClientCommand, DaemonCapabilities, ServerMessage};
 
-use super::{RuntimeClientFuture, RuntimeEventReceiverHandle, TuiRuntimeClient};
+use crate::{ClientIdentity, RuntimeClient, RuntimeClientFuture, RuntimeEventReceiverHandle};
+
+/// The daemon's health advertisement, including the protocol version it
+/// speaks.
+///
+/// A frontend uses the protocol version to refuse to operate against a daemon
+/// it cannot talk to, rather than failing later with an opaque I/O error.
+#[derive(Debug, Clone)]
+pub struct DaemonHealth {
+    /// The daemon's status string.
+    pub status: String,
+    /// The daemon's version string.
+    pub version: String,
+    /// The daemon protocol version the daemon speaks.
+    pub protocol_version: u32,
+}
 
 /// Shared channel registry for routing RuntimeEvent messages from the reader
 /// task to per-subscriber receivers. Each `subscribe_events()` call inserts
@@ -34,6 +50,9 @@ pub enum DaemonClientError {
 struct DaemonConnection {
     _socket_path: String,
     request_counter: AtomicU64,
+    /// The caller's identity: the client kind and label the daemon records,
+    /// and the namespace for this client's request ids.
+    identity: ClientIdentity,
     writer: Mutex<tokio::net::unix::OwnedWriteHalf>,
     pending_responses: std::sync::Arc<
         std::sync::Mutex<rustc_hash::FxHashMap<String, oneshot::Sender<ServerMessage>>>,
@@ -53,7 +72,15 @@ pub struct DaemonRuntimeClient {
 
 impl DaemonRuntimeClient {
     /// Connect to a daemon at the given socket path.
-    pub async fn connect(socket_path: &str) -> Result<Self, DaemonClientError> {
+    ///
+    /// The caller supplies its own identity: the client kind recorded in the
+    /// daemon's registry, the label the daemon shows, and the namespace for
+    /// this client's request ids. The crate is frontend-neutral, so it cannot
+    /// choose any of those on the caller's behalf.
+    pub async fn connect(
+        socket_path: &str,
+        identity: ClientIdentity,
+    ) -> Result<Self, DaemonClientError> {
         let stream = UnixStream::connect(socket_path).await?;
         let (read_half, write_half) = stream.into_split();
 
@@ -115,6 +142,7 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::SessionClosed { request_id, .. }
                                     | ServerMessage::PersistedSessions { request_id, .. }
                                     | ServerMessage::PersistedSnapshot { request_id, .. }
+                                    | ServerMessage::Operations { request_id, .. }
                                     | ServerMessage::TaskResult { request_id, .. } => {
                                         request_id.clone()
                                     }
@@ -126,7 +154,7 @@ impl DaemonRuntimeClient {
                                     }
                                 };
                                 let mut pending = pending_clone.lock().unwrap_or_else(|poisoned| {
-                                    tracing::warn!("TUI pending request registry mutex was poisoned; recovering state");
+                                    tracing::warn!("daemon pending request registry mutex was poisoned; recovering state");
                                     poisoned.into_inner()
                                 });
                                 if let Some(sender) = pending.remove(&request_id) {
@@ -156,6 +184,7 @@ impl DaemonRuntimeClient {
             inner: Arc::new(DaemonConnection {
                 _socket_path: socket_path.to_string(),
                 request_counter: AtomicU64::new(0),
+                identity: identity.clone(),
                 writer: Mutex::new(write_half),
                 pending_responses,
                 event_channels,
@@ -165,13 +194,10 @@ impl DaemonRuntimeClient {
         // Declare client kind to the daemon; a rejection leaves this client
         // unregistered, so later session-scoped commands would fail opaquely.
         if let Err(e) = client
-            .declare_client(
-                eggsec_daemon_protocol::client_registry::ClientKind::Tui,
-                Some("eggsec-tui".into()),
-            )
+            .declare_client(identity.kind.clone(), Some(identity.label.clone()))
             .await
         {
-            tracing::warn!("Daemon rejected TUI client declaration: {}", e);
+            tracing::warn!("Daemon rejected client declaration: {}", e);
         }
 
         Ok(client)
@@ -193,7 +219,76 @@ impl DaemonRuntimeClient {
 
     fn next_request_id(&self) -> String {
         let id = self.inner.request_counter.fetch_add(1, Ordering::Relaxed);
-        format!("tui-{}", id)
+        self.inner.identity.request_id(id)
+    }
+
+    /// Fetch the daemon's operation catalog and the derived request schema.
+    ///
+    /// This is an inherent method rather than a `RuntimeClient` trait method:
+    /// the catalog is daemon-published state, and the embedded client has no
+    /// catalog to publish. Daemon-only frontends call it directly.
+    pub async fn describe_operations(
+        &self,
+    ) -> Result<DescribeOperationsResponse, DaemonClientError> {
+        let cmd = ClientCommand::DescribeOperations {
+            request_id: self.next_request_id(),
+        };
+        match self.send_command(cmd).await {
+            Ok(ServerMessage::Operations { operations, .. }) => Ok(operations),
+            Ok(ServerMessage::Error { message, .. }) => Err(DaemonClientError::Protocol(message)),
+            Ok(other) => Err(DaemonClientError::Protocol(format!(
+                "unexpected response: {other:?}"
+            ))),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Query the daemon's health, including the protocol version it speaks.
+    ///
+    /// Inherent rather than a trait method for the same reason as
+    /// [`Self::describe_operations`]: only a daemon-backed client has a
+    /// daemon to ask.
+    pub async fn health(&self) -> Result<DaemonHealth, DaemonClientError> {
+        let cmd = ClientCommand::Health {
+            request_id: self.next_request_id(),
+        };
+        match self.send_command(cmd).await {
+            Ok(ServerMessage::Health {
+                status,
+                version,
+                protocol_version,
+                ..
+            }) => Ok(DaemonHealth {
+                status,
+                version,
+                protocol_version,
+            }),
+            Ok(ServerMessage::Error { message, .. }) => Err(DaemonClientError::Protocol(message)),
+            Ok(other) => Err(DaemonClientError::Protocol(format!(
+                "unexpected response: {other:?}"
+            ))),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The daemon's full capability advertisement.
+    ///
+    /// The `RuntimeClient` trait's `capabilities` returns the *runtime* half
+    /// of the advertisement; a daemon-only frontend also needs the daemon's
+    /// own flags — notably `operation_schema`, which says whether this daemon
+    /// can publish the operation catalog at all.
+    pub async fn daemon_capabilities(&self) -> Result<DaemonCapabilities, DaemonClientError> {
+        let cmd = ClientCommand::Capabilities {
+            request_id: self.next_request_id(),
+        };
+        match self.send_command(cmd).await {
+            Ok(ServerMessage::Capabilities { capabilities, .. }) => Ok(capabilities),
+            Ok(ServerMessage::Error { message, .. }) => Err(DaemonClientError::Protocol(message)),
+            Ok(other) => Err(DaemonClientError::Protocol(format!(
+                "unexpected response: {other:?}"
+            ))),
+            Err(e) => Err(e),
+        }
     }
 
     async fn send_command(&self, cmd: ClientCommand) -> Result<ServerMessage, DaemonClientError> {
@@ -212,6 +307,7 @@ impl DaemonRuntimeClient {
             | ClientCommand::Subscribe { request_id, .. }
             | ClientCommand::ApprovePolicy { request_id, .. }
             | ClientCommand::ListPersistedSessions { request_id }
+            | ClientCommand::DescribeOperations { request_id }
             | ClientCommand::GetPersistedSnapshot { request_id, .. } => request_id.clone(),
         };
 
@@ -222,7 +318,7 @@ impl DaemonRuntimeClient {
                 .pending_responses
                 .lock()
                 .unwrap_or_else(|poisoned| {
-                    tracing::warn!("TUI pending_responses mutex was poisoned; recovering state");
+                    tracing::warn!("daemon pending_responses mutex was poisoned; recovering state");
                     poisoned.into_inner()
                 });
             pending.insert(request_id, tx);
@@ -272,7 +368,7 @@ impl DaemonRuntimeClient {
     }
 }
 
-impl TuiRuntimeClient for DaemonRuntimeClient {
+impl RuntimeClient for DaemonRuntimeClient {
     fn capabilities(&self) -> RuntimeClientFuture<RuntimeCapabilities> {
         let client = self.clone();
         Box::pin(async move {

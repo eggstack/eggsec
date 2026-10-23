@@ -413,7 +413,7 @@ fn run_tui_body(
 
 /// Attach to a daemon session: create/list/subscribe based on mode flags.
 async fn attach_daemon_session(
-    client: &dyn crate::runtime_client::TuiRuntimeClient,
+    client: &dyn eggsec_frontend_client::RuntimeClient,
     mode: &RuntimeMode,
     app: &mut App,
 ) -> Result<(), String> {

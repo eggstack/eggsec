@@ -248,6 +248,19 @@ pub(crate) fn server_message_to_response(
             },
             error_code: None,
         },
+        ServerMessage::Operations {
+            request_id,
+            operations,
+        } => DaemonResponsePy {
+            ok: true,
+            request_id,
+            message: format!(
+                "{} operation(s), {} task kind(s)",
+                operations.operations.len(),
+                operations.task_kinds.len()
+            ),
+            error_code: None,
+        },
     }
 }
 
@@ -344,13 +357,14 @@ fn parse_surface(surface: &str) -> PyResult<eggsec_runtime::RuntimeSurface> {
     match surface {
         "cli_manual" | "CliManual" => Ok(RuntimeSurface::CliManual),
         "tui_manual" | "TuiManual" => Ok(RuntimeSurface::TuiManual),
+        "desktop_gui_manual" | "DesktopGuiManual" => Ok(RuntimeSurface::DesktopGuiManual),
         "mcp_server" | "McpServer" => Ok(RuntimeSurface::McpServer),
         "rest_api" | "RestApi" => Ok(RuntimeSurface::RestApi),
         "grpc_api" | "GrpcApi" => Ok(RuntimeSurface::GrpcApi),
         "security_agent" | "SecurityAgent" => Ok(RuntimeSurface::SecurityAgent),
         "ci" | "Ci" => Ok(RuntimeSurface::Ci),
         _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "Unknown surface: {}. Valid values: cli_manual, tui_manual, mcp_server, rest_api, grpc_api, security_agent, ci",
+            "Unknown surface: {}. Valid values: cli_manual, tui_manual, desktop_gui_manual, mcp_server, rest_api, grpc_api, security_agent, ci",
             surface
         ))),
     }

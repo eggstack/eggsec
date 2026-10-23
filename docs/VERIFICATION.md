@@ -37,6 +37,16 @@ bash scripts/check-architecture-guards.sh
 
 The package-level test commands automatically include all integration tests. Newly added tests run without Makefile maintenance. No `cargo-nextest` is required. Any pull request touching Rust source, workspace configuration, or architecture documentation must pass all of these checks locally before pushing.
 
+The desktop GUI (`eggsec-gui`) is covered in two places. Its **no-shell** profile is already inside `cargo check --workspace --no-default-features` — that profile needs no platform webview SDK. Its **shell** profile adds one gated line to `make check`, one to `make clippy`, and one to `make check-msrv`:
+
+```bash
+cargo check -p eggsec-gui --features shell          # in `make check`
+cargo clippy -p eggsec-gui --features shell -- -D warnings   # in `make clippy`
+cargo +1.89 check -p eggsec-gui --features shell     # in `make check-msrv`
+```
+
+Each of those three runs through the `GUI_SHELL_GATE` macro, which **SKIPs with the reason named** when the platform webview prerequisite is absent. See [Desktop GUI platform prerequisites](#desktop-gui-platform-prerequisites). `make check-gui` is the ungated escape hatch for the same two commands.
+
 ### Defect classes covered
 
 | Command | Defect class | Why merge-time |
@@ -50,6 +60,7 @@ The package-level test commands automatically include all integration tests. New
 | `cargo test -p eggsec-transport-eggfetch --tests` | Adapter parity/adversarial regressions (67 tests: 52 parity + 6 mapping unit + 5 H2-local + 4 SOCKS5-local) | Proves approved-IP pinning, authorized redirects, TLS/timeout mapping without production wiring |
 | `cargo test -p eggsec-output --tests` | Report rendering/conversion regressions | Output crate is leaf; distinct defect class |
 | `cargo test -p eggsec-report-model --tests` | Report contract roundtrip | Model crate is leaf; JSON shape is the cross-domain contract |
+| `cargo check -p eggsec-gui --features shell` (gated) | Desktop GUI shell-profile regressions | The GUI's shell profile needs the platform webview SDK; the gate SKIPs with the reason named when it is absent |
 | `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
 
 ## Mandatory Python contributor contract
@@ -87,6 +98,46 @@ vs live commands, expected skips, and release-gating.
 
 Contributors generally need local platform testing only for platform-specific
 changes.
+
+### Desktop GUI platform prerequisites
+
+The desktop GUI crate (`eggsec-gui`) has two build profiles, and they have
+different prerequisites:
+
+| Profile | Command | Prerequisites | Where it runs |
+|---------|---------|---------------|---------------|
+| No shell | `cargo check -p eggsec-gui --no-default-features` | None beyond the toolchain | Inside `cargo check --workspace --no-default-features` — already mandatory, every PR |
+| Shell (`shell` feature) | `cargo check -p eggsec-gui --features shell`, `cargo clippy -p eggsec-gui --features shell -- -D warnings` | The platform webview development packages (Linux: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`, `pkg-config`; macOS/Windows: the system webview) | Gated lines in `make check`, `make clippy`, and `make check-msrv`; ungated via `make check-gui` |
+
+### Prerequisite-skip semantics
+
+The three gated shell-profile lines run through the Makefile's `GUI_SHELL_GATE`
+macro, which follows the discipline of `scripts/check-features-individual.sh`:
+
+- **Prerequisite absent** → the command is **SKIPped** and the reason is named
+  on the output line. The gate succeeds; the check does not run. On Linux the
+  gate probes `pkg-config` for `webkit2gtk-4.1` (or `webkit2gtk-4.0`); on
+  macOS and Windows the system webview is always present, so the gate always
+  runs the command.
+- **Prerequisite present but the build is broken** → a hard **FAIL**. The build
+  error is never swallowed by the gate.
+
+A SKIP is not a pass. The shell profile must still be green wherever the
+prerequisite is available — which is why CI installs the Linux packages on the
+jobs that run these lines.
+
+`make check-gui` is the **ungated** escape hatch: it always runs the shell
+profile's check and clippy, and reports cargo's own error rather than a gate
+verdict. Use it when you have the prerequisite installed and want the real
+compiler output.
+
+The GUI's Tauri version pins are exact (`=`), not carets: the next lines up
+declare MSRV 1.90, above this workspace's 1.89 floor, and `tauri` declares its
+runtime and utils dependencies with caret requirements — so without the direct
+exact pins a `cargo update` would float the closure onto the 1.90 line and
+break `make check-msrv`. `make check-msrv` therefore covers the GUI's shell
+profile under the declared MSRV (`cargo +1.89 check -p eggsec-gui --features
+shell`), behind the same gate. See `architecture/desktop_gui.md`.
 
 ## Code MSRV vs release-tool Cargo
 
@@ -216,6 +267,7 @@ See [docs/RELEASING.md](RELEASING.md) for the full procedure.
 | `make fmt` | Format check | Every PR/push |
 | `make check-no-default` | No-default-features build | Every PR/push (part of `make check`) |
 | `make check-msrv` | MSRV compile check | Deep checks only (requires `rustup toolchain install 1.89`) |
+| `make check-gui` | Desktop GUI shell-profile check + clippy, **ungated** | Desktop GUI changes; reports cargo's own error rather than a gate verdict |
 | `make check-feature-profiles` | Representative feature profiles | Pre-release |
 | `make release-check` | Release validation (no publication) | Pre-release |
 | `make test-feature-matrix` | Feature metadata validation | Every PR/push (standalone target; `make check` covers the same ground via `--tests`) |

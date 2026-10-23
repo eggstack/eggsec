@@ -1,0 +1,78 @@
+[package]
+name = "eggsec-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Desktop GUI frontend for Eggsec, built on the Tauri v2 shell (ADR-0009)"
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "../../README.md"
+keywords = ["security", "gui", "tauri", "frontend"]
+categories = ["development-tools"]
+
+[lib]
+name = "eggsec_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "eggsec-gui"
+path = "src/main.rs"
+
+[features]
+# The shell feature carries the Tauri dependency and everything that needs it.
+# The crate builds without it so `cargo check --workspace --no-default-features`
+# — the `make check` baseline — stays green on hosts with no webview SDK.
+default = ["shell"]
+shell = [
+    "dep:tauri",
+    "dep:tauri-macros",
+    "dep:tauri-runtime",
+    "dep:tauri-runtime-wry",
+    "dep:tauri-utils",
+]
+
+[dependencies]
+eggsec-frontend-client = { path = "../eggsec-frontend-client", version = "0.1.0" }
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
+eggsec-daemon-protocol = { path = "../eggsec-daemon-protocol", version = "0.1.0" }
+# Frontend-neutral view DTOs and the renderer registry. Depends on
+# eggsec-runtime, serde, and serde_json only — no engine, no framework.
+eggsec-ui-model = { path = "../eggsec-ui-model", version = "0.1.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# UnixStream (net), mpsc/oneshot (sync), request timeout (time), spawn (rt),
+# and the `#[tokio::main]` attribute (macros). No rt-multi-thread.
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros", "net"] }
+tracing = { workspace = true }
+
+# The shell framework. `rustls-tls` and `native-tls` are deliberately NOT
+# enabled: the GUI performs no outbound HTTP of its own — every engine request
+# travels over the daemon's Unix socket — so the whole `reqwest`/`rustls`/
+# `native-tls` closure stays out of the GUI's dependency graph. This is what
+# keeps the workspace's ring-only TLS invariant true without an exception.
+tauri = { workspace = true, optional = true, features = [
+    "wry",
+    "common-controls-v6",
+    "x11",
+    "dbus",
+    "dynamic-acl",
+] }
+
+# Version-hold dependencies. `tauri` declares its runtime, utils, and macro
+# dependencies with caret requirements, and the next lines up (tauri 2.12,
+# tauri-utils 2.10, tauri-macros 2.7) all declare MSRV 1.90 — above this
+# workspace's 1.89 floor. These exact pins hold the transitive closure on the
+# MSRV-safe line; the GUI does not call them directly.
+tauri-macros = { workspace = true, optional = true }
+tauri-runtime = { workspace = true, optional = true }
+tauri-runtime-wry = { workspace = true, optional = true }
+tauri-utils = { workspace = true, optional = true }
+
+[build-dependencies]
+tauri-build = { workspace = true }
+# `tauri-build` requires `tauri-utils ^2.9.3`; this exact pin keeps even the
+# no-shell build (and therefore `make check-msrv`) off the MSRV-1.90 line.
+tauri-utils = { workspace = true }

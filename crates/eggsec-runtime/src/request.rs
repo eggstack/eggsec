@@ -23,6 +23,12 @@ pub enum RuntimeSurface {
     CliManualStrict,
     TuiManual,
     TuiManualStrict,
+    /// Desktop GUI interactive session (default manual permissive).
+    ///
+    /// A peer of the CLI and TUI manual surfaces, not a new policy class: it
+    /// carries the same manual semantics, and the same `ExecutionSurface`
+    /// counterpart on the engine side.
+    DesktopGuiManual,
     Ci,
     McpServer,
     RestApi,
@@ -45,6 +51,7 @@ impl RuntimeSurface {
             Self::CliManualStrict => "cli-manual-strict",
             Self::TuiManual => "tui-manual",
             Self::TuiManualStrict => "tui-manual-strict",
+            Self::DesktopGuiManual => "desktop-gui-manual",
             Self::Ci => "ci",
             Self::McpServer => "mcp-server",
             Self::RestApi => "rest-api",
@@ -61,6 +68,7 @@ impl RuntimeSurface {
 /// to the runtime. Payload structs are serializable and TUI-free.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "params")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum TaskKind {
     LoadTest(LoadTestParams),
     StressTest(StressTestParams),
@@ -107,6 +115,7 @@ pub struct RunRequest {
 
 /// Load test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LoadTestParams {
     pub target: String,
     pub method: String,
@@ -125,6 +134,7 @@ pub struct LoadTestParams {
 
 /// Stress test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StressTestParams {
     pub target: String,
     pub flood_type: String,
@@ -135,6 +145,7 @@ pub struct StressTestParams {
 
 /// Port scan parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PortScanParams {
     pub target: String,
     pub ports: Option<String>,
@@ -149,6 +160,7 @@ pub struct PortScanParams {
 
 /// Endpoint scan parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EndpointScanParams {
     pub target: String,
     pub methods: Option<Vec<String>>,
@@ -169,6 +181,7 @@ pub struct EndpointScanParams {
 
 /// Fingerprint parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FingerprintParams {
     pub target: String,
     pub ports: Option<String>,
@@ -178,6 +191,7 @@ pub struct FingerprintParams {
 
 /// Fuzz parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FuzzParams {
     pub target: String,
     pub payload_type: Option<String>,
@@ -199,6 +213,7 @@ pub struct FuzzParams {
 
 /// WAF detection parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WafParams {
     pub target: String,
     pub bypass_mode: Option<bool>,
@@ -207,6 +222,7 @@ pub struct WafParams {
 
 /// WAF stress test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WafStressParams {
     pub target: String,
     pub requests: Option<u32>,
@@ -215,6 +231,7 @@ pub struct WafStressParams {
 
 /// Pipeline parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PipelineParams {
     pub target: String,
     pub profile: Option<String>,
@@ -240,12 +257,14 @@ pub struct PipelineParams {
 /// The target is not carried here: it lives inside the checkpoint, and the
 /// engine reads it to build the enforcement descriptor for the resumed run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ResumeParams {
     pub session_path: String,
 }
 
 /// Recon parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ReconParams {
     pub target: String,
     pub modules: Option<Vec<String>>,
@@ -253,6 +272,7 @@ pub struct ReconParams {
 
 /// Packet capture parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketCaptureParams {
     pub interface: Option<String>,
     pub filter: Option<String>,
@@ -263,6 +283,7 @@ pub struct PacketCaptureParams {
 
 /// Packet traceroute parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketTracerouteParams {
     pub target: String,
     pub max_hops: Option<u32>,
@@ -270,6 +291,7 @@ pub struct PacketTracerouteParams {
 
 /// Packet send parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketSendParams {
     pub target: String,
     pub protocol: String,
@@ -281,6 +303,7 @@ pub struct PacketSendParams {
 
 /// GraphQL testing parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GraphQlParams {
     pub target: String,
     pub introspection: Option<bool>,
@@ -293,6 +316,7 @@ pub struct GraphQlParams {
 
 /// OAuth testing parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct OAuthParams {
     pub target: String,
     pub flow: Option<String>,
@@ -308,6 +332,7 @@ pub struct OAuthParams {
 
 /// Authentication test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AuthTestParams {
     pub target: String,
     pub username: Option<String>,
@@ -320,6 +345,7 @@ pub struct AuthTestParams {
 
 /// NSE script parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NseParams {
     pub target: String,
     pub script: String,
@@ -343,6 +369,7 @@ pub struct NseParams {
 
 /// Vulnerability hunt parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct HuntParams {
     pub target: String,
     pub hunt_type: Option<String>,
@@ -350,6 +377,7 @@ pub struct HuntParams {
 
 /// Browser testing parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct BrowserParams {
     pub target: String,
     pub headless: Option<bool>,
@@ -357,6 +385,7 @@ pub struct BrowserParams {
 
 /// Compliance check parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ComplianceParams {
     pub target: String,
     pub framework: Option<String>,
@@ -364,6 +393,7 @@ pub struct ComplianceParams {
 
 /// Storage parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StorageParams {
     pub storage_type: String,
     pub path: Option<String>,
@@ -394,6 +424,7 @@ pub struct StorageParams {
 
 /// Integration parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct IntegrationsParams {
     pub integration_type: String,
     pub config: Option<serde_json::Value>,
@@ -401,6 +432,7 @@ pub struct IntegrationsParams {
 
 /// Workflow parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowParams {
     pub workflow_id: Option<String>,
     pub steps: Option<Vec<String>>,
@@ -408,6 +440,7 @@ pub struct WorkflowParams {
 
 /// Vulnerability parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct VulnParams {
     pub target: String,
     pub vuln_type: Option<String>,
@@ -415,6 +448,7 @@ pub struct VulnParams {
 
 /// Wireless recon parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WirelessParams {
     pub interface: Option<String>,
     pub duration_secs: Option<u32>,
@@ -448,6 +482,7 @@ fn default_wireless_dry_run() -> bool {
 /// existed — or any payload that omits them — simulates the attack instead of
 /// transmitting live frames. Never invert this default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WirelessActiveParams {
     pub interface: Option<String>,
     pub target_bssid: Option<String>,
@@ -485,6 +520,7 @@ impl Default for WirelessActiveParams {
 
 /// Database pentest parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DbPentestParams {
     pub db_type: String,
     pub target: String,
@@ -498,6 +534,7 @@ pub struct DbPentestParams {
 
 /// Intercept proxy parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct InterceptParams {
     pub listen_port: Option<u16>,
     pub target: Option<String>,
@@ -508,6 +545,7 @@ pub struct InterceptParams {
 
 /// C2 simulation parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct C2Params {
     pub profile: Option<String>,
     pub target: Option<String>,

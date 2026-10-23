@@ -60,6 +60,25 @@ impl SqliteStore {
         Ok(store)
     }
 
+    /// Test-only: the surface label of every persisted audit event, in write
+    /// order.
+    ///
+    /// The store trait has no audit read-back — audit rows are written for
+    /// external inspection. This helper exists so a test can assert what the
+    /// daemon actually persisted.
+    #[cfg(test)]
+    pub fn audit_surfaces(&self) -> Vec<String> {
+        let conn = lock_conn(&self.conn);
+        let mut statement = conn
+            .prepare("SELECT surface FROM audit_events ORDER BY audit_id")
+            .expect("the audit_events table must exist");
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("the audit surface query must succeed");
+        rows.map(|row| row.expect("an audit surface row must read"))
+            .collect()
+    }
+
     fn migrate(&self) -> anyhow::Result<()> {
         let conn = lock_conn(&self.conn);
         conn.execute_batch(SCHEMA_DDL)?;

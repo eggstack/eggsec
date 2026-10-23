@@ -3,7 +3,7 @@
 //! Protects the dual-mode enforcement contract across all execution surfaces.
 //! Catches two categories of regression:
 //!
-//! 1. Manual CLI/TUI becoming too strict to be useful.
+//! 1. Manual CLI/TUI/GUI becoming too strict to be useful.
 //! 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 //!
 //! This file is the canonical cross-surface guardrail.
@@ -131,10 +131,12 @@ const ALL_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::CliManualStrict,
     ExecutionSurface::TuiManual,
     ExecutionSurface::TuiManualStrict,
+    ExecutionSurface::DesktopGuiManual,
     ExecutionSurface::McpServer,
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 /// Automated (strict) surfaces.
@@ -143,11 +145,15 @@ const AUTOMATED_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
-/// Surfaces that honor manual overrides (only CliManual and TuiManual).
-const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] =
-    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
+/// Surfaces that honor manual overrides (the permissive manual surfaces).
+const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] = &[
+    ExecutionSurface::CliManual,
+    ExecutionSurface::TuiManual,
+    ExecutionSurface::DesktopGuiManual,
+];
 
 /// Surfaces that do NOT honor manual overrides.
 const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
@@ -157,11 +163,15 @@ const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 /// Manual permissive surfaces.
-const PERMISSIVE_SURFACES: &[ExecutionSurface] =
-    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
+const PERMISSIVE_SURFACES: &[ExecutionSurface] = &[
+    ExecutionSurface::CliManual,
+    ExecutionSurface::TuiManual,
+    ExecutionSurface::DesktopGuiManual,
+];
 
 /// Strict/guarded surfaces (not permissive).
 const STRICT_SURFACES: &[ExecutionSurface] = &[
@@ -171,6 +181,7 @@ const STRICT_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 // ===========================================================================
@@ -178,15 +189,15 @@ const STRICT_SURFACES: &[ExecutionSurface] = &[
 // ===========================================================================
 
 #[test]
-fn cli_manual_and_tui_manual_map_to_manual_permissive() {
-    assert_eq!(
-        ExecutionSurface::CliManual.profile(),
-        ExecutionProfile::ManualPermissive
-    );
-    assert_eq!(
-        ExecutionSurface::TuiManual.profile(),
-        ExecutionProfile::ManualPermissive
-    );
+fn permissive_manual_surfaces_map_to_manual_permissive() {
+    for surface in OVERRIDE_HONORING_SURFACES {
+        assert_eq!(
+            surface.profile(),
+            ExecutionProfile::ManualPermissive,
+            "{}: a permissive manual surface must map to ManualPermissive",
+            surface
+        );
+    }
 }
 
 #[test]
@@ -231,12 +242,17 @@ fn rest_maps_to_strict_profile() {
 }
 
 #[test]
-fn only_cli_tui_manual_honor_manual_overrides() {
+fn grpc_maps_to_strict_profile() {
+    assert_eq!(
+        ExecutionSurface::GrpcApi.profile(),
+        ExecutionProfile::McpStrict
+    );
+}
+
+#[test]
+fn only_permissive_manual_surfaces_honor_manual_overrides() {
     for surface in ALL_SURFACES {
-        let expected = matches!(
-            surface,
-            ExecutionSurface::CliManual | ExecutionSurface::TuiManual
-        );
+        let expected = OVERRIDE_HONORING_SURFACES.contains(surface);
         assert_eq!(
             surface.honors_manual_override(),
             expected,

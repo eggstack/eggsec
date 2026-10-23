@@ -11,6 +11,7 @@ Thank you for your interest in contributing to Eggsec! This document provides gu
 - [Testing](#testing)
 - [Documentation](#documentation)
 - [TUI Development](#tui-development)
+- [Desktop GUI Development](#desktop-gui-development)
 - [Pull Request Process](#pull-request-process)
 
 ## Code of Conduct
@@ -387,8 +388,9 @@ crates/eggsec-tui/src/
 │   └── action.rs    # Action handling
 ├── state/           # State management
 │   └── history.rs   # History management
-└── runtime_client/  # Daemon client adapter
 ```
+
+The frontend runtime-client contract (the `RuntimeClient` trait and the embedded/daemon implementations) now lives in its own leaf crate, `crates/eggsec-frontend-client/`, not under `crates/eggsec-tui/src/runtime_client/`. The TUI depends on that crate and no longer on `eggsec-daemon-protocol` directly. See [architecture/frontend_client.md](architecture/frontend_client.md).
 
 ### Input Modes
 
@@ -636,6 +638,42 @@ fn build_new_feature_task(&self) -> Option<workers::TaskConfig> {
 3. Verify tab switching works correctly
 4. Ensure long outputs scroll properly with `Ctrl+u/d`
 5. Check that async operations can be started and stopped
+
+## Desktop GUI Development
+
+### Overview
+
+The desktop GUI is a [Tauri v2](https://tauri.app) application in `crates/eggsec-gui/`. It is a **daemon-only** frontend: it reaches the engine exclusively through the daemon's Unix socket, so it links no engine code and performs no outbound HTTP. Its frontend assets are hand-written HTML, CSS and vanilla JavaScript — **no npm, no bundler, no build step**.
+
+### Prerequisites
+
+- Rust 1.89 or later (workspace MSRV; verify with `make check-msrv`)
+- The platform webview development packages — **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `patchelf`, plus `libayatana-appindicator3-dev` and `libxdo-dev` for the tray; **macOS / Windows**: the system webview is already present, so no extra packages.
+- An already-running `eggsec-daemon --full-executor` — the GUI does not start, supervise, or stop a daemon.
+
+### Build and Run
+
+```bash
+# The shell-independent half — no webview SDK required.
+cargo check -p eggsec-gui --no-default-features
+cargo test -p eggsec-gui --no-default-features --lib
+
+# The desktop window (needs the webview SDK).
+cargo run -p eggsec-gui
+
+# Point at a daemon on a non-default socket.
+cargo run -p eggsec-gui -- --socket /path/to/eggsec-daemon.sock
+```
+
+The GUI's shell profile is platform-sensitive, so it is verified through the Makefile's `GUI_SHELL_GATE`: the shell-profile lines inside `make check`, `make clippy`, and `make check-msrv` **SKIP with the reason named** when the webview SDK is absent, and **FAIL** if the prerequisite is present but the build breaks. `make check-gui` is the ungated escape hatch — it always runs and reports cargo's own error.
+
+### Things to know before you change it
+
+- **Do not loosen the Tauri version pins.** They are exact (`=`), because the next lines up declare MSRV 1.90 — above this workspace's 1.89 floor — and `tauri` declares its runtime and utils dependencies with caret requirements. Without the direct exact pins, a `cargo update` floats the closure onto the 1.90 line and breaks `make check-msrv`. See [architecture/desktop_gui.md](architecture/desktop_gui.md).
+- **Do not add per-operation code.** The form is generated from the request schema the daemon publishes. There is no `match` over task-kind names and no hand-written field table; a newly published task kind must get a form with no GUI change.
+- **Do not add an npm dependency or a remote script source.** The CSP has no remote origin, and a remote script in a security tool is supply-chain surface the operator cannot audit from the source tree.
+- **A blank field means "not provided", not zero.** The GUI must never send `""`, `0`, `false` or `[]` for an untouched field: several published parameters carry non-null defaults, and one is a fail-safe flag (`dry_run`, default `true`). Sending `false` for an untouched field would silently turn a simulation into a live action.
+- **Keep retention bounded.** Log lines are capped per task and per flush, and dropped lines are counted rather than discarded silently. Unbounded retention is a disqualifying defect, not a tuning problem.
 
 ## Pull Request Process
 

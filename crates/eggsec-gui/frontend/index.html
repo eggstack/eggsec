@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eggsec</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="topbar__row">
+          <h1 class="topbar__title">Eggsec</h1>
+          <span id="no-op-badge" class="badge badge--warning" hidden>No-op executor</span>
+          <span id="connection-badge" class="badge badge--muted">Not connected</span>
+        </div>
+
+        <form id="connect-form" class="connect-form" autocomplete="off">
+          <label class="connect-form__label" for="socket-input">Daemon socket</label>
+          <input
+            id="socket-input"
+            class="connect-form__input"
+            type="text"
+            name="socket"
+            value="/tmp/eggsec-daemon.sock"
+            spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
+          />
+          <button id="connect-button" class="button button--primary" type="submit">Connect</button>
+        </form>
+
+        <dl id="catalog-facts" class="catalog-facts"></dl>
+      </header>
+
+      <div id="banner-area" class="banner-area" role="status" aria-live="polite"></div>
+
+      <div class="workspace">
+        <nav class="sidebar" aria-labelledby="sidebar-heading">
+          <h2 id="sidebar-heading" class="sidebar__title">Operations</h2>
+          <p class="sidebar__hint">
+            Every entry comes from the connected daemon's published catalog.
+          </p>
+          <ul id="task-kind-list" class="task-kinds"></ul>
+        </nav>
+
+        <main class="main">
+          <section class="panel panel--form" aria-labelledby="form-heading">
+            <div class="panel__header">
+              <h2 id="form-heading" class="panel__heading">Run an operation</h2>
+              <p id="form-subheading" class="panel__subheading"></p>
+            </div>
+            <div id="form-body" class="panel__body"></div>
+          </section>
+
+          <section class="panel panel--tasks" aria-labelledby="tasks-heading">
+            <div class="panel__header">
+              <h2 id="tasks-heading" class="panel__heading">Tasks</h2>
+              <button id="cancel-active-button" class="button button--danger" type="button" disabled>
+                Cancel active task
+              </button>
+            </div>
+            <div id="dashboard-counters" class="counters" hidden></div>
+            <div id="task-list" class="panel__body task-list"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

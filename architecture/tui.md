@@ -383,7 +383,11 @@ handler does before dispatch.
 
 ### Runtime Binding (`app/mod.rs:152`)
 
-`RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
+`RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `RuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
+
+The contract itself lives in the leaf crate **`eggsec-frontend-client`** (see [frontend_client.md](frontend_client.md)). The TUI's former `crates/eggsec-tui/src/runtime_client/` module was removed when the contract was extracted: the trait was renamed `TuiRuntimeClient` → `RuntimeClient`, and the TUI now depends on `eggsec-frontend-client` instead of on `eggsec-daemon-protocol` directly. `App::runtime_client` is therefore `Option<Arc<dyn RuntimeClient + Send + Sync>>`, and daemon attach mode constructs `eggsec_frontend_client::DaemonRuntimeClient::connect(...)`.
+
+`connect()` now takes the caller's `ClientIdentity` alongside the socket path, because the contract carries no frontend's identity of its own. The TUI passes its own — `ClientKind::Tui`, label `eggsec-tui`, request-id prefix `tui-` (`crates/eggsec-tui/src/app/mod.rs:390-397`). **The TUI's observable behaviour is unchanged**: the same client kind is declared to the daemon, the same label appears in daemon-side listings, and the request ids keep the `tui-` namespace they always had. The desktop GUI passes its own identity over the same seam — see [desktop_gui.md](desktop_gui.md).
 
 ### Attach Mode (`app/runner.rs:415–507`)
 
@@ -597,4 +601,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*
+*Last verified against source: 2026-10-23 (the daemon connect now passes the TUI's own `ClientIdentity` — `ClientKind::Tui` / `eggsec-tui` / `tui-` — over the frontend-client seam; observable behaviour unchanged); earlier pass 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*

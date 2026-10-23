@@ -2,7 +2,7 @@
 
 Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine with multiple frontends (CLI, TUI, REST, MCP, gRPC, Agent), centralized policy enforcement, and domain execution crates. This document is the bird's-eye view of the system and the index into the per-component deep-dive documents that live alongside it in `architecture/`.
 
-Every number in this document was verified against source on 2026-10-06. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
+Every number in this document was verified against source on 2026-10-23. Where a claim depends on a count (variants, commands, tabs), the verifying location is cited.
 
 ## Quick Navigation
 
@@ -39,7 +39,7 @@ Every number in this document was verified against source on 2026-10-06. Where a
 
 ## Workspace Crates
 
-Eggsec is organized as a Cargo workspace with **23 crates** plus the standalone NSE runtime. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
+Eggsec is organized as a Cargo workspace with **25 crates** plus the standalone NSE runtime. The first-level crate boundary separates dependency-light leaf crates from the composition root and frontends.
 
 ### Release validation boundary
 
@@ -60,15 +60,17 @@ nor hosted CI publishes a package.
 | `eggsec-report-model` | Report data contracts | Yes | `ScanReportData`, `ReportEnvelope`, evidence/summary DTOs. Data only; depends only on `eggsec-core`. Domain DTO owner (Phase B). |
 | `eggsec-output` | Report rendering | Yes | JSON/CSV/HTML/SARIF/JUnit/Markdown, dedup, trends, diff over `eggsec-report-model` (never the reverse). No engine/runtime deps. PDF lives in the engine crate, not here. Scheduling/session removed in Phase A (cron in `eggsec-agent::cron`). |
 | `eggsec-agent` | Agent coordination | Yes | Registry, scheduler, lifecycle, delegation, aggregation, cron. Internal deps: `eggsec-core` + `eggsec-transport` (the outbound contract for agent-issued network work). |
-| `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). |
+| `eggsec-runtime` | Frontend-neutral runtime | Yes | `Runtime`, `RuntimeTaskExecutor`, task lifecycle; zero workspace deps (serde/tokio/tracing only). Optional `schema` feature publishes a derived JSON Schema over the canonical request DTOs. |
 | `eggsec-ui-model` | Frontend view DTOs | Yes | View models + renderer registry (23 entries). Depends only on `eggsec-runtime`. |
+| `eggsec-frontend-client` | Frontend runtime client | Yes | Frontend-neutral runtime-client contract (`RuntimeClient` trait + embedded/daemon implementations); no frontend framework, no engine dependency. Deep dive: [frontend_client.md](frontend_client.md). |
 | `eggsec` | Main engine (lib) | No | Composition root: all security modules, policy enforcement, dispatch, runtime bridge. |
 | `eggsec-db-lab` | DB pentest domain | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks, each driver behind its own feature. |
 | `eggsec-web-proxy` | Web proxy domain | Yes | MITM intercept (HTTP/HTTPS/WS/H2/gRPC), TLS cert generation, proxy pool. Highest test density in the workspace. |
 | `eggsec-mobile-lab` | Mobile analysis domain | Yes | APK/IPA static analysis + Android dynamic testing (`mobile-dynamic`). |
-| `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.31 bundled); optional `http-api` SSE transport, optional `full-executor`. |
-| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (15), `ServerMessage` (14), `ErrorCode` (11), RBAC client registry. Depends only on `eggsec-runtime`. |
+| `eggsec-daemon` | Persistent daemon host | Yes | Unix socket server, session lifecycle, SQLite (rusqlite 0.32 bundled); optional `http-api` SSE transport, optional `full-executor`. |
+| `eggsec-daemon-protocol` | Daemon IPC protocol | Yes | `ClientCommand` (16), `ServerMessage` (15), `ErrorCode` (11), RBAC client registry, published operation catalog. Depends on `eggsec-runtime` + `eggsec-policy`. |
 | `eggsec-tui` | Terminal UI | No | 33 tabs (21 base + 12 feature-gated), ratatui/crossterm, 50 LZMA-packaged themes. |
+| `eggsec-gui` | Desktop GUI frontend | No | Tauri v2 desktop shell (2.11.x, exact pins). Daemon-only: no engine, daemon, CLI or TUI dep; no outbound HTTP; buildless frontend with zero npm dependencies. Deep dive: [desktop_gui.md](desktop_gui.md). |
 | `eggsec-cli` | CLI binary | Yes | Thin binary shell over the engine's `cli` feature; optional `tui` and `daemon-client`. |
 | `eggsec-python` | Python bindings | Yes | PyO3/maturin. 22 stable-core operations, each with sync + async paths (asserted by test). |
 | `eggsec-transport` | Scoped HTTP contract | Yes | Scope-aware outbound DTOs, `NetworkAuthority` checkpoints (incl. proxy-peer `authorize_proxy_resolved`/`authorize_proxy_socket`), TOCTOU-closed resolver binding, recording fake. Zero workspace deps (`bytes`/`http`/`url`/`thiserror` + log-only `tracing`). |
@@ -215,10 +217,12 @@ The daemon architecture enables persistent sessions, background task execution, 
 | Module | Source | Purpose | Architecture Doc |
 |--------|--------|---------|------------------|
 | Daemon | `crates/eggsec-daemon/` | Long-running host: session persistence (SQLite via rusqlite, bundled), client registry, Unix socket IPC, optional HTTP/SSE transport (`http-api`), optional full engine executor (`full-executor`) | [daemon.md](daemon.md) |
-| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (15), `ServerMessage` (14), `ErrorCode` (11), `ClientRegistry` with roles/permissions; no persistence/TLS deps | [daemon.md](daemon.md) |
-| Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, sessions, event broadcasting; zero workspace deps | [runtime.md](runtime.md) |
+| Daemon Protocol | `crates/eggsec-daemon-protocol/` | Wire DTOs + RBAC: `ClientCommand` (16), `ServerMessage` (15), `ErrorCode` (11), `ClientRegistry` with roles/permissions; read-only publication of the operation catalog + derived request schema (`operations`); no persistence/TLS deps | [daemon.md](daemon.md) |
+| Runtime | `crates/eggsec-runtime/` | Frontend-neutral async runtime: `Runtime` orchestrator, `RuntimeTaskExecutor` trait, task lifecycle, sessions, event broadcasting; zero workspace deps. Optional `schema` feature derives a JSON Schema over the canonical request DTOs | [runtime.md](runtime.md) |
 | Runtime Bridge | `crates/eggsec/src/runtime_bridge/` | Converts `RuntimeSurface`→`ExecutionSurface` (1:1 except `Unknown`→error), `RunRequest`/`TaskKind`→`OperationDescriptor`; `preflight_run_request()` preview, `approve_run_request()` issues `ApprovedOperation`; manual overrides honored only on ManualPermissive surfaces | [runtime_bridge.md](runtime_bridge.md) |
 | UI Model | `crates/eggsec-ui-model/` | View DTOs (`SessionView`, `TaskView`, `ResultEnvelopeView`, `DashboardSummaryView`, event/artifact/permission/policy-prompt views) + renderer registry (23 entries) keyed by task kind | [ui_model.md](ui_model.md) |
+| Frontend Client | `crates/eggsec-frontend-client/` | Frontend-neutral runtime-client contract: the `RuntimeClient` trait plus the embedded and daemon implementations; no frontend framework, no engine dependency | [frontend_client.md](frontend_client.md) |
+| Desktop GUI | `crates/eggsec-gui/` | Tauri v2 desktop shell: 8-command IPC surface, schema-driven form engine (no per-operation code), bounded task state and result dashboard; daemon-only, no engine/daemon/CLI/TUI dep | [desktop_gui.md](desktop_gui.md) |
 
 ### User Interfaces
 
@@ -228,6 +232,7 @@ Frontend entry points for human interaction.
 |--------|--------|---------|------------------|
 | CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (27 base + 25 feature-gated; `cli/mod.rs:270-470`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
 | TUI | `crates/eggsec-tui/src/` | Real-time terminal UI: ratatui/crossterm, **33 tabs (21 base + 12 feature-gated)** (`tabs/mod.rs:142`), tab-spec table, event loop with daemon attach mode, **50 LZMA-packaged themes**, search, overlays, `TestBackend` visual regression suite | [tui.md](tui.md) |
+| Desktop GUI | `crates/eggsec-gui/` | Tauri v2 desktop window: buildless HTML/CSS/vanilla-JS frontend, eight narrow IPC commands, forms generated from the published request schema, bounded task dashboard. Requires an already-running `eggsec-daemon --full-executor` | [desktop_gui.md](desktop_gui.md) |
 
 ### Compliance & Risk
 
@@ -306,12 +311,13 @@ All side-effecting operations pass through a centralized enforcement gate. The m
 
 ### Surfaces
 
-`ExecutionSurface` identifies the caller origin — 9 variants (`eggsec-policy/src/policy.rs:362`, re-exported through the `config/policy` facade):
+`ExecutionSurface` identifies the caller origin — 10 variants (`eggsec-policy/src/policy.rs:362`, re-exported through the `config/policy` facade):
 
 | Surface | Profile | Overrides | Automated |
 |---------|---------|:---------:|:---------:|
 | `CliManual` | `ManualPermissive` | Yes | No |
 | `TuiManual` | `ManualPermissive` | Yes | No |
+| `DesktopGuiManual` | `ManualPermissive` | Yes | No |
 | `CliManualStrict` | `ManualGuarded` | No | No |
 | `TuiManualStrict` | `ManualGuarded` | No | No |
 | `McpServer` | `McpStrict` | No | Yes |
@@ -460,15 +466,15 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `ExecutionSurface` | `eggsec-policy/src/policy.rs:362` | Caller origin (9 variants) |
-| `ExecutionProfile` | `eggsec-policy/src/policy.rs:466` | Trust boundary (5 variants) |
+| `ExecutionSurface` | `eggsec-policy/src/policy.rs:362` | Caller origin (10 variants) |
+| `ExecutionProfile` | `eggsec-policy/src/policy.rs:483` | Trust boundary (5 variants) |
 | `OperationRisk` | `eggsec-policy/src/policy.rs:9` | Risk tier (15 levels) |
 | `OperationMetadata` | `eggsec-policy::catalog` (facade: `config/policy_catalog.rs`) | Static registry of all operations (34 canonical + 42 aliases) — single source of truth |
 | `OperationDescriptor` | `config/policy.rs` | Unit of policy evaluation |
 | `EnforcementContext` | `config/policy_decision.rs:42` (engine facade over `eggsec-policy`) | Central policy evaluation gate |
 | `ApprovedOperation` | `eggsec-policy/src/approval.rs:22` | Proof-of-enforcement token |
 | `EnforcedDispatcher` | `tool/dispatcher.rs` | Type-level dispatch gate with binding validation |
-| `LoadedScope` | `config/scope.rs:217` | Scope + provenance (`ScopeSource`: DefaultEmpty/ConfigFile/CliScopeFile/GeneratedPreset) |
+| `LoadedScope` | `eggsec-policy/src/scope.rs:46` | Scope + provenance (`ScopeSource`: DefaultEmpty/ConfigFile/CliScopeFile/GeneratedPreset) |
 
 ### Runtime/Daemon Types
 
@@ -482,6 +488,11 @@ Pure marker gates (empty feature arrays) are `tool-api`, `insecure-tls`, `api-sc
 | `DaemonHost` | `eggsec-daemon` | Runtime bridge with client registry |
 | `ClientRegistry` | `eggsec-daemon-protocol` | Connected-client tracking + RBAC |
 | `DaemonStore` | `eggsec-daemon` | Persistence trait (SQLite backend) |
+| `RuntimeClient` | `eggsec-frontend-client` | Frontend-neutral runtime-client trait (embedded + daemon implementations) |
+| `ClientIdentity` | `eggsec-frontend-client` | Caller-supplied client identity (kind, label, request-id namespace) for the daemon connect |
+| `GuiState` | `eggsec-gui` | The GUI's managed Tauri state: the daemon connection, the task registry, the event forwarder |
+| `Control` / `ControlKind` | `eggsec-gui` | The schema-property → control descriptor and its five control kinds |
+| `GuiTaskStatus` | `eggsec-gui` | The GUI's own task-status view (`AwaitingPolicy` is the GUI's addition) |
 
 ---
 
@@ -509,8 +520,11 @@ eggsec-core (leaf — no workspace deps)
     ├── eggsec-runtime       (no workspace deps — only serde/tokio/tracing)
     │       ↑
     │       ├── eggsec-ui-model        (frontend-neutral view DTOs)
-    │       ├── eggsec-daemon-protocol (IPC DTOs, RBAC client registry)
-    │       └── eggsec-daemon          (persistent sessions, Unix socket IPC)
+    │       ├── eggsec-daemon-protocol (IPC DTOs, RBAC client registry, published operation catalog; + eggsec-policy)
+    │       │       ↑
+    │       │       └── eggsec-frontend-client (frontend-neutral runtime-client contract)
+    │       ├── eggsec-daemon          (persistent sessions, Unix socket IPC)
+    │       └── eggsec-gui             (desktop GUI — Tauri shell; + frontend-client + daemon-protocol + ui-model; no engine dep)
     │
     ├── eggsec-db-lab        (database pentest domain)
     ├── eggsec-web-proxy     (MITM proxy domain)
@@ -519,7 +533,7 @@ eggsec-core (leaf — no workspace deps)
     │
     └── eggsec               (ALL above incl. transport — main engine, lib only)
             ↑
-            ├── eggsec-tui    (engine + runtime + daemon-protocol + ui-model)
+            ├── eggsec-tui    (engine + runtime + frontend-client + ui-model)
             ├── eggsec-cli    (engine + runtime + ui-model; optional: tui + daemon)
             └── eggsec-python (engine + core + tool-core; optional domain crates)
 ```
@@ -533,12 +547,15 @@ Enforced by `scripts/check-architecture-guards.sh`:
 - `eggsec-output` depends on `eggsec-report-model` (facades re-export it, DTOs are never redefined) and has no engine or runtime dependencies (Checks 23, 119)
 - `eggsec-runtime` has no TUI, transport, persistence, or engine dependencies
 - `eggsec-daemon` has no non-optional TUI/engine dependencies; transport deps only behind `http-api`
+- `eggsec-frontend-client` depends on no frontend framework (no `ratatui`/`crossterm`) and not on the engine; it is reached only through `eggsec-runtime` + `eggsec-daemon-protocol` (Check 153)
+- `eggsec-gui` names only `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol` and `eggsec-ui-model` — never `eggsec`, `eggsec-daemon`, `eggsec-cli` or `eggsec-tui` (Check 155); the Tauri dependency appears in no other crate (Check 156); the GUI declares no TLS stack of its own — no `rustls-tls`, no `native-tls`, no direct `reqwest`/`rustls`/`native-tls` dependency (Check 157); the GUI's CSP names no wildcard source and no remote origin (Check 158)
+- The GUI's form is generated from the published request schema: no per-operation `match`/`switch` over the task-kind variant names and no hand-written operation table (Check 159); the GUI's task state caps log retention per task and the forwarder caps each flush (Check 160)
 - Domain crates (`db-lab`, `web-proxy`, `mobile-lab`, `nse`) depend on `eggsec-report-model` for DTOs, never on `eggsec-output` (Check 120)
 - `eggsec-policy` has no Tokio/HTTP/TLS/filesystem/frontend/engine/transport deps, no `cfg!` feature queries, no resolver/authority behavior (Check 121); engine → policy one-way with transport independent of policy (Check 122); engine policy modules stay facades with no redefined core types (Check 123)
 - `eggsec-service-db` has no workspace dependency at all, no runtime/network/TLS/frontend/persistence dep, and no `Scope`/`ApprovedOperation`/`Capability` reference (Check 148); the engine reaches it only through the `pub use eggsec_service_db as service_data` facade, and Check 114 pins it as the single canonical service-table owner
 - `eggsec-payloads` has `eggsec-core` as its only workspace dependency, no `reqwest`/Tokio/TLS/frontend/persistence dep, and no authorization reference (Check 148); the engine dispatches the 6 live-probe types locally and delegates the other 34 payload generators (40 total) (Check 150), and `tests/fuzzer_payload_corpus_seam.rs` asserts all 6 advanced types still return real payloads and that the cached union equals the per-type sum over all 40
 - `eggsec-secrets` has `eggsec-core` as its only workspace dependency, no runtime/network/TLS/frontend/persistence dep, and no `Scope`/`ApprovedOperation`/`Capability` reference (Check 148); the engine reaches it only through the `pub use eggsec_secrets as secrets` facade, which is what keeps the Python bindings' exhaustive 30-arm `SecretType` match compiling with zero edits. Check 149 pins the canonical owner and freezes the entropy gate at `3.5`, scoped only to `SecretType::AwsSecretKey`
-- Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine
+- Only frontends (`eggsec-cli`, `eggsec-tui`, `eggsec-python`) depend on the engine. The desktop GUI (`eggsec-gui`) is a frontend that deliberately does **not**: it is daemon-only and reaches the engine only through `eggsec-daemon`
 
 ### Intra-Engine Dependencies
 
@@ -619,8 +636,8 @@ Complete catalog of component deep-dives in this directory:
 | **Load & Stress** | [loadtest.md](loadtest.md), [stress.md](stress.md) |
 | **Orchestration** | [pipeline.md](pipeline.md), [distributed.md](distributed.md), [ai_agents.md](ai_agents.md) |
 | **Infrastructure** | [proxy.md](proxy.md), [web_proxy.md](web_proxy.md), [storage.md](storage.md), [workflow.md](workflow.md), [findings.md](findings.md), [diff.md](diff.md), [notify.md](notify.md), [integrations.md](integrations.md) |
-| **Daemon & Runtime** | [daemon.md](daemon.md), [runtime.md](runtime.md), [ui_model.md](ui_model.md) |
-| **Interfaces** | [cli_commands.md](cli_commands.md), [tui.md](tui.md), [python_api.md](python_api.md) |
+| **Daemon & Runtime** | [daemon.md](daemon.md), [runtime.md](runtime.md), [ui_model.md](ui_model.md), [frontend_client.md](frontend_client.md) |
+| **Interfaces** | [cli_commands.md](cli_commands.md), [tui.md](tui.md), [desktop_gui.md](desktop_gui.md), [python_api.md](python_api.md) |
 | **Compliance & Risk** | [compliance.md](compliance.md), [vuln.md](vuln.md), [supply_chain.md](supply_chain.md), [container.md](container.md) |
 | **Defense Lab** | [defense_lab.md](defense_lab.md), [database_pentest.md](database_pentest.md), [mobile.md](mobile.md), [postex.md](postex.md), [c2.md](c2.md) |
 | **Integration** | [nse_integration.md](nse_integration.md), [nse_capability_inventory.md](nse_capability_inventory.md), [nse_report_display_contract.md](nse_report_display_contract.md) |
@@ -649,8 +666,10 @@ Workspace-level canonical docs:
 
 ---
 
-*Last updated: 2026-10-06 — Knowledge-corpus convergence review (subagent batches across discovery, interfaces, enforcement/config, and the new corpus crates). Corrections applied here: **19 → 23 workspace crates** (added `eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan` to the crate table with an inline boundary note); added the missing `eggsec-udp-scan` row and a dedicated **Knowledge Corpus** module-index section linking [knowledge_corpus.md](knowledge_corpus.md); **TaskKind 29 → 30** variants (`eggsec-runtime/src/request.rs:64`, new `C2` variant); `PayloadType` citation re-pointed from `fuzzer/payloads/mod.rs:49` to its new owner `eggsec-payloads/src/lib.rs:95`; enforcement-type citations re-pointed from the `config/` facades to their real owners in `eggsec-policy` (`policy.rs:362`/`466`, `approval.rs:22`) and `EnforcementContext::evaluate` to `policy_decision.rs:141`; `eggsec-nse` corrected from *pinned Git dependency* to the **published crates.io 0.2.0 release**; `eggsec-agent` internal deps corrected from "`eggsec-core` only" to `eggsec-core` + `eggsec-transport`; `utils` corrected from "20 sub-modules" to the **12 that remain** (with the Phase A/D/G pruning history); added the `udp-scan` feature gate to the flag table; payloads corpus count corrected from "34 data-only modules" to **40 payload modules (34 generators + 6 probers)**.
+*Last updated: 2026-10-23 — Desktop GUI frontend (Tauri shell, schema-driven forms, task dashboard). Corrections applied here: **24 → 25 workspace crates** (added `eggsec-gui` to the crate table, the module index, the User Interfaces table, the Key Types table, the dependency map, and the dependency-guardrails list, with a deep dive at [desktop_gui.md](desktop_gui.md)); the dependency map now records the GUI's exact four workspace dependencies (`eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol`, `eggsec-ui-model`) and its deliberate *absence* of an engine edge; the guardrails list gained Checks 155–160.*
 
-Re-verified unchanged: 34 operations + 42 aliases (`eggsec-policy/src/catalog.rs`), 33 TUI tabs (`eggsec-tui/src/tabs/mod.rs:154`), 52 CLI subcommands (`eggsec/src/cli/mod.rs`), 32 handler modules, `ExecutionSurface` 9 / `ExecutionProfile` 5 / `OperationRisk` 15 / `Capability` 19 / `IntendedUse` 8 / `DenialClass` 8 / `ConfirmationClass` 8, engine default feature set empty. Prior review: 2026-09-30 (8 subagent batches).*
+Re-verified unchanged: 34 operations + 42 aliases (`eggsec-policy/src/catalog.rs`), 33 TUI tabs (`eggsec-tui/src/tabs/mod.rs:154`), 52 CLI subcommands (`eggsec/src/cli/mod.rs`), 32 handler modules, `ExecutionProfile` 5 / `OperationRisk` 15 / `Capability` 19 / `IntendedUse` 8 / `DenialClass` 8 / `ConfirmationClass` 8, `ErrorCode` 11, `TaskKind` 30, 23 renderer kinds, engine default feature set empty. Prior review: 2026-10-23 (desktop-GUI surface parity, operation parameter schema publication, frontend runtime-client extraction); before that 2026-10-06 (knowledge-corpus convergence + code-hygiene pass); before that 2026-09-30 (8 subagent batches).*
 
-**Addendum 2026-10-06 (code-hygiene pass).** Three defects surfaced by that review were fixed in source, not just documented: (1) `TaskKind::Resume` was missing from the closure test's `all_task_kinds()` helper while the count pin also read 29 — the helper now covers all 30 variants and `runtime_contract_closure` is 18 tests; (2) `make check` had no `cargo test -p eggsec-udp-scan` line, so that crate's 23 tests never ran — added, giving all four corpus crates coverage; (3) the dead `test-util` feature in `eggsec-udp-scan` (no `cfg` site, no consumer) was removed. Verified corpus test counts: payloads 252 / service-db 21 / secrets 11 / udp-scan 23. Workspace totals (23 crates, 51 features, 30 task kinds) are unchanged.
+**Addendum 2026-10-23 (desktop GUI frontend).** The `eggsec-gui` crate is a Tauri v2 desktop application that is **daemon-only**: it depends on `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol` and `eggsec-ui-model` and on nothing else — no engine, no daemon, no CLI, no TUI — and it performs no outbound HTTP. The Tauri version pins are exact (`=`) because the next lines up declare MSRV 1.90, above this workspace's 1.89 floor; loosening them breaks `make check-msrv`. The frontend is buildless with zero npm dependencies. The GUI's forms are generated from the published request schema, so there is no per-operation code; its log retention is capped per task and per flush.
+
+**Addendum 2026-10-06 (code-hygiene pass).** Three defects surfaced by that review were fixed in source, not just documented: (1) `TaskKind::Resume` was missing from the closure test's `all_task_kinds()` helper while the count pin also read 29 — the helper now covers all 30 variants and `runtime_contract_closure` is 18 tests; (2) `make check` had no `cargo test -p eggsec-udp-scan` line, so that crate's 23 tests never ran — added, giving all four corpus crates coverage; (3) the dead `test-util` feature in `eggsec-udp-scan` (no `cfg` site, no consumer) was removed. Verified corpus test counts: payloads 252 / service-db 21 / secrets 11 / udp-scan 23. Workspace totals (crate count, feature count, task kinds) are unchanged.

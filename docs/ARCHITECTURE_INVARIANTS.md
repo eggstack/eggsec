@@ -6,7 +6,7 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 
 1. **Centralized authorization**: All side-effecting operations must have an `OperationDescriptor` evaluated by `EnforcementContext::evaluate()` before execution. No handler may execute a tool without passing through enforcement.
 
-2. **No automated overrides**: Automated surfaces (`McpStrict`, `AgentStrict`, `CiStrict`) must never honor `ManualOverride`. Only `CliManual` and `TuiManual` surfaces honor overrides.
+2. **No automated overrides**: Automated surfaces (`McpStrict`, `AgentStrict`, `CiStrict`) must never honor `ManualOverride`. Only `CliManual`, `TuiManual`, and `DesktopGuiManual` surfaces honor overrides.
 
 3. **Fail-closed strict**: Strict surfaces (`McpStrict`, `AgentStrict`, `CiStrict`) must fail closed on `Warn`, `RequireConfirmation`, or `Deny`. Only `Allow` permits dispatch.
 
@@ -93,3 +93,13 @@ Normative rules that all code in the eggsec workspace must preserve. Violations 
 38. **Request surface is normalized to session surface**: The executor must derive its `ExecutionSurface` from `RuntimeExecutionContext` (session-bound), not from `RunRequest.surface`. Client-submitted surface is informational only and must not influence enforcement decisions or persisted state.
 
 39. **Unsupported task kinds are rejected before dispatch**: If the daemon's runtime capabilities do not include a submitted `TaskKind`, the task must be rejected during submission (before dispatch) rather than silently dropped or returned as an unexpected runtime error.
+
+## Desktop GUI Invariants
+
+40. **The desktop GUI is daemon-only**: `eggsec-gui` must not depend on `eggsec` (the engine), `eggsec-daemon`, `eggsec-cli` or `eggsec-tui`, and must not import them from any source file. Its only workspace dependencies are `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol` and `eggsec-ui-model`. All engine traffic travels over the daemon's Unix socket; the GUI performs no outbound HTTP and declares no TLS stack of its own. Enforced by architecture guards 155–157.
+
+41. **The published schema is descriptive, never authoritative**: The operation/request schema the daemon publishes (`DescribeOperations`) is a *description* of what a request looks like, not a source of authorization or of the truth about whether a task may run. The GUI may use it to generate a form and to give advisory type/bounds feedback, and it may deserialize the assembled request into the same `RunRequest` the engine will deserialize — but the engine's own validation remains the authority that decides whether a task runs. A published schema must never encode a per-operation policy rule, and no frontend may treat "the schema allows it" as "it is allowed".
+
+42. **The GUI's form is generated, not written**: The GUI must contain no per-operation code — no `match` or `switch` over the published task-kind variant names, and no hand-written table of operation names or fields. A task kind the engine has not published yet must get a form with no GUI change. Enforced by architecture guard 159.
+
+43. **The GUI's retention is bounded**: The GUI must cap the log lines it retains per task and the log lines it forwards per flush, and must report what it drops rather than discarding silently. Unbounded retention is a disqualifying defect, not a tuning problem. Enforced by architecture guard 160.

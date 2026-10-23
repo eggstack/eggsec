@@ -368,6 +368,12 @@ pub enum ExecutionSurface {
     CliManualStrict,
     /// TUI with strict-scope toggle (manual guarded, Phase 5).
     TuiManualStrict,
+    /// Desktop GUI interactive session (default manual permissive).
+    ///
+    /// A peer of the CLI and TUI manual surfaces: same permissive profile,
+    /// same manual-override rule. The GUI is a frontend, not a new policy
+    /// class.
+    DesktopGuiManual,
     /// MCP server entrypoint.
     McpServer,
     /// Autonomous security agent entrypoint.
@@ -384,7 +390,9 @@ impl ExecutionSurface {
     /// Derive the [`ExecutionProfile`] for this surface.
     pub fn profile(self) -> ExecutionProfile {
         match self {
-            Self::CliManual | Self::TuiManual => ExecutionProfile::ManualPermissive,
+            Self::CliManual | Self::TuiManual | Self::DesktopGuiManual => {
+                ExecutionProfile::ManualPermissive
+            }
             Self::CliManualStrict | Self::TuiManualStrict => ExecutionProfile::ManualGuarded,
             Self::McpServer => ExecutionProfile::McpStrict,
             Self::SecurityAgent => ExecutionProfile::AgentStrict,
@@ -398,7 +406,11 @@ impl ExecutionSurface {
     pub fn is_manual(self) -> bool {
         matches!(
             self,
-            Self::CliManual | Self::TuiManual | Self::CliManualStrict | Self::TuiManualStrict
+            Self::CliManual
+                | Self::TuiManual
+                | Self::CliManualStrict
+                | Self::TuiManualStrict
+                | Self::DesktopGuiManual
         )
     }
 
@@ -415,7 +427,10 @@ impl ExecutionSurface {
     /// Only permissive manual surfaces honor overrides. Strict and automated
     /// surfaces never accept `--yes` or `--allow-*` flags.
     pub fn honors_manual_override(self) -> bool {
-        matches!(self, Self::CliManual | Self::TuiManual)
+        matches!(
+            self,
+            Self::CliManual | Self::TuiManual | Self::DesktopGuiManual
+        )
     }
 
     /// Returns `true` if this surface requires an explicit scope manifest
@@ -431,6 +446,7 @@ impl ExecutionSurface {
             Self::TuiManual => "TUI manual",
             Self::CliManualStrict => "CLI manual strict",
             Self::TuiManualStrict => "TUI manual strict",
+            Self::DesktopGuiManual => "Desktop GUI manual",
             Self::McpServer => "MCP server",
             Self::SecurityAgent => "Security agent",
             Self::Ci => "CI",
@@ -447,6 +463,7 @@ impl std::fmt::Display for ExecutionSurface {
             Self::TuiManual => write!(f, "tui-manual"),
             Self::CliManualStrict => write!(f, "cli-manual-strict"),
             Self::TuiManualStrict => write!(f, "tui-manual-strict"),
+            Self::DesktopGuiManual => write!(f, "desktop-gui-manual"),
             Self::McpServer => write!(f, "mcp-server"),
             Self::SecurityAgent => write!(f, "security-agent"),
             Self::Ci => write!(f, "ci"),
@@ -912,6 +929,7 @@ mod tests {
     fn execution_surface_is_agent_controlled() {
         assert!(!ExecutionSurface::CliManual.is_agent_controlled());
         assert!(!ExecutionSurface::TuiManual.is_agent_controlled());
+        assert!(!ExecutionSurface::DesktopGuiManual.is_agent_controlled());
         assert!(ExecutionSurface::McpServer.is_agent_controlled());
         assert!(ExecutionSurface::SecurityAgent.is_agent_controlled());
         assert!(ExecutionSurface::Ci.is_agent_controlled());
@@ -922,6 +940,7 @@ mod tests {
     fn execution_surface_honors_manual_override() {
         assert!(ExecutionSurface::CliManual.honors_manual_override());
         assert!(ExecutionSurface::TuiManual.honors_manual_override());
+        assert!(ExecutionSurface::DesktopGuiManual.honors_manual_override());
         assert!(!ExecutionSurface::CliManualStrict.honors_manual_override());
         assert!(!ExecutionSurface::TuiManualStrict.honors_manual_override());
         assert!(!ExecutionSurface::McpServer.honors_manual_override());
@@ -934,16 +953,49 @@ mod tests {
     fn execution_surface_requires_explicit_manifest_for_networked() {
         assert!(!ExecutionSurface::CliManual.requires_explicit_manifest_for_networked());
         assert!(!ExecutionSurface::TuiManual.requires_explicit_manifest_for_networked());
+        assert!(!ExecutionSurface::DesktopGuiManual.requires_explicit_manifest_for_networked());
         assert!(ExecutionSurface::McpServer.requires_explicit_manifest_for_networked());
         assert!(ExecutionSurface::SecurityAgent.requires_explicit_manifest_for_networked());
         assert!(ExecutionSurface::Ci.requires_explicit_manifest_for_networked());
         assert!(ExecutionSurface::RestApi.requires_explicit_manifest_for_networked());
     }
 
+    /// The desktop GUI is a frontend, not a new policy class: it must derive
+    /// exactly the same profile as the CLI and TUI manual surfaces.
+    #[test]
+    fn desktop_gui_derives_the_manual_permissive_profile() {
+        assert_eq!(
+            ExecutionSurface::DesktopGuiManual.profile(),
+            ExecutionProfile::ManualPermissive
+        );
+        assert_eq!(
+            ExecutionSurface::DesktopGuiManual.profile(),
+            ExecutionSurface::CliManual.profile()
+        );
+        assert_eq!(
+            ExecutionSurface::DesktopGuiManual.profile(),
+            ExecutionSurface::TuiManual.profile()
+        );
+        assert!(ExecutionSurface::DesktopGuiManual.is_manual());
+        // A GUI is not a strict surface, so it must not behave like one.
+        assert_ne!(
+            ExecutionSurface::DesktopGuiManual.profile(),
+            ExecutionSurface::CliManualStrict.profile()
+        );
+        assert_ne!(
+            ExecutionSurface::DesktopGuiManual.profile(),
+            ExecutionSurface::TuiManualStrict.profile()
+        );
+    }
+
     #[test]
     fn execution_surface_display() {
         assert_eq!(format!("{}", ExecutionSurface::CliManual), "cli-manual");
         assert_eq!(format!("{}", ExecutionSurface::TuiManual), "tui-manual");
+        assert_eq!(
+            format!("{}", ExecutionSurface::DesktopGuiManual),
+            "desktop-gui-manual"
+        );
         assert_eq!(
             format!("{}", ExecutionSurface::CliManualStrict),
             "cli-manual-strict"
@@ -966,6 +1018,10 @@ mod tests {
         assert_eq!(ExecutionSurface::CliManual.label(), "CLI manual");
         assert_eq!(ExecutionSurface::TuiManual.label(), "TUI manual");
         assert_eq!(
+            ExecutionSurface::DesktopGuiManual.label(),
+            "Desktop GUI manual"
+        );
+        assert_eq!(
             ExecutionSurface::CliManualStrict.label(),
             "CLI manual strict"
         );
@@ -986,6 +1042,7 @@ mod tests {
             ExecutionSurface::TuiManual,
             ExecutionSurface::CliManualStrict,
             ExecutionSurface::TuiManualStrict,
+            ExecutionSurface::DesktopGuiManual,
             ExecutionSurface::McpServer,
             ExecutionSurface::SecurityAgent,
             ExecutionSurface::Ci,
@@ -995,6 +1052,32 @@ mod tests {
             let deserialized: ExecutionSurface = serde_json::from_str(&json).unwrap();
             assert_eq!(surface, deserialized);
         }
+    }
+
+    /// The desktop GUI label must be distinguishable from every other
+    /// surface label, in both its human-readable and its wire form.
+    #[test]
+    fn desktop_gui_labels_are_distinct() {
+        let gui_label = ExecutionSurface::DesktopGuiManual.label();
+        let gui_display = format!("{}", ExecutionSurface::DesktopGuiManual);
+        for other in [
+            ExecutionSurface::CliManual,
+            ExecutionSurface::TuiManual,
+            ExecutionSurface::CliManualStrict,
+            ExecutionSurface::TuiManualStrict,
+            ExecutionSurface::McpServer,
+            ExecutionSurface::SecurityAgent,
+            ExecutionSurface::Ci,
+            ExecutionSurface::RestApi,
+        ] {
+            assert_ne!(gui_label, other.label(), "the GUI label must be distinct");
+            assert_ne!(
+                gui_display,
+                format!("{}", other),
+                "the GUI wire label must be distinct"
+            );
+        }
+        assert_eq!(gui_display, "desktop-gui-manual");
     }
 }
 

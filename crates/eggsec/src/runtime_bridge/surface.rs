@@ -57,6 +57,7 @@ pub fn runtime_surface_to_execution_surface(
         RuntimeSurface::CliManualStrict => Ok(ExecutionSurface::CliManualStrict),
         RuntimeSurface::TuiManual => Ok(ExecutionSurface::TuiManual),
         RuntimeSurface::TuiManualStrict => Ok(ExecutionSurface::TuiManualStrict),
+        RuntimeSurface::DesktopGuiManual => Ok(ExecutionSurface::DesktopGuiManual),
         RuntimeSurface::Ci => Ok(ExecutionSurface::Ci),
         RuntimeSurface::McpServer => Ok(ExecutionSurface::McpServer),
         RuntimeSurface::RestApi => Ok(ExecutionSurface::RestApi),
@@ -78,6 +79,7 @@ pub fn execution_surface_to_runtime_surface(surface: &ExecutionSurface) -> Runti
         ExecutionSurface::CliManualStrict => RuntimeSurface::CliManualStrict,
         ExecutionSurface::TuiManual => RuntimeSurface::TuiManual,
         ExecutionSurface::TuiManualStrict => RuntimeSurface::TuiManualStrict,
+        ExecutionSurface::DesktopGuiManual => RuntimeSurface::DesktopGuiManual,
         ExecutionSurface::Ci => RuntimeSurface::Ci,
         ExecutionSurface::McpServer => RuntimeSurface::McpServer,
         ExecutionSurface::RestApi => RuntimeSurface::RestApi,
@@ -102,6 +104,10 @@ mod tests {
             (
                 RuntimeSurface::TuiManualStrict,
                 ExecutionSurface::TuiManualStrict,
+            ),
+            (
+                RuntimeSurface::DesktopGuiManual,
+                ExecutionSurface::DesktopGuiManual,
             ),
             (RuntimeSurface::Ci, ExecutionSurface::Ci),
             (RuntimeSurface::McpServer, ExecutionSurface::McpServer),
@@ -151,7 +157,11 @@ mod tests {
 
     #[test]
     fn manual_surfaces_honor_override_only_for_permissive() {
-        let permissive = [RuntimeSurface::CliManual, RuntimeSurface::TuiManual];
+        let permissive = [
+            RuntimeSurface::CliManual,
+            RuntimeSurface::TuiManual,
+            RuntimeSurface::DesktopGuiManual,
+        ];
         for rt in permissive {
             let exec = runtime_surface_to_execution_surface(rt.clone()).unwrap();
             assert!(
@@ -184,6 +194,7 @@ mod tests {
             RuntimeSurface::CliManualStrict,
             RuntimeSurface::TuiManual,
             RuntimeSurface::TuiManualStrict,
+            RuntimeSurface::DesktopGuiManual,
             RuntimeSurface::Ci,
             RuntimeSurface::McpServer,
             RuntimeSurface::RestApi,
@@ -205,6 +216,7 @@ mod tests {
             ExecutionSurface::CliManualStrict,
             ExecutionSurface::TuiManual,
             ExecutionSurface::TuiManualStrict,
+            ExecutionSurface::DesktopGuiManual,
             ExecutionSurface::Ci,
             ExecutionSurface::McpServer,
             ExecutionSurface::RestApi,
@@ -217,5 +229,55 @@ mod tests {
             let fwd = runtime_surface_to_execution_surface(rt).unwrap();
             assert_eq!(fwd, exec);
         }
+    }
+
+    /// The desktop GUI is a frontend, not a new policy class. It must derive
+    /// the same permissive manual profile as the CLI and TUI manual surfaces,
+    /// must honor operator overrides, and must never land on the strict side
+    /// of the manual/strict split.
+    #[test]
+    fn desktop_gui_is_a_manual_surface() {
+        let gui = runtime_surface_to_execution_surface(RuntimeSurface::DesktopGuiManual).unwrap();
+        assert_eq!(gui, ExecutionSurface::DesktopGuiManual);
+        assert_eq!(gui.profile(), ExecutionSurface::CliManual.profile());
+        assert_eq!(gui.profile(), ExecutionSurface::TuiManual.profile());
+        assert!(gui.is_manual());
+        assert!(gui.honors_manual_override());
+        assert!(!gui.is_agent_controlled());
+        assert!(!gui.requires_explicit_manifest_for_networked());
+        // A GUI session is never a strict session.
+        assert_ne!(gui.profile(), ExecutionSurface::CliManualStrict.profile());
+        assert_ne!(gui.profile(), ExecutionSurface::TuiManualStrict.profile());
+    }
+
+    /// The wire encodings of the pre-existing surfaces must not change when a
+    /// new surface is added. This is the snapshot that pins them.
+    #[test]
+    fn existing_surface_wire_encodings_are_unchanged() {
+        let expected = [
+            (RuntimeSurface::CliManual, "\"CliManual\""),
+            (RuntimeSurface::CliManualStrict, "\"CliManualStrict\""),
+            (RuntimeSurface::TuiManual, "\"TuiManual\""),
+            (RuntimeSurface::TuiManualStrict, "\"TuiManualStrict\""),
+            (RuntimeSurface::Ci, "\"Ci\""),
+            (RuntimeSurface::McpServer, "\"McpServer\""),
+            (RuntimeSurface::RestApi, "\"RestApi\""),
+            (RuntimeSurface::GrpcApi, "\"GrpcApi\""),
+            (RuntimeSurface::SecurityAgent, "\"SecurityAgent\""),
+            (RuntimeSurface::Unknown, "\"Unknown\""),
+        ];
+        for (surface, encoding) in expected {
+            assert_eq!(
+                serde_json::to_string(&surface).unwrap(),
+                encoding,
+                "the wire encoding of {:?} changed",
+                surface
+            );
+        }
+        // The new surface has its own encoding, and it is distinct.
+        assert_eq!(
+            serde_json::to_string(&RuntimeSurface::DesktopGuiManual).unwrap(),
+            "\"DesktopGuiManual\""
+        );
     }
 }

@@ -25,14 +25,43 @@ Persistent session host (`eggsec-daemon`), its IPC protocol (`eggsec-daemon-prot
 - Primary: Unix domain socket, line-based JSON protocol
 - Optional: loopback HTTP/SSE behind the `http-api` feature (daemon crate)
 
+The desktop GUI (`crates/eggsec-gui`) connects to this daemon over the Unix
+socket and nothing else — it never links the daemon crate. It requires an
+`eggsec-daemon --full-executor`: `eggsec daemon start` and a default-built
+`eggsec-daemon` host a **no-op executor** that answers every command correctly
+and rejects every task, which the GUI reports as "the daemon advertises no
+task kinds" rather than presenting a submit button that cannot work.
+
 ## Client Contract
 
 1. Connect to socket
-2. Send `DeclareClient { kind: ClientKind::Tui|Cli|..., label }` - must succeed before session-scoped commands
+2. Send `DeclareClient { kind: ClientKind::Tui|Cli|Gui|..., label }` - must succeed before session-scoped commands
 3. Authorization uses the `CommandPermission` enum (per-command RBAC)
 4. Observers cannot submit/cancel tasks (`ErrorCode::PermissionDenied`)
 5. On strict-surface sessions only the Owner can approve policies; `ApprovePolicy` returns `ErrorCode::Unsupported` until wired
 6. Durable retrieval (protocol v2, Phase E): `GetTaskResult { session_id, task_id }` → `TaskResult { status, outcome }` reads live state first, persisted snapshot second — reconnecting clients fetch completed results without event replay. Reconnect = re-declare + re-subscribe; missed events recover as state. See `docs/DAEMON_PARITY.md`.
+7. `DescribeOperations` publishes the canonical operation catalog plus a JSON Schema derived from the request DTOs. Read-only and additive: no session, no session role, but a **declared client** is required (same rule as the other daemon-wide reads). `DaemonCapabilities.operation_schema` advertises availability and is `#[serde(default)]`, so a client built against an older protocol still decodes a newer daemon's capabilities. A daemon too old to know the command answers `ErrorCode::UnsupportedCommand` — degrade to a static form set, never fail.
+8. Session-scoped audit events record the **session's runtime surface** label (`desktop-gui-manual`, `tui-manual`, `cli-manual`, ...), so each frontend is attributable in the persisted trail. Events with no session (`declare-client`, startup recovery, `approve-policy`) keep the literal `"daemon"`.
+
+## Client kinds
+
+`ClientKind` lives in `crates/eggsec-daemon-protocol/src/client_registry.rs`
+and is the shared `ClientKind` / `CommandPermission` RBAC type — there is no
+daemon-local copy, so daemon and clients cannot drift.
+
+`ClientKind::Gui` was added additively for the desktop GUI
+(`crates/eggsec-daemon-protocol/src/client_registry.rs:19`). The protocol
+version stays at 2: a daemon that predates the variant fails to deserialize
+the `DeclareClient` command and rejects the client, which is a fail-closed
+outcome rather than a silent misclassification. `ClientCommand` and
+`ServerMessage` variant sets are unchanged.
+
+The RBAC matrix's manual-approval arm now includes
+`RuntimeSurface::DesktopGuiManual` beside `TuiManual` and `CliManual`
+(`crates/eggsec-daemon-protocol/src/client_registry.rs:199`), so an unrelated
+controller may approve a policy on a GUI session exactly as on the CLI and TUI.
+That mirrors the classification `eggsec-policy` makes for the surface; the two
+must not drift.
 
 ## CLI Integration
 
@@ -66,6 +95,8 @@ cargo check --workspace --no-default-features   # dependency-rule baseline
 - `docs/DAEMON.md` - Transport config, schema, CLI reference
 - `architecture/daemon.md` - Persistence, session lifecycle, transport deep dive
 - `architecture/runtime.md` / `architecture/runtime_bridge.md` - Runtime types and bridge contract
+- `.opencode/skills/eggsec-gui/SKILL.md` - the desktop GUI client of this daemon
+- `.opencode/skills/eggsec-frontend-client/SKILL.md` - the shared runtime-client contract
 
 ## Phase D Hotspots (2026-09-09)
 

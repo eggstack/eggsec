@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The Eggsec desktop GUI's own window. Grants the core default permission set only: the GUI enables no plugin (no http, shell, fs, process, or updater), and every engine request travels over the daemon's Unix socket.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

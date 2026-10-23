@@ -193,6 +193,22 @@ impl DaemonHost {
         result
     }
 
+    /// The audit surface label for a session.
+    ///
+    /// Session-scoped audit events carry the *session's* runtime surface, not
+    /// a blanket "daemon" label, so a desktop GUI session is distinguishable
+    /// from a TUI session in the persisted audit trail. Events that have no
+    /// session — client declaration, startup recovery — are genuinely
+    /// daemon-level and keep "daemon".
+    fn session_surface_label(&self, session_id: &eggsec_runtime::SessionId) -> String {
+        self.session_access
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(session_id)
+            .map(|access| access.surface.label().to_owned())
+            .unwrap_or_else(|| "daemon".to_owned())
+    }
+
     /// Recover persisted session state from the store on startup.
     ///
     /// Loads all persisted sessions and reconstructs them in the runtime.
@@ -297,7 +313,7 @@ impl DaemonHost {
                 if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: format!("command-denied:{}", cmd.discriminant()),
-                        surface: "daemon".into(),
+                        surface: self.session_surface_label(session_id),
                         outcome: "denied".into(),
                         client_id: client_id.map(|c| c.to_string()),
                         session_id: Some(session_id.to_string()),
@@ -327,6 +343,18 @@ impl DaemonHost {
                     request_id: request_id.clone(),
                     code: ErrorCode::ClientNotDeclared,
                     message: "client must declare before listing persisted sessions".into(),
+                };
+            }
+        } else if let ClientCommand::DescribeOperations { request_id } = &cmd {
+            // The operation catalog and request schema are daemon-wide
+            // descriptive state rather than session state, so this command
+            // carries no session id — but it still requires a declared client
+            // identity, exactly like the other daemon-wide reads above.
+            if client_id.is_none() {
+                return ServerMessage::Error {
+                    request_id: request_id.clone(),
+                    code: ErrorCode::ClientNotDeclared,
+                    message: "client must declare before describing operations".into(),
                 };
             }
         }
@@ -360,6 +388,9 @@ impl DaemonHost {
                             bind_address: self.config.socket_path.clone(),
                             enabled: true,
                         }],
+                        // This daemon can always publish the operation catalog
+                        // and the derived request schema.
+                        operation_schema: true,
                     },
                 }
             }
@@ -420,6 +451,9 @@ impl DaemonHost {
                 } else {
                     surface
                 };
+                // The audit trail records the surface the session was created
+                // with, so a GUI session is distinguishable from a TUI one.
+                let audit_surface = surface.label().to_owned();
                 match self
                     .runtime()
                     .create_session_with_scope(Default::default(), surface.clone(), scope)
@@ -470,7 +504,7 @@ impl DaemonHost {
                                     store.as_ref(),
                                     PersistedAuditEvent {
                                         action: "create-session".into(),
-                                        surface: "daemon".into(),
+                                        surface: audit_surface,
                                         outcome: "allow".into(),
                                         client_id: client_id_str,
                                         session_id: Some(session_id_copy.to_string()),
@@ -577,6 +611,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("submit-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -588,7 +623,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "submit-task".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -637,6 +672,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("cancel-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -648,7 +684,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "cancel-task".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -694,6 +730,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("cancel-active", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -705,7 +742,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "cancel-active".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -749,6 +786,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("close-session", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -760,7 +798,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "close-session".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -978,6 +1016,28 @@ impl DaemonHost {
                     },
                 }
             }
+
+            ClientCommand::DescribeOperations { request_id } => {
+                // Read-only publication of the canonical operation catalog and
+                // the derived request schema (ADR-0008).
+                //
+                // The payload is assembled from immutable registry data, so it
+                // is safe to serve concurrently and reproduces exactly. This
+                // command creates no session, mutates no task state, and takes
+                // part in no authorization decision: it reads the catalog and
+                // a derived schema, and grants nothing.
+                //
+                // Access control is inherited from the surrounding dispatch
+                // rather than re-implemented here: the command carries no
+                // session id, so the session-scoped permission check above
+                // does not apply to it, and it is answerable before any
+                // session exists. A declared client identity is still
+                // required, exactly as for the other daemon-wide reads.
+                ServerMessage::Operations {
+                    request_id,
+                    operations: crate::operations::describe_operations(),
+                }
+            }
         }
     }
 
@@ -1179,6 +1239,309 @@ mod tests {
             }
             other => panic!("expected Capabilities, got {:?}", other),
         }
+    }
+
+    /// The daemon advertises that it can publish the operation catalog and the
+    /// derived request schema, so a client can discover the capability without
+    /// issuing the command and failing.
+    #[tokio::test]
+    async fn capabilities_advertise_the_operation_schema() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-schema".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert!(capabilities.operation_schema);
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// The command serves the canonical operation catalog together with the
+    /// derived request schema.
+    #[tokio::test]
+    async fn handle_describe_operations() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-1".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Operations {
+            request_id,
+            operations,
+        } = resp
+        else {
+            panic!("expected Operations, got {:?}", resp);
+        };
+        assert_eq!(request_id, "describe-1");
+        assert!(!operations.operations.is_empty());
+        assert_eq!(operations.task_kinds.len(), 30);
+        assert!(!operations.task_kind_schema.is_null());
+        // Every published operation names a canonical catalog id.
+        for operation in &operations.operations {
+            assert!(!operation.id.is_empty());
+            assert!(!operation.display_name.is_empty());
+        }
+    }
+
+    /// The published identity and policy fields must match the catalog field
+    /// for field. If this fails, the daemon published a transcribed copy
+    /// rather than reading the catalog.
+    #[tokio::test]
+    async fn describe_operations_matches_the_catalog() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-catalog".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Operations { operations, .. } = resp else {
+            panic!("expected Operations, got {:?}", resp);
+        };
+        assert_eq!(
+            operations.operations.len(),
+            eggsec_policy::ALL_OPERATION_METADATA.len()
+        );
+        for metadata in eggsec_policy::ALL_OPERATION_METADATA {
+            let published = operations
+                .operations
+                .iter()
+                .find(|operation| operation.id == metadata.id)
+                .expect("every catalog operation must be published");
+            assert_eq!(published.display_name, metadata.display_name);
+            assert_eq!(published.mode, metadata.mode);
+            assert_eq!(published.risk, metadata.risk);
+            assert_eq!(published.target_policy, metadata.target_policy.to_string());
+            assert_eq!(published.manual_exposable, metadata.manual_exposable);
+            assert_eq!(published.rest_exposable, metadata.rest_exposable);
+        }
+    }
+
+    /// The command is daemon-wide descriptive state, so it requires a declared
+    /// client identity exactly like the other daemon-wide reads. An undeclared
+    /// client is rejected by the surrounding dispatch, not by a bespoke rule.
+    #[tokio::test]
+    async fn describe_operations_requires_a_declared_client() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-undeclared".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Error {
+                code: ErrorCode::ClientNotDeclared,
+                ..
+            } => {}
+            other => panic!("expected ClientNotDeclared, got {:?}", other),
+        }
+    }
+
+    /// The command creates no task state and mutates no session state.
+    #[tokio::test]
+    async fn describe_operations_creates_no_task_state() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let before = host
+            .handle_command(
+                ClientCommand::ListSessions {
+                    request_id: "list-before".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let _ = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-no-state".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let after = host
+            .handle_command(
+                ClientCommand::ListSessions {
+                    request_id: "list-after".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Sessions {
+            sessions: before, ..
+        } = before
+        else {
+            panic!("expected Sessions, got {:?}", before);
+        };
+        let ServerMessage::Sessions {
+            sessions: after, ..
+        } = after
+        else {
+            panic!("expected Sessions, got {:?}", after);
+        };
+        assert_eq!(
+            serde_json::to_value(&before).expect("serializable"),
+            serde_json::to_value(&after).expect("serializable"),
+            "DescribeOperations must not create or mutate session state"
+        );
+    }
+
+    /// The payload is immutable registry data, so concurrent readers see the
+    /// same thing and none of them observes a partial result.
+    #[tokio::test]
+    async fn describe_operations_is_concurrency_safe() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let (first, second) = tokio::join!(
+            host.handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "concurrent-1".into(),
+                },
+                test_ctx(Some(client_id)),
+            ),
+            host.handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "concurrent-2".into(),
+                },
+                test_ctx(Some(client_id)),
+            ),
+        );
+        let ServerMessage::Operations {
+            operations: first_ops,
+            ..
+        } = first
+        else {
+            panic!("expected Operations, got {:?}", first);
+        };
+        let ServerMessage::Operations {
+            operations: second_ops,
+            ..
+        } = second
+        else {
+            panic!("expected Operations, got {:?}", second);
+        };
+        assert_eq!(
+            serde_json::to_value(&first_ops).expect("serializable"),
+            serde_json::to_value(&second_ops).expect("serializable"),
+        );
+    }
+
+    /// A desktop GUI session must be distinguishable from a TUI session in the
+    /// persisted audit trail: a session-scoped audit record carries the
+    /// session's runtime surface, not a blanket "daemon" label.
+    #[tokio::test]
+    async fn gui_session_audit_trail_carries_the_gui_surface_label() {
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let host = DaemonHost::new(
+            DaemonConfig {
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        );
+
+        for surface in [
+            eggsec_runtime::RuntimeSurface::DesktopGuiManual,
+            eggsec_runtime::RuntimeSurface::TuiManual,
+        ] {
+            let resp = host
+                .handle_command(
+                    ClientCommand::CreateSession {
+                        request_id: "gui-audit".into(),
+                        surface,
+                        scope: None,
+                        labels: vec![],
+                    },
+                    test_ctx(None),
+                )
+                .await;
+            assert!(
+                matches!(resp, ServerMessage::SessionCreated { .. }),
+                "the session must be created"
+            );
+        }
+
+        // The audit write happens on a fire-and-forget persistence task, so
+        // the rows appear shortly after the command returns.
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if surfaces.len() >= 2 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual"),
+            "a GUI session must be auditable as desktop-gui-manual, got {surfaces:?}"
+        );
+        assert!(
+            surfaces.iter().any(|surface| surface == "tui-manual"),
+            "a TUI session must be auditable as tui-manual, got {surfaces:?}"
+        );
+        assert!(
+            !surfaces.iter().any(|surface| surface == "daemon"),
+            "a session-scoped audit event must not carry the blanket daemon label, got {surfaces:?}"
+        );
+    }
+
+    /// A session-less daemon event is genuinely daemon-level and keeps the
+    /// "daemon" label.
+    #[tokio::test]
+    async fn session_less_audit_events_keep_the_daemon_label() {
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let host = DaemonHost::new(
+            DaemonConfig {
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        );
+        let _ = host
+            .handle_command(
+                ClientCommand::DeclareClient {
+                    request_id: "declare-audit".into(),
+                    kind: ClientKind::Tui,
+                    label: None,
+                },
+                test_ctx(None),
+            )
+            .await;
+
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if !surfaces.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(surfaces, vec!["daemon".to_owned()]);
     }
 
     #[tokio::test]
@@ -2061,6 +2424,7 @@ mod tests {
         for kind in [
             ClientKind::Tui,
             ClientKind::Cli,
+            ClientKind::Gui,
             ClientKind::Mcp,
             ClientKind::Rest,
             ClientKind::Agent,

@@ -4364,6 +4364,501 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 151. ADR-0008: the published operation schema is descriptive only. It must
+# never be imported by, or consulted by, an authorization, dispatch, scope,
+# or policy path -- if it were, the artifact would become a second policy
+# surface and `OperationMetadata` would stop being the single source of
+# truth. The engine and the policy kernel must not even gain the derivation
+# dependency, so the schema is unreachable from an enforcement path by
+# construction, not by convention.
+echo ""
+echo "--- Check 151: published schema stays off the authorization path ---"
+SECTION_FAIL=0
+SCHEMA_PATTERN='schemars|schema_for!|eggsec_runtime::schema|describe_operations|DescribeOperations'
+# The engine's execution and bridge halves.
+for dir in crates/eggsec/src/dispatch crates/eggsec/src/runtime_bridge crates/eggsec-policy/src; do
+  if code_search "$dir" "$SCHEMA_PATTERN" | grep -q .; then
+    echo "FAIL: $dir reaches for the published schema; the schema is descriptive and must stay off the authorization path."
+    code_search "$dir" "$SCHEMA_PATTERN" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The engine's policy and scope halves.
+for f in crates/eggsec/src/config/policy.rs crates/eggsec/src/config/policy_target.rs crates/eggsec/src/config/policy_catalog.rs crates/eggsec/src/config/policy_decision.rs crates/eggsec/src/config/policy_approval.rs crates/eggsec/src/config/scope.rs crates/eggsec/src/config/scope_address.rs; do
+  if [[ -f "$f" ]] && rg -q "$SCHEMA_PATTERN" "$f" 2>/dev/null; then
+    echo "FAIL: $f reaches for the published schema; the schema is descriptive and must stay off the authorization path."
+    rg -n "$SCHEMA_PATTERN" "$f" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The enforcement owners must not gain the derivation dependency.
+if rg -q '^schemars' crates/eggsec/Cargo.toml crates/eggsec-policy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: the engine or the policy kernel gained a schemars dependency; the schema must be unreachable from an enforcement path."
+  rg -n '^schemars' crates/eggsec/Cargo.toml crates/eggsec-policy/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the published schema is unreachable from every authorization, dispatch, scope, and policy path."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 152. ADR-0008: no hand-written parameter table. A transcribed parameter
+# table is a second source of truth: it drifts silently the moment a request
+# struct gains, drops, or renames a field, and nothing fails. The canonical
+# request DTOs live in eggsec-runtime; no other frontend-neutral crate may
+# define a struct with a params name.
+#
+# The engine and the Python bindings are deliberately out of scope: the engine
+# owns REST-surface DTOs (e.g. PaginationParams) and the bindings own their
+# own argument structs. Neither publishes a request-parameter table.
+echo ""
+echo "--- Check 152: no hand-written parameter table ---"
+SECTION_FAIL=0
+for crate in eggsec-core eggsec-tool-core eggsec-runtime eggsec-output eggsec-ui-model eggsec-report-model eggsec-daemon-protocol eggsec-policy eggsec-frontend-client; do
+  dir="crates/${crate}/src"
+  [[ -d "$dir" ]] || continue
+  HITS="$(rg -n 'pub struct \w*Params\b' "$dir" 2>/dev/null | grep -v '^crates/eggsec-runtime/src/request.rs:' || true)"
+  if [[ -n "$HITS" ]]; then
+    echo "FAIL: $crate defines a params struct; only crates/eggsec-runtime/src/request.rs owns the canonical request DTOs."
+    echo "$HITS"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the canonical request DTOs are the only params structs in the frontend-neutral crates."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 153. The frontend-client crate is the shared runtime contract for every
+# interactive frontend. It must stay free of any frontend framework and of
+# the engine, so a second frontend can depend on it without inheriting a TUI
+# -- or the whole engine -- along with it.
+echo ""
+echo "--- Check 153: frontend-client crate stays framework-free ---"
+SECTION_FAIL=0
+FC_MANIFEST="crates/eggsec-frontend-client/Cargo.toml"
+if [[ ! -f "$FC_MANIFEST" ]]; then
+  echo "FAIL: $FC_MANIFEST is missing (the frontend-client crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for dep in 'eggsec =' 'eggsec-tui' 'ratatui' 'crossterm'; do
+    if rg -q "^${dep}" "$FC_MANIFEST" 2>/dev/null; then
+      echo "FAIL: $FC_MANIFEST references forbidden dep '$dep' (the frontend client carries no frontend framework)."
+      rg -n "^${dep}" "$FC_MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if code_search crates/eggsec-frontend-client/src 'ratatui|crossterm|eggsec_tui|eggsec::' | grep -q .; then
+    echo "FAIL: crates/eggsec-frontend-client/src reaches for a frontend framework or the engine."
+    code_search crates/eggsec-frontend-client/src 'ratatui|crossterm|eggsec_tui|eggsec::' || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the frontend-client crate depends on no frontend framework and not on the engine."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 154. The desktop GUI must remain a *manual* surface. A future edit could
+# silently demote it (drop it from honors_manual_override, move it onto an
+# agent-controlled arm, give it a strict profile) or drop the conversion
+# entirely, and the GUI would then be evaluated under the wrong rules. This
+# guard pins the variant's presence, its manual classification, and the one
+# conversion table that owns it.
+echo ""
+echo "--- Check 154: desktop GUI stays a manual surface ---"
+SECTION_FAIL=0
+GUI_RUNTIME="crates/eggsec-runtime/src/request.rs"
+GUI_POLICY="crates/eggsec-policy/src/policy.rs"
+GUI_BRIDGE="crates/eggsec/src/runtime_bridge/surface.rs"
+if ! rg -q '^\s+DesktopGuiManual,' "$GUI_RUNTIME" 2>/dev/null; then
+  echo "FAIL: $GUI_RUNTIME no longer declares RuntimeSurface::DesktopGuiManual."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q '^\s+DesktopGuiManual,' "$GUI_POLICY" 2>/dev/null; then
+  echo "FAIL: $GUI_POLICY no longer declares ExecutionSurface::DesktopGuiManual."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'RuntimeSurface::DesktopGuiManual => Ok\(ExecutionSurface::DesktopGuiManual\)' "$GUI_BRIDGE" 2>/dev/null; then
+  echo "FAIL: $GUI_BRIDGE no longer maps RuntimeSurface::DesktopGuiManual to the execution surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'ExecutionSurface::DesktopGuiManual => RuntimeSurface::DesktopGuiManual' "$GUI_BRIDGE" 2>/dev/null; then
+  echo "FAIL: $GUI_BRIDGE no longer maps ExecutionSurface::DesktopGuiManual back to the wire surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The manual/strict split is decided by honors_manual_override() and
+# is_agent_controlled(); the GUI must be on the manual side of both.
+GUI_MANUAL_ARM="$(sed -n '/pub fn honors_manual_override/,/^    }/p' "$GUI_POLICY")"
+if ! printf '%s' "$GUI_MANUAL_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: honors_manual_override() no longer includes the desktop GUI surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+GUI_AGENT_ARM="$(sed -n '/pub fn is_agent_controlled/,/^    }/p' "$GUI_POLICY")"
+if printf '%s' "$GUI_AGENT_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: is_agent_controlled() includes the desktop GUI surface; the GUI is a manual surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+GUI_PROFILE_ARM="$(sed -n '/pub fn profile/,/^    }/p' "$GUI_POLICY")"
+if ! printf '%s' "$GUI_PROFILE_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: profile() no longer derives a profile for the desktop GUI surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the desktop GUI surface is declared in both enums, converts in both directions, and stays manual."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 155. The desktop GUI is a daemon-only frontend: it reaches the engine
+# through the daemon's Unix socket, using the shared frontend-client
+# contract. A GUI that linked the engine (or the daemon, or another
+# frontend) directly would open a second path to the engine -- one with no
+# daemon session, no daemon audit trail, and no daemon-issued scope. The
+# dependency direction is one-way: engine -> transport, frontend -> daemon.
+#
+# `eggsec-frontend-client`, `eggsec-runtime`, and `eggsec-daemon-protocol`
+# ARE permitted: they are the frontend-neutral wire contract. The match is
+# on the EXACT dependency name, never a substring -- `eggsec` as a prefix
+# would false-positive on all three of them.
+echo ""
+echo "--- Check 155: GUI crate links no engine ---"
+SECTION_FAIL=0
+GUI_MANIFEST="crates/eggsec-gui/Cargo.toml"
+# The forbidden source-level shapes: a crate path (`eggsec::`) or an import
+# statement naming one of the four crates. The crate name must be followed
+# by `::` or end the `use` item, so `eggsec_frontend_client::`,
+# `eggsec_runtime::`, and `eggsec_daemon_protocol::` stay permitted.
+GUI_FORBIDDEN_PATH='(^|[^[:alnum:]_])(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)::|(^|[^[:alnum:]_])use[[:space:]]+(::)?(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)([[:space:]]|;)|(^|[^[:alnum:]_])extern[[:space:]]+crate[[:space:]]+(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)([[:space:]]|;)'
+if [[ ! -f "$GUI_MANIFEST" ]]; then
+  echo "FAIL: $GUI_MANIFEST is missing (the desktop GUI crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for dep in 'eggsec' 'eggsec-daemon' 'eggsec-cli' 'eggsec-tui'; do
+    if rg -q "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" "$GUI_MANIFEST" 2>/dev/null; then
+      echo "FAIL: $GUI_MANIFEST declares forbidden dep '${dep}' (the GUI reaches the engine only through the daemon socket)."
+      rg -n "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" "$GUI_MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if code_search crates/eggsec-gui/src "$GUI_FORBIDDEN_PATH" | grep -q .; then
+    echo "FAIL: crates/eggsec-gui/src imports or reaches the engine, the daemon, or another frontend crate."
+    code_search crates/eggsec-gui/src "$GUI_FORBIDDEN_PATH" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI crate depends on no engine, daemon, or other frontend crate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 156. The shell framework stays inside the GUI crate. Tauri owns a window,
+# a webview, and an IPC bridge; a second crate depending on it would put a
+# second window/IPC owner in the workspace and the daemon-IPC contract
+# would stop having exactly one frontend implementation.
+#
+# The root manifest legitimately carries the shared version pins under
+# `[workspace.dependencies]` (tauri, tauri-build, tauri-runtime,
+# tauri-runtime-wry, tauri-macros, tauri-utils): that is the workspace's
+# single place to pin the MSRV-safe versions, and it is ALLOWED. What is
+# forbidden is any crate OTHER than crates/eggsec-gui declaring a
+# dependency on one of them, or mentioning `tauri` at all.
+echo ""
+echo "--- Check 156: shell framework stays inside the GUI crate ---"
+SECTION_FAIL=0
+GUI_CRATE_MANIFEST="crates/eggsec-gui/Cargo.toml"
+for manifest in crates/*/Cargo.toml; do
+  [[ "$manifest" == "$GUI_CRATE_MANIFEST" ]] && continue
+  if rg -q 'tauri' "$manifest" 2>/dev/null; then
+    echo "FAIL: $manifest mentions 'tauri'; the shell framework belongs to crates/eggsec-gui alone."
+    rg -n 'tauri' "$manifest" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The root manifest is a virtual manifest: it may PIN tauri for the
+# workspace, but it must never declare a tauri dependency of its own.
+ROOT_MANIFEST="Cargo.toml"
+ROOT_TAURI_ELSEWHERE=$(awk '
+  /^\[[^]]*\][[:space:]]*$/ { section = $0 }
+  section != "[workspace.dependencies]" && /tauri/ && $0 !~ /^[[:space:]]*#/ { print FILENAME ":" FNR ":" $0 }
+' "$ROOT_MANIFEST" 2>/dev/null || true)
+if [[ -n "$ROOT_TAURI_ELSEWHERE" ]]; then
+  echo "FAIL: $ROOT_MANIFEST references 'tauri' outside [workspace.dependencies]; only crates/eggsec-gui may depend on the shell framework."
+  echo "$ROOT_TAURI_ELSEWHERE"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no crate other than crates/eggsec-gui declares or mentions a tauri dependency."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 157. The GUI declares no second TLS stack. The GUI performs no outbound
+# HTTP of its own: every engine request travels over the daemon's Unix
+# socket. A TLS stack in the GUI's graph would be a second, unowned TLS
+# policy -- and the workspace's TLS invariant is ring-only, with no
+# `rustls-tls`/`native-tls` exception.
+#
+# The scope is the GUI crate's manifest, deliberately NOT the workspace: the
+# engine's transport stack and the daemon's SQLite stack legitimately carry
+# reqwest/rustls, so a workspace-wide scan would be a false positive. The
+# root manifest is consulted only to NAME the workspace pin in the failure
+# message, never to police it.
+echo ""
+echo "--- Check 157: GUI declares no second TLS stack ---"
+SECTION_FAIL=0
+if [[ ! -f "$GUI_MANIFEST" ]]; then
+  echo "FAIL: $GUI_MANIFEST is missing (the desktop GUI crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  # Comments are stripped FIRST: the manifest documents this ban in prose
+  # ("`rustls-tls` and `native-tls` are deliberately NOT enabled"), and a
+  # guard that trips on its own documentation is a guard nobody trusts.
+  GUI_MANIFEST_CODE=$(sed -e 's/#.*$//' "$GUI_MANIFEST")
+  # A. No direct TLS dependency -- neither a path dependency nor a
+  #    `workspace = true` pin.
+  for dep in 'reqwest' 'rustls' 'native-tls'; do
+    if printf '%s\n' "$GUI_MANIFEST_CODE" | rg -q "^${dep}([ =.]|$)|\[dependencies\.${dep}\]"; then
+      echo "FAIL: $GUI_MANIFEST declares forbidden TLS dep '${dep}' (the GUI talks to the daemon over a Unix socket and needs no TLS stack)."
+      printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # B. No TLS feature enabled on any dependency: `rustls-tls` (reqwest) and
+  #    `native-tls` are the two ways a TLS stack enters through a feature.
+  if printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n '(^|[^[:alnum:]_-])(rustls-tls|native-tls)([^[:alnum:]_-]|$)'; then
+    echo "FAIL: $GUI_MANIFEST enables a TLS feature (rustls-tls / native-tls); the GUI must not add a second TLS stack."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # C. The workspace may pin reqwest/rustls/native-tls for OTHER crates; the
+  #    GUI must not inherit one through `workspace = true`. Report the root
+  #    pin by name so the fix is obvious.
+  for dep in 'reqwest' 'rustls' 'native-tls'; do
+    if rg -q "^${dep}([ =.]|$)" "$ROOT_MANIFEST" 2>/dev/null \
+      && printf '%s\n' "$GUI_MANIFEST_CODE" | rg -q "^${dep}([ =.]|$)"; then
+      echo "FAIL: $ROOT_MANIFEST pins workspace dep '${dep}' and $GUI_MANIFEST inherits it; the GUI must not add a second TLS stack."
+      rg -n "^${dep}([ =.]|$)" "$ROOT_MANIFEST" 2>/dev/null || true
+      printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n "^${dep}([ =.]|$)" || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI crate declares no TLS dependency and enables no TLS feature."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 158. The GUI's CSP forbids remote origins. The webview loads local assets
+# and talks to the daemon over the Tauri IPC bridge only. A wildcard source
+# or a remote http(s) origin in the CSP would let an injected or compromised
+# asset reach the network -- the one capability the daemon-only GUI is
+# designed not to have.
+#
+# The Tauri IPC origin `http://ipc.localhost` is the single permitted
+# exception: it is the bridge to the Rust side, not a network origin.
+echo ""
+echo "--- Check 158: GUI CSP forbids remote origins ---"
+SECTION_FAIL=0
+GUI_CONF="crates/eggsec-gui/tauri.conf.json"
+if [[ ! -f "$GUI_CONF" ]]; then
+  echo "FAIL: $GUI_CONF is missing (the desktop GUI shell config must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to parse $GUI_CONF (the CSP check reads app.security.csp)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_CONF" <<'PYEOF' 2>&1; then
+import json, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text())
+except Exception as exc:
+    print(f"FAIL: {path} is not valid JSON: {exc}")
+    sys.exit(1)
+
+security = ((data.get("app") or {}).get("security") or {})
+csp = security.get("csp")
+if not isinstance(csp, str) or not csp.strip():
+    print(f"FAIL: {path} does not define app.security.csp; the GUI webview needs an explicit CSP.")
+    sys.exit(1)
+
+ALLOWED_REMOTE = {"http://ipc.localhost"}
+WILDCARD_DIRECTIVES = {"connect-src", "script-src", "default-src"}
+problems = []
+for directive in csp.split(";"):
+    directive = directive.strip()
+    if not directive:
+        continue
+    parts = directive.split()
+    name, sources = parts[0], parts[1:]
+    for source in sources:
+        if name in WILDCARD_DIRECTIVES and "*" in source:
+            problems.append(f"{name} allows the wildcard source '{source}'")
+        if source.startswith("http://") or source.startswith("https://"):
+            if source not in ALLOWED_REMOTE:
+                problems.append(f"{name} allows the remote origin '{source}'")
+        elif source.startswith("//"):
+            problems.append(f"{name} allows the protocol-relative origin '{source}'")
+if problems:
+    print(f"FAIL: {path} app.security.csp allows a wildcard source or a remote origin:")
+    for problem in problems:
+        print(f"      {problem}")
+    print(f"      offending CSP: {csp}")
+    print(f"      the only permitted remote origin is {sorted(ALLOWED_REMOTE)[0]}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI CSP allows no wildcard source and no remote origin."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 159. The desktop GUI's forms are generated from the schema the daemon
+# publishes. A GUI that named an operation, a task-kind variant, or a field
+# would carry a second, hand-maintained catalog: it would drift silently the
+# moment the engine published a new operation, and the drift would show up
+# as a missing button rather than as a failure.
+#
+# The list of task-kind variants is READ FROM THE RUNTIME, not transcribed
+# here: a guard that hardcoded the thirty names would itself be the
+# hand-written table this check exists to prevent, and it would go stale
+# the day the engine published a thirty-first variant.
+#
+# The Rust side is searched in its PRODUCTION half only. A test may use a
+# variant as a fixture -- there are fixtures like that today -- but
+# production code may not name one.
+echo ""
+echo "--- Check 159: the GUI carries no per-operation form code ---"
+SECTION_FAIL=0
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+TASK_KIND_SOURCE="crates/eggsec-runtime/src/request.rs"
+TASK_KIND_VARIANTS=""
+if [[ -f "$TASK_KIND_SOURCE" ]]; then
+  TASK_KIND_VARIANTS="$(sed -n '/pub enum TaskKind/,/^}/p' "$TASK_KIND_SOURCE" \
+    | rg -o '^[[:space:]]+([A-Z][A-Za-z0-9]*)\(' -r '$1' | sort -u)"
+fi
+if [[ -z "$TASK_KIND_VARIANTS" ]]; then
+  echo "FAIL: could not read the task-kind variants from $TASK_KIND_SOURCE; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for variant in $TASK_KIND_VARIANTS; do
+    # The frontend has no test half: search it whole.
+    if [[ -d "$GUI_FRONTEND_DIR" ]]; then
+      FRONTEND_HITS="$(rg -n "\b${variant}\b" "$GUI_FRONTEND_DIR" 2>/dev/null || true)"
+      if [[ -n "$FRONTEND_HITS" ]]; then
+        echo "FAIL: the frontend names the task-kind variant '$variant'; the form must be generated from the published schema."
+        echo "$FRONTEND_HITS"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    fi
+    # The Rust side: the production half only.
+    for gui_file in "$GUI_SRC_DIR"/*.rs; do
+      [[ -f "$gui_file" ]] || continue
+      GUI_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$gui_file")"
+      if printf '%s' "$GUI_PRODUCTION" | rg -q "\b${variant}\b"; then
+        echo "FAIL: $gui_file names the task-kind variant '$variant'; the form engine must be schema-driven."
+        printf '%s' "$GUI_PRODUCTION" | rg -n "\b${variant}\b" || true
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI names no task-kind variant; its forms come from the published schema."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 160. The GUI's task state is a BOUNDED view of the daemon's event stream.
+# `TaskLog` is the high-cardinality event type: a task that logs thousands of
+# lines must not be able to grow the GUI's memory without bound. The ring
+# keeps a capped number of lines per task and counts what it drops, so the
+# loss is reported rather than silent.
+#
+# Unbounded retention is a disqualifying defect, not a tuning problem, so
+# this check pins the cap's existence rather than its value: a later
+# milestone may move the number, but it may not remove the bound.
+echo ""
+echo "--- Check 160: the GUI retains no unbounded event log ---"
+SECTION_FAIL=0
+GUI_TASKS="crates/eggsec-gui/src/tasks.rs"
+if [[ ! -f "$GUI_TASKS" ]]; then
+  echo "FAIL: $GUI_TASKS is missing (the GUI's task state must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! rg -q 'MAX_LOG_LINES_PER_TASK' "$GUI_TASKS" 2>/dev/null; then
+    echo "FAIL: $GUI_TASKS declares no log-line cap; the GUI's task state must bound its retention."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'MAX_LOG_LINES_PER_FLUSH' "$GUI_TASKS" 2>/dev/null; then
+    echo "FAIL: $GUI_TASKS declares no forward-flush cap; the GUI must not queue log lines without bound."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # The retained lines live in a capped ring, not in a Vec that grows. The
+  # check is scoped to the ring struct itself: `Vec<LogLine>` elsewhere in
+  # the module is fine -- a serialized snapshot of the ring and a single
+  # event's batch are both bounded by the ring -- but the ring itself must
+  # never be an unbounded accumulator.
+  if ! python3 - "$GUI_TASKS" <<'PYEOF'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+
+match = re.search(r"(?:pub\s+)?struct\s+LogRing\s*\{", text)
+if not match:
+    print(f"FAIL: {path} declares no LogRing struct; the GUI's retained log lines must live in a bounded ring.")
+    sys.exit(1)
+
+depth = 0
+end = match.end()
+for index in range(match.end() - 1, len(text)):
+    if text[index] == "{":
+        depth += 1
+    elif text[index] == "}":
+        depth -= 1
+        if depth == 0:
+            end = index
+            break
+body = text[match.start():end]
+
+problems = []
+if "VecDeque<LogLine>" not in body:
+    problems.append("the ring does not hold its lines in a VecDeque")
+if "Vec<LogLine>" in body:
+    problems.append("the ring holds its lines in an unbounded Vec")
+if not re.search(r"\bcapacity\b", body):
+    problems.append("the ring declares no capacity")
+if re.search(r"(?<!_)\.push\(", body):
+    problems.append("the ring pushes with push() rather than push_back()")
+
+if problems:
+    print(f"FAIL: {path} does not bound its retained log lines:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+  then
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's task state bounds its log retention and reports what it drops."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
