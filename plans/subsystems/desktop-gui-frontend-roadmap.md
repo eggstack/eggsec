@@ -118,8 +118,14 @@ The subsystem **does not own**:
 The engine is already frontend-neutral, and the workspace already contains
 most of the pieces a GUI needs. Milestones 001–005 have since turned those
 pieces into a working desktop frontend; what remains is coverage, export, and
-daemon lifecycle — not the foundation. Milestones 006 and 007 are **planned and
-registered** (2026-10-23) but not yet implemented.
+daemon lifecycle — not the foundation. Milestones 006 through 009 are
+**planned and registered** (2026-10-23) but not yet implemented.
+
+**The supported-platform set is decided.** `ADR-0010` fixes the desktop GUI's
+platforms at **Linux and macOS** and records **Windows as out of scope**, with
+the root cause named: the daemon's transport is a Unix domain socket, so the
+GUI does not compile for Windows. The engine, CLI, TUI, and Python surfaces are
+unaffected.
 
 **What exists today:**
 
@@ -202,6 +208,35 @@ registered** (2026-10-23) but not yet implemented.
    socket-path environment variable. (The count was previously recorded as
    four; it is six, and the GUI's own source comment understates it further.)
    Collapsing the duplication belongs to a corrective plan, not to this roadmap.
+6. **A daemon built the way the daemon builds itself exposes almost nothing.**
+   `eggsec-daemon`'s `full-executor` feature enables `eggsec/cli`, and the
+   engine's `cli` feature enables only `clap` — so a `--full-executor` daemon
+   links the engine with **none** of the engine's 28 `full`-aggregate members.
+   Milestone 006's coverage value ("the GUI reaches the engine's full feature
+   set") is therefore unreachable without a daemon feature profile, which is
+   **milestone 008's** work.
+7. **Nothing installs the daemon binary, and `eggsec daemon start` advertises
+   capabilities it cannot execute.** `cargo install --path crates/eggsec-cli`
+   installs only `eggsec`; there is no `PATH` or sidecar convention for
+   `eggsec-daemon`. Meanwhile `eggsec daemon start` hosts a no-op executor
+   that advertises **20** task kinds and rejects every task, and prints
+   "Daemon started" after a fixed 100 ms whether or not the socket bound. The
+   CLI's own doc comment claims the command "delegates to the daemon binary
+   logic", which the code does not do. Milestone 009 owns the obtainability
+   path and the start honesty fix; the CLI-side defect is visible to CLI users
+   today, independently of this roadmap.
+
+8. **The GUI's manual surface is not in the engine's permissive set.**
+   `resolve_loaded_scope` treats only `RuntimeSurface::CliManual` and
+   `RuntimeSurface::TuiManual` as permissive
+   (`crates/eggsec/src/runtime_bridge/executor.rs:70-73`). A
+   `DesktopGuiManual` session with a non-explicit scope therefore takes the
+   strict branch and **fails closed** (`:102-113`) instead of receiving the
+   default empty scope the CLI and TUI get. The GUI is documented — here and in
+   `ADR-0007` — as a permissive manual surface, so this is a **behavioural
+   divergence**, not a design choice. It is an engine-side defect in the
+   runtime bridge, outside the GUI crate, and it is not owned by any milestone
+   in this roadmap. It is recorded here so it is not lost.
 
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
@@ -514,7 +549,8 @@ Class: operational
 Objective: qualify the GUI on the supported platform matrix and hand the
 binary to the separately-managed distribution process.
 
-Dependencies: M6 (hard); distribution policy (operational).
+Dependencies: M6 (hard); M8 and M9 (hard — a qualification run needs a daemon
+that can be built and obtained); distribution policy (operational).
 
 Deliverable boundary: a qualified build per supported platform, documented
 system prerequisites, and a handoff artifact for the distribution workstream.
@@ -523,8 +559,10 @@ system prerequisites, and a handoff artifact for the distribution workstream.
 User or operator value: an installable desktop build exists for the
 platforms the project supports.
 
-Exit conditions: each supported platform builds and launches; the Linux
-system prerequisites are documented; known limitations are recorded.
+Exit conditions: **Linux and macOS** — each builds and launches, with the
+Linux system prerequisites documented and known limitations recorded.
+**Windows is out of scope** for the desktop GUI and is recorded as such
+(`ADR-0010`); it is not a qualified platform and must not appear as one.
 
 Deferred work: signing, notarization, installers, update channels — all
 owned by the separate distribution workstream.
@@ -533,18 +571,95 @@ Implementation plan: `plans/implementation/desktop-gui-frontend/007-packaging-an
 (**planned 2026-10-23**, `Primary class: operational`; not yet implemented).
 
 The plan is authored to be handed off **once M6 closes**; M6 is its hard
-dependency and that is stated in the plan rather than papered over. One finding
-recorded at plan-authoring time bounds the milestone's Windows row: the GUI
-**does not currently compile on Windows**, because the frontend client uses
-`tokio::net::UnixStream` unconditionally and the daemon's transport is a Unix
-domain socket. Windows is therefore a **named limitation to escalate**, not a
-qualification to claim. The platform matrix has one row per platform
-(Linux/macOS/Windows) and one column per required behaviour — build, launch,
-connect, submit, cancel, render, export — each cell carrying evidence or a
-justified gap, because `make check` never exercises a windowed application.
-`bundle.active` stays `false`, so this milestone hands over the binary and a
-reproducible build recipe rather than making a packaging decision that belongs
-to the distribution workstream.
+dependency and that is stated in the plan rather than papered over.
+
+**The supported-platform set is now decided.** `ADR-0010` fixes it at **Linux
+(x86_64 glibc) and macOS (x86_64 and arm64)**, and records **Windows as out of
+scope** for the desktop GUI. The root cause is the daemon's transport: the
+frontend client imports `tokio::net::UnixStream` unconditionally
+(`crates/eggsec-frontend-client/src/daemon.rs:9`) and the daemon imports
+`std::os::unix::fs::PermissionsExt` and `tokio::net::UnixListener`
+unconditionally (`crates/eggsec-daemon/src/server.rs:1,5`), so the GUI does
+not compile for Windows. That is a daemon-transport property, not a GUI defect,
+and `ADR-0009`'s egui fallback does not address it — the obstacle is the
+transport, not the shell. Re-entry is gated on a **daemon-subsystem** transport
+milestone with its own ADR, not on GUI work.
+
+The platform matrix therefore has one row per platform — two qualified rows
+and one explicitly out-of-scope row with its root cause named — and one column
+per required behaviour: build, launch, connect, submit, cancel, render, export.
+Each cell carries evidence or a justified gap, because `make check` never
+exercises a windowed application. `bundle.active` stays `false`, so this
+milestone hands over the binary and a reproducible build recipe rather than
+making a packaging decision that belongs to the distribution workstream.
+
+### Milestone 8 — Daemon feature profile and build recipe
+
+Class: capability
+
+Objective: make it possible to **build** a daemon that actually exposes the
+engine's feature set, and to record how to build it.
+
+Dependencies: none (independent of M5–M7, but it gates M6's coverage value).
+
+Deliverable boundary: an explicit daemon feature profile — the engine features
+a GUI-serving daemon enables — published as a cargo feature on
+`crates/eggsec-daemon`; the system prerequisites each profile implies; and a
+reproducible build recipe per profile.
+
+User or operator value: milestone 006's stated value — "the GUI reaches the
+engine's full feature set" — is unreachable without it, because a daemon built
+the way the daemon builds itself today links the engine with **none** of the
+engine's 28 `full`-aggregate members.
+
+Exit conditions: a daemon built with the profile reports the profile's feature
+set; the recipe is documented with the per-profile system prerequisites; and
+the profile is a cargo feature on the daemon crate, not a hand-maintained list.
+
+Deferred work: the profile's **runtime publication** belongs to milestone 006
+(the additive enabled-features handshake field); the daemon's **install path**
+belongs to milestone 009.
+
+Implementation plan: `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md`
+(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+
+This is the one milestone in this roadmap whose **code surface is outside the
+GUI crate**. It is tracked here because milestone 006 depends on it and there is
+no daemon subsystem roadmap to carry it; that dependency is recorded rather than
+hidden.
+
+### Milestone 9 — Daemon obtainability and start honesty
+
+Class: capability
+
+Objective: make it possible to **obtain** a working daemon, and stop the
+daemon that starts from advertising capabilities it cannot execute.
+
+Dependencies: M8 (soft — the obtainable daemon is more useful with a real
+feature profile, but the honesty fix does not depend on it).
+
+Deliverable boundary: a documented install path for the daemon binary, and a
+`eggsec daemon start` that either runs a real executor or advertises
+honestly.
+
+User or operator value: `eggsec daemon start` currently advertises **20** task
+kinds and executes **none**, and nothing in the workspace installs the daemon
+binary at all — so an operator following the GUI's own diagnostic ends up with
+a daemon that looks capable and is not.
+
+Exit conditions: the daemon binary has a documented, reproducible install path;
+`eggsec daemon start` never advertises a capability it cannot execute; and the
+CLI's false "Daemon started" message is corrected.
+
+Deferred work: the GUI's own packaging, and the distribution workstream's
+signing and installers.
+
+Implementation plan: `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md`
+(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+
+Like M8, this milestone's code surface is outside the GUI crate. It is tracked
+here because milestone 006's daemon-lifecycle work needs a daemon that can be
+obtained, and milestone 007's qualification run needs one that works.
 
 ## 8. Cross-cutting requirements
 
@@ -559,11 +674,22 @@ milestone changes an existing persisted representation.
 ### Protocol and compatibility
 
 The daemon protocol changes **additively only**: one new read-only command
-(`DescribeOperations`) and one new surface label. No existing
-`ClientCommand` or `ServerMessage` shape changes, so existing clients
+(`DescribeOperations`) and one new surface label, added by milestone 001.
+Milestone 006 adds two more **additive** changes, and nothing else: a
+defaulted enabled-feature field on the capabilities handshake, and a second
+read-only command carrying report data. No existing `ClientCommand` or
+`ServerMessage` shape changes, so existing clients
 continue to work and older daemons answer the new command with the protocol's
 existing `UnsupportedCommand` error, which clients MUST treat as a
 graceful degradation to a static form set rather than a launch failure.
+
+The **result envelope's empty payload stays empty**. `TaskResultEnvelope.payload`
+is `json!({})` with `artifacts: vec![]`, and that is pinned by a test
+(`crates/eggsec/tests/runtime_contract_closure.rs:618-619`). Milestone 006
+routes report data over a new read-only command rather than filling the
+envelope, because filling it is **not** additive and would be an ADR decision
+point. The same reasoning forbids adding a `TaskOutcome` variant: the enum is
+externally tagged, so an older client fails to deserialize an unknown variant.
 
 ### Security and authorization
 
@@ -653,11 +779,11 @@ the matching skill. `plans/registry.md` is updated at each milestone.
 | The daemon protocol proves insufficient for GUI needs (e.g. no per-task log streaming granularity, no artifact transfer) | M5/M6 stall | Audit the protocol against GUI needs during M2; add only **additive** read paths, never change existing shapes |
 | Interactive approval cannot be completed through the daemon | Operations requiring confirmation are unusable from a remote daemon | Fail closed (M3); wire `ApprovePolicy` as a separate corrective milestone if required |
 | The shell framework's memory or rendering characteristics disappoint | M4 rework | Measure at M4 before building on it; egui fallback is pre-sanctioned in `ADR-0009` |
-| The shell's dependency closure fails `cargo deny` | M4 blocked | Pre-verified at the milestone-004 baseline: the `tauri` 2.11.x closure is entirely MIT / Apache-2.0 / Zlib and clears the existing `deny.toml` allow-list with no new exception — the gtk-rs bindings are MIT, not LGPL. Re-verify on the resolved graph; if it still fails, admit with an owner and review-by date, or fall back to egui |
+| The shell's dependency closure fails `cargo deny` | M4/M6/M7 blocked | **Corrected 2026-10-23.** The milestone-004 pre-verification established that the `tauri` 2.11.x closure is entirely MIT / Apache-2.0 / Zlib and clears the existing `deny.toml` allow-list — the gtk-rs bindings are MIT, not LGPL — so `cargo deny check licenses` is `licenses ok` and needs no exception. It did **not** check *advisories*, and seven advisory entries are reachable only through the GUI's Tauri closure: `glib 0.18.5` (RUSTSEC-2024-0429), `glib-macros 0.18.5` → `proc-macro-error 1.0.4` (RUSTSEC-2024-0370), and the five `unic-*` crates (RUSTSEC-2025-0081, -0075, -0080, -0100, -0098). Four more (`rustls 0.23.45`, `rustls-webpki 0.103.15`, `webpki-root-certs 1.0.9`, `tokio 1.53.1`) are shared with the engine but are attributed by `cargo deny` to a chain through `eggsec-gui` → `tauri` → `reqwest`, because `cargo deny` resolves over the lockfile graph while the GUI's feature-resolved build declines Tauri's `rustls-tls` feature. Re-verify on the resolved graph; if it still fails, admit with an owner and a review-by date, or fall back to egui |
 | Schema derivation over 30 structs inflates compile time for downstream consumers | Build-time regression | Feature-gate or split into a leaf crate; measure before choosing |
 | Linux `webkit2gtk-4.1` floor excludes target distributions | Packaging gap | Document the platform floor; the egui fallback avoids the system dependency entirely |
 | The schema artifact becomes a second policy surface by accident | Enforcement regression | Guard: the schema MUST NOT be imported by any authorization or policy path; explicit test required |
-| Feature-gated operations are reachable in the GUI but fail opaquely | Operator confusion | Hide or clearly report unavailable operations based on the daemon's advertised capabilities |
+| Feature-gated operations are reachable in the GUI but fail opaquely | Operator confusion | **Corrected 2026-10-23.** The earlier mitigation — hide or report unavailability "based on the daemon's advertised capabilities" — is **not implementable**: the published capability list is a compile-time constant that is never feature-derived, and it therefore cannot distinguish a feature that is off from a capability that was simply never advertised. Milestone 006 resolves availability from an **additive enabled-features read path** on the capabilities handshake, with a **denial-driven fallback** that turns a `FeatureMissing` denial into an explicit unavailability report. The fallback is mandatory: an older daemon answers with `UnsupportedCommand`, and the GUI MUST degrade to "cannot verify" rather than hide nothing |
 
 Decision points requiring an ADR:
 
@@ -676,9 +802,10 @@ This roadmap is closed when:
 - a desktop GUI exists that reaches the engine's full operation surface
   through the daemon protocol alone;
 - the engine, the daemon protocol's existing shapes, and the runtime DTOs are
-  demonstrably unchanged in substance by the GUI's existence, beyond the two
-  additive items recorded here (the read-only schema command and the GUI
-  surface variant);
+  demonstrably unchanged in substance by the GUI's existence, beyond the
+  **additive** items recorded here — the read-only schema command and the GUI
+  surface variant (milestone 001 and 003), and the defaulted enabled-features
+  handshake field plus the read-only report command (milestone 006);
 - every operation is reachable from the GUI without per-operation frontend
   code, driven by the published schema;
 - the shell framework is confined to `crates/eggsec-gui`, proven by guard;
@@ -700,4 +827,6 @@ This roadmap is closed when:
 | 4 — GUI shell skeleton | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/004-gui-shell-skeleton.md` | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | — |
 | 5 — Schema-driven forms and task dashboard | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard.md` | `plans/closure/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard-closure.md` | — |
 | 6 — Full operation coverage and report export | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` | — (not yet closed) | M5 (met — M5 implemented 2026-10-23) |
-| 7 — Packaging and platform qualification | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | — (not yet closed) | M6 (**open** — M7 is gated on M6 closing); distribution policy |
+| 7 — Packaging and platform qualification | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | — (not yet closed) | M6 (**open**); M8, M9 (**open**); distribution policy |
+| 8 — Daemon feature profile and build recipe | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | — (not yet closed) | — |
+| 9 — Daemon obtainability and start honesty | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | — (not yet closed) | M8 (soft) |

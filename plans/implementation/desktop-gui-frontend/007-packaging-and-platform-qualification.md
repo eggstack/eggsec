@@ -2,7 +2,7 @@
 
 Status: ready for handoff
 
-Repository baseline: branch `feat/auto-20261022-76692679`, commit `34df13d0` ("feat(gui): add the desktop GUI frontend foundation (milestones 001-005)"). Milestones 001–005 are implemented with closure records under `plans/closure/desktop-gui-frontend/`. Milestone 006 is **planned but not implemented**; its plan lives at `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` and is authored in parallel with this one.
+Repository baseline: branch `feat/auto-20261022-76692679`, commit `e1916069` ("docs(plans): register the desktop GUI milestones 006 and 007"), on top of `34df13d0` ("feat(gui): add the desktop GUI frontend foundation (milestones 001-005)"). Milestones 001–005 are implemented with closure records under `plans/closure/desktop-gui-frontend/`. Milestone 006 is **planned but not implemented**; its plan lives at `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md`. Milestones 008 and 009 are **planned but not implemented**; they gate this milestone's daemon prerequisites.
 
 Source roadmap:
 
@@ -20,6 +20,7 @@ Applicable ADRs:
 - `plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md`
 - `plans/adrs/ADR-0008-operation-parameter-schema-publication.md`
 - `plans/adrs/ADR-0009-gui-shell-technology-selection.md`
+- `plans/adrs/ADR-0010-gui-supported-platform-scope.md`
 
 Primary class: operational
 
@@ -27,7 +28,7 @@ Primary class: operational
 > lists `Primary class: invariant | capability | infrastructure | polish`, and
 > `operational` is not among them. The value is kept because the subsystem
 > roadmap declares this milestone `Class: operational`
-> (`plans/subsystems/desktop-gui-frontend-roadmap.md:512`) and because the
+> (`plans/subsystems/desktop-gui-frontend-roadmap.md:547`) and because the
 > milestone's deliverable is qualification evidence and a handoff artifact
 > rather than a production capability. The repository already carries
 > free-form values in this field (`security + infrastructure`,
@@ -42,11 +43,11 @@ Qualify the desktop GUI on the platform matrix the project actually supports, an
 
 One bounded outcome, in three observable parts:
 
-1. A **platform qualification matrix** exists as a checked-in artifact with one row per platform (Linux, macOS, Windows) and one column per required behaviour (build, launch, connect, submit, cancel, render, export). Every cell carries either a reproducible evidence reference or a **named, justified gap**.
+1. A **platform qualification matrix** exists as a checked-in artifact with one row per platform — **two qualified rows (Linux, macOS)** and **one explicitly out-of-scope row (Windows)** — and one column per required behaviour (build, launch, connect, submit, cancel, render, export). Every cell carries either a reproducible evidence reference or a **named, justified gap**.
 2. The **Linux system prerequisites** are documented concretely, with the per-distribution package names and the supported Linux floor.
 3. A **handoff artifact** describes the qualified binary (platform, feature set, toolchain, commit, runtime prerequisites, known limitations) and states exactly what the distribution workstream inherits and what it still must decide.
 
-The milestone's deliverable boundary is fixed by the roadmap: "a qualified build per supported platform, documented system prerequisites, and a handoff artifact for the distribution workstream. **This milestone does not own signing, notarization, or installers.**" (`plans/subsystems/desktop-gui-frontend-roadmap.md:519-521`).
+The milestone's deliverable boundary is fixed by the roadmap: "a qualified build per supported platform, documented system prerequisites, and a handoff artifact for the distribution workstream. **This milestone does not own signing, notarization, or installers.**" (`plans/subsystems/desktop-gui-frontend-roadmap.md:555-557`).
 
 ---
 
@@ -56,7 +57,7 @@ The milestone's deliverable boundary is fixed by the roadmap: "a qualified build
 
 | Dependency | State at `34df13d0` | Evidence |
 |---|---|---|
-| M1 — operation parameter schema publication | **closed 2026-10-23** | `plans/closure/desktop-gui-frontend/001-operation-parameter-schema-publication-closure.md`; roadmap status table `plans/subsystems/desktop-gui-frontend-roadmap.md:697` |
+| M1 — operation parameter schema publication | **closed 2026-10-23** | `plans/closure/desktop-gui-frontend/001-operation-parameter-schema-publication-closure.md`; roadmap status table `plans/subsystems/desktop-gui-frontend-roadmap.md:824` |
 | M2 — frontend-client contract extraction | **closed 2026-10-23** | `plans/closure/desktop-gui-frontend/002-frontend-client-contract-extraction-closure.md`; roadmap `:698` |
 | M3 — desktop GUI surface parity | **closed 2026-10-23** | `plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md`; roadmap `:699` |
 | M4 — GUI shell skeleton | **implemented 2026-10-23** | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md`; roadmap `:700` |
@@ -68,17 +69,19 @@ The milestone's deliverable boundary is fixed by the roadmap: "a qualified build
 - The GUI's **IPC surface is exactly eight commands**, each declaring `rename_all = "snake_case"` — enforced by an in-crate test at `crates/eggsec-gui/src/commands.rs:641-655`. The surface is registered at `crates/eggsec-gui/src/shell.rs:22-31`.
 - The GUI's 34 tests are **unit-level and headless-safe**: no `UnixStream`, `UnixListener`, `TcpStream`, `tauri::test`, `WebviewWindow`, or `std::process::Command` appears anywhere under `crates/eggsec-gui/src/` (verified by search over the crate's source tree). The `connection.rs` tests (`crates/eggsec-gui/src/connection.rs:179-215`) construct error values and strings; they open no socket.
 - The frontend is **buildless with zero npm dependencies**: `crates/eggsec-gui/frontend/` holds `index.html` (72 lines), `styles.css` (871), and `app.js` (1307); there is no `package.json`, no lockfile, and no bundler. `tauri.conf.json:10` sets `withGlobalTauri: true` precisely so the webview can call `window.__TAURI__.core.invoke` without a module build step (`architecture/desktop_gui.md:136-141`).
-- The daemon transport contract is stable and additive-only (`plans/subsystems/desktop-gui-frontend-roadmap.md:559-566`).
+- The daemon transport contract is stable and additive-only (`plans/subsystems/desktop-gui-frontend-roadmap.md:674-692`).
 
-### 2.3 The remaining hard dependency — stated plainly
+### 2.3 The remaining hard dependencies — stated plainly
 
-**M6 is the roadmap's hard dependency for M7** (`plans/subsystems/desktop-gui-frontend-roadmap.md:517`; the status table lists M7's blockers as "M6; distribution policy" at `:703`). M6 is **not implemented at this baseline**; the roadmap records M6 as "not started" with blocker M5 (`:702`).
+**M6 is the roadmap's hard dependency for M7** (`plans/subsystems/desktop-gui-frontend-roadmap.md:552-554`; the status table lists M7's blockers as "M6; M8, M9; distribution policy" at `:818`). M6 is **not implemented at this baseline**. **M8 and M9 are also hard dependencies**: a qualification run needs a daemon that can be **built** with a real feature profile (M8) and **obtained** and started without lying about its capabilities (M9).
 
 Consequences for this plan:
 
-- The **report-export** column of the qualification matrix cannot be qualified until M6 lands, because M6 is what introduces report export (`plans/subsystems/desktop-gui-frontend-roadmap.md:702`, milestone title "Full operation coverage and report export"). M007 therefore treats the export cell as a **dependency-gated cell**: the matrix defines it, the procedure defines it, and the cell stays marked *pending M6* until M6 closes.
-- This plan is authored to be **handed off and executed once M6 closes**. It is not a claim that M7's work has started or that its dependency is satisfied.
-- The second named dependency, **distribution policy** (`roadmap:517`), is *operational* rather than a code dependency. M007 cannot unilaterally declare the supported-platform matrix — that decision belongs to the distribution workstream. M007's job is to produce the **evidence** that the decision needs and to state a **recommended** matrix with its reasoning. §7 Work package E carries the recommendation; §13 makes the distribution workstream's sign-off an acceptance precondition.
+- The **report-export** column of the qualification matrix cannot be qualified until M6 lands, because M6 is what introduces report export (`plans/subsystems/desktop-gui-frontend-roadmap.md:490`, milestone title "Full operation coverage and report export"). M007 therefore treats the export cell as a **dependency-gated cell**: the matrix defines it, the procedure defines it, and the cell stays marked *pending M6* until M6 closes.
+- The **connect** and **submit** columns depend on M8 and M9 for the same reason: a qualification run needs a daemon that can actually run the operation it is submitting. Until M8 and M9 close, those cells stay dependency-gated rather than blank.
+- This plan is authored to be **handed off and executed once M6, M8, and M9 close**. It is not a claim that M7's work has started or that its dependencies are satisfied.
+
+**The supported-platform matrix is no longer an open question.** `ADR-0010` decides it: the desktop GUI is supported on **Linux (x86_64 glibc) and macOS (x86_64 and arm64)**, and **Windows is out of scope**, because the daemon's transport is a Unix domain socket and the GUI does not compile for Windows. That decision removes the "distribution policy" dependency's *matrix* component: the distribution workstream still owns signing, notarization, installers, and update channels, and §13 still makes its sign-off on the **distribution** an acceptance precondition — but it no longer decides **which platforms the GUI is offered on**. M007's job is now to produce the **evidence** for the two supported platforms and the **named out-of-scope row**, not to recommend a matrix.
 
 ---
 
@@ -109,7 +112,7 @@ Consequences for this plan:
 
 `crates/eggsec-gui/tauri.conf.json:26-28` sets `bundle.active: false`, and `architecture/desktop_gui.md:74-78` states the consequence plainly: "the GUI is run from the build tree, not installed as a bundle."
 
-Tauri's bundler, when enabled, produces `.deb` / `.rpm` / `.AppImage` on Linux, `.dmg` / `.app` on macOS, and `.msi` / `.exe` installers on Windows. Every one of those is an **installer**, which the roadmap places outside this milestone (`roadmap:521`, `:529-530`) and outside this workstream (`plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md:88-91`, `:249-251`).
+Tauri's bundler, when enabled, produces `.deb` / `.rpm` / `.AppImage` on Linux, `.dmg` / `.app` on macOS, and `.msi` / `.exe` installers on Windows. Every one of those is an **installer**, which the roadmap places outside this milestone (`roadmap:557`, `:567-568`) and outside this workstream (`plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md:88-91`, `:249-251`).
 
 ### 3.3 The daemon transport — a Unix domain socket, with no Windows fallback
 
@@ -149,6 +152,8 @@ error[E0432]: unresolved import `tokio::net::UnixStream`
 ```
 
 **Therefore: at the baseline, the desktop GUI does not compile on Windows — with or without the `shell` feature.** The blocking dependency is the shared frontend-client contract crate, which is owned by the frontend-client subsystem, not by the GUI.
+
+**This is now a decision, not an open gap.** `ADR-0010` fixes the desktop GUI's supported platforms at **Linux and macOS** and records **Windows as out of scope**, precisely because of the finding above. The exclusion is a deliberate scope decision with a named root cause and a named re-entry path (a daemon-subsystem transport milestone with its own ADR) — not a defect awaiting a workaround, and not something M007 may resolve by adding a transport. M007's job is to **record** the out-of-scope row with its root cause, and to qualify the two supported platforms.
 
 A separate `cargo check -p eggsec-daemon --target x86_64-pc-windows-msvc` run stopped earlier, in the `libsqlite3-sys v0.30.1` build script (a cross-C-toolchain limitation of this machine, not a property of the code). The daemon's own Windows incompatibility is nevertheless established by the unconditional `std::os::unix::fs::PermissionsExt` and `tokio::net::UnixListener` imports cited above.
 
@@ -220,12 +225,12 @@ check-gui:
 
 | Gap | Evidence | Handling |
 |---|---|---|
-| The GUI's resident footprint was never measured | `plans/subsystems/desktop-gui-frontend-roadmap.md:604-606` requires it "at the shell milestone"; no footprint measurement appears in `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | **Carry-forward.** M007 is the measurement milestone; the measurement is discharged here and recorded in the handoff artifact. |
+| The GUI's resident footprint was never measured | `plans/subsystems/desktop-gui-frontend-roadmap.md:730-732` requires it "at the shell milestone"; no footprint measurement appears in `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | **Carry-forward.** M007 is the measurement milestone; the measurement is discharged here and recorded in the handoff artifact. |
 | The GUI does not manage the daemon's lifecycle | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md:561` — "Milestone 006 owns daemon lifecycle management" | M007 qualifies and documents whatever M6 delivers; it does not implement lifecycle management. |
 | `bundle.active: false` | `crates/eggsec-gui/tauri.conf.json:26-28` | §7 Work package C decides and records the position. |
 | No GUI build on macOS or Windows in CI | `deep-checks.yml:60-76` | §7 Work package C adds the matrix job. |
 | `ApprovePolicy` remains unwired | `plans/closure/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard-closure.md:469` | Out of scope; recorded as a known limitation in the handoff artifact because it affects what an operator can do from the shipped binary. |
-| The socket-path default is duplicated in four places | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md:559` | Out of scope; recorded as a known limitation. |
+| The socket-path default is duplicated in six places | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md:559` | Out of scope; recorded as a known limitation. |
 
 ### 3.9 Pre-existing failures inherited by this milestone — **not** regressions of M7
 
@@ -258,7 +263,7 @@ These are recorded so that the closure record does not attribute them to M7, and
 
    **Two graphs disagree here, and the difference decides who owns an advisory.** `rustls` appears **zero** times in the GUI's **feature-resolved** tree, across all targets — which is exactly what `crates/eggsec-gui/Cargo.toml:51-55` claims when it declines the `rustls-tls` and `native-tls` Tauri features. So the GUI's *built binary* links no second TLS stack, which is what satisfies guard 157's ring-only invariant without an exception. But `cargo deny` resolves advisories over the **lockfile** graph, in which `tauri` carries its optional `reqwest` edge; there, `rustls 0.23.45` reaches `eggsec-gui` through `eggsec-gui` → `tauri 2.11.6` → `reqwest 0.13.5` → `hyper-rustls 0.27.9`. The same is true of `rustls-webpki 0.103.15` and `webpki-root-certs 1.0.9`. Those advisories are therefore **shared** — the engine reaches them independently — but `make check-deps` will name `eggsec-gui` in their dependency chain, and the closure record MUST say so rather than claim the GUI is uninvolved. The seven **GUI-exclusive** entries are the ones the GUI alone contributes.
 
-   The `glib` and `unic-*` rows mean the GUI's closure **now contributes** to the failing dependency gate. This does not change the roadmap's requirement — "`make check-deps` MUST pass with the GUI's dependency closure admitted to `deny.toml`; any exception MUST also be recorded in `docs/DEPENDENCY_EXCEPTIONS.md` with an owner and a review-by date" (`roadmap:627-629`) — but it does mean the GUI's closure is **not** currently admitted, and admitting it is a **maintainer decision** (owner + review-by date), not something M007 may decide for the maintainer. The roadmap's own risk table anticipates this: "Re-verify on the resolved graph; if it still fails, admit with an owner and review-by date, or fall back to egui" (`roadmap:698`).
+   The `glib` and `unic-*` rows mean the GUI's closure **now contributes** to the failing dependency gate. This does not change the roadmap's requirement — "`make check-deps` MUST pass with the GUI's dependency closure admitted to `deny.toml`; any exception MUST also be recorded in `docs/DEPENDENCY_EXCEPTIONS.md` with an owner and a review-by date" (`roadmap:753-755`) — but it does mean the GUI's closure is **not** currently admitted, and admitting it is a **maintainer decision** (owner + review-by date), not something M007 may decide for the maintainer. The roadmap's own risk table anticipates this: "Re-verify on the resolved graph; if it still fails, admit with an owner and review-by date, or fall back to egui" (`roadmap:825`).
 
 2. **`cargo check --workspace --all-features` fails** with `E0616: field 'url' of struct 'WebSocketFuzzer' is private` at `crates/eggsec/src/fuzzer/advanced.rs:446` (`url: self.url.clone()`), because the corpus type declares `pub(crate) url` at `crates/eggsec-payloads/src/websocket.rs:43` — not visible across the crate boundary. Verified pre-existing in `plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md:273`. It is **not** in `make check`; it affects `make check-full` and `make check-features-individual`.
 
@@ -273,19 +278,19 @@ These are recorded so that the closure record does not attribute them to M7, and
 ## 4. Invariants that must not regress
 
 1. **The GUI stays a leaf application.** It MUST NOT become a dependency of the engine, daemon, or runtime crates, and MUST NOT be published to crates.io (`plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md:84-91`, `:210-213`). Enforced by guard 155 ("GUI crate links no engine").
-2. **The GUI imports no enforcement internals.** It MUST NOT import `EnforcementContext`, `EnforcedDispatcher`, `Scope::is_target_allowed`, or `tool.execute()` (`roadmap:570-572`). Enforced by guard 154 ("desktop GUI stays a manual surface").
-3. **The GUI is a manual surface** (`RuntimeSurface::DesktopGuiManual` / `ExecutionSurface::DesktopGuiManual`) — permissive profile, operator overrides allowed, evaluated by the engine, never by the GUI (`roadmap:573-575`).
-4. **The GUI performs no outbound HTTP of its own**; all engine traffic travels over the daemon's local transport (`roadmap:583-584`). The `rustls-tls` / `native-tls` Tauri features stay disabled (`crates/eggsec-gui/Cargo.toml:51-55`), and guard 157 ("GUI declares no second TLS stack") keeps the workspace's ring-only TLS rule true.
+2. **The GUI imports no enforcement internals.** It MUST NOT import `EnforcementContext`, `EnforcedDispatcher`, `Scope::is_target_allowed`, or `tool.execute()` (`roadmap:696-698`). Enforced by guard 154 ("desktop GUI stays a manual surface").
+3. **The GUI is a manual surface** (`RuntimeSurface::DesktopGuiManual` / `ExecutionSurface::DesktopGuiManual`) — permissive profile, operator overrides allowed, evaluated by the engine, never by the GUI (`roadmap:699-701`).
+4. **The GUI performs no outbound HTTP of its own**; all engine traffic travels over the daemon's local transport (`roadmap:709-710`). The `rustls-tls` / `native-tls` Tauri features stay disabled (`crates/eggsec-gui/Cargo.toml:51-55`), and guard 157 ("GUI declares no second TLS stack") keeps the workspace's ring-only TLS rule true.
 5. **The CSP admits no remote origin** beyond `http://ipc.localhost` (`crates/eggsec-gui/tauri.conf.json:22-24`); guard 158 enforces it. M007 must not weaken the CSP to make a platform build succeed.
-6. **The frontend keeps zero npm dependencies.** Any JavaScript dependency admitted later requires a recorded policy with an owner and a review-by date (`roadmap:667-670`).
+6. **The frontend keeps zero npm dependencies.** Any JavaScript dependency admitted later requires a recorded policy with an owner and a review-by date (`roadmap:793-796`).
 7. **Tokio baseline**: `default-features = false` with explicit per-crate feature lists; no `test-util` anywhere; DTO crates carry no Tokio.
-8. **Spawned Tokio tasks in the GUI need 30–300 s timeout wrappers**; failures are reported through `tracing`, never `let _ =` and never `filter_map(|e| e.ok())` (`roadmap:591-593`).
+8. **Spawned Tokio tasks in the GUI need 30–300 s timeout wrappers**; failures are reported through `tracing`, never `let _ =` and never `filter_map(|e| e.ok())` (`roadmap:717-719`).
 9. **`make check` stays green** for everything M007 touches: fmt, the `--no-default-features` workspace check, the gated GUI shell check, clippy, the test suites, and the architecture guards.
 10. **The architecture guards stay green**, and any new guard M007 adds is itself negative-tested (violated on purpose, observed failing, then restored).
 11. **`deny.toml` remains the canonical dependency policy.** New exceptions require an owner and a review-by date in `deny.toml` **and** `docs/DEPENDENCY_EXCEPTIONS.md`. `.cargo/audit.toml` is not reintroduced.
 12. **The Tauri version pin holds** on the 2.11.x line (`ADR-0009:218-224`; `Cargo.toml:93-98`), keeping `make check-msrv` green without a workspace MSRV bump.
-13. **The GUI owns no authoritative storage** and requires **no data migration** (`roadmap:551-557`).
-14. **The GUI never persists credentials** in its own state or logs (`roadmap:582`).
+13. **The GUI owns no authoritative storage** and requires **no data migration** (`roadmap:666-672`).
+14. **The GUI never persists credentials** in its own state or logs (`roadmap:708`).
 
 ---
 
@@ -304,13 +309,13 @@ These are recorded so that the closure record does not attribute them to M7, and
 
 ### Explicitly out of scope
 
-- **Signing, notarization, installers, and update channels.** The roadmap states it directly: "This milestone does not own signing, notarization, or installers" (`roadmap:521`), and "Deferred work: signing, notarization, installers, update channels — all owned by the separate distribution workstream" (`roadmap:529-530`). `ADR-0007:88-91` and `:249-251` place binary distribution and platform packaging outside this workstream entirely.
+- **Signing, notarization, installers, and update channels.** The roadmap states it directly: "This milestone does not own signing, notarization, or installers" (`roadmap:557`), and "Deferred work: signing, notarization, installers, update channels — all owned by the separate distribution workstream" (`roadmap:567-568`). `ADR-0007:88-91` and `:249-251` place binary distribution and platform packaging outside this workstream entirely.
 - **Enabling the Tauri bundler.** See §7 Work package C for the decision and its justification against the stated boundary.
-- **Changing the daemon transport.** Adding a Windows named-pipe transport would be a daemon-subsystem change and, because it alters the protocol's transport kind, potentially a non-additive protocol change requiring its own ADR (`roadmap:664-666`). M007 records the gap and hands it off.
+- **Changing the daemon transport.** Adding a Windows named-pipe transport would be a daemon-subsystem change and, because it alters the protocol's transport kind, potentially a non-additive protocol change requiring its own ADR (`roadmap:790-792`). M007 records the gap and hands it off.
 - **Implementing daemon lifecycle management** (spawn, supervise, stop) — owned by M6.
 - **Report export** — owned by M6. M007 qualifies the export *column* and leaves the cell dependency-gated.
 - **Adding a seventh platform domain to `crates/eggsec/src/platform/`.** The GUI is a build-time platform requirement, not a runtime probing domain; `docs/PLATFORM.md:11-14` requires a matrix row for any new domain, and M007 adds none.
-- **Recording `deny.toml` advisory exceptions.** That is a maintainer decision requiring an owner and a review-by date (`roadmap:627-629`; `docs/DEPENDENCY_EXCEPTIONS.md`). M007 reports the failure and its GUI-reachable share; it does not write the exception.
+- **Recording `deny.toml` advisory exceptions.** That is a maintainer decision requiring an owner and a review-by date (`roadmap:753-755`; `docs/DEPENDENCY_EXCEPTIONS.md`). M007 reports the failure and its GUI-reachable share; it does not write the exception.
 - **Fixing the `--all-features` `E0616` compile error** — a knowledge-corpus crate's field visibility, outside this milestone (as recorded at `plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md:273`).
 - **Any npm or JavaScript dependency.**
 - **Any engine, daemon-protocol, runtime, or policy change.**
@@ -328,17 +333,17 @@ This is an operational milestone with a small production-code surface. The produ
 
 ### Storage and migrations
 
-- None. The GUI owns no authoritative storage (`roadmap:551-557`). The qualification record and the handoff artifact are **checked-in documents**, not runtime state.
+- None. The GUI owns no authoritative storage (`roadmap:666-672`). The qualification record and the handoff artifact are **checked-in documents**, not runtime state.
 - The build recipe writes its outputs to a caller-supplied output directory that is **outside** the source tree by default (`dist/` at the repository root is the proposed default and MUST be git-ignored by this milestone), so no build artifact is ever committed.
 
 ### Protocol and DTOs
 
-- None. The daemon protocol is unchanged (`roadmap:559-566`).
+- None. The daemon protocol is unchanged (`roadmap:674-692`).
 
 ### Runtime and concurrency
 
 - None. The GUI's runtime semantics are M1–M5's subject.
-- One runtime-adjacent obligation is *measured*, not changed: the GUI's **resident footprint** (`roadmap:604-606`), which was never recorded in the M4 closure. M007 records it per platform in the handoff artifact. The measurement must not alter the GUI's memory behaviour; it is an observation.
+- One runtime-adjacent obligation is *measured*, not changed: the GUI's **resident footprint** (`roadmap:730-732`), which was never recorded in the M4 closure. M007 records it per platform in the handoff artifact. The measurement must not alter the GUI's memory behaviour; it is an observation.
 
 ### Frontend or operator surface
 
@@ -361,15 +366,15 @@ This is an operational milestone with a small production-code surface. The produ
 - **Updated**: `docs/PLATFORM.md` — a short cross-reference stating that the GUI's build requirements are documented separately and are **not** one of the six runtime probing domains.
 - **Updated**: `docs/VERIFICATION.md` — the "Desktop GUI platform prerequisites" section (`:102-110`) and "Prerequisite-skip semantics" (`:112-132`) gain the new matrix job and the explicit statement that `make check` does not run the GUI's test suite.
 - **Updated**: `.opencode/skills/eggsec-gui/SKILL.md` — the platform and packaging section, so the skill does not drift from `architecture/desktop_gui.md`.
-- **New static guard (check 163)**: "the GUI's platform qualification record names every platform it claims and carries no unqualified support claim, and the Tauri bundler stays inactive." It must:
+- **New static guard (check 168)**: "the GUI's platform qualification record names every platform it claims and carries no unqualified support claim, and the Tauri bundler stays inactive." It must:
 
-  > **Guard numbering.** M006 lands checks **161** and **162** before M007 executes (M006 is M007's hard dependency), so M007's new check is **163**, not 161. The implementer MUST confirm the next free number against `scripts/check-architecture-guards.sh` at execution time and MUST NOT renumber M006's checks.
+  > **Guard numbering.** M007 is the **last** milestone in this subsystem's order, because it is gated on M6, M8, and M9. The guards land in execution order: M006 (**161**, **162**), M008 (**163**), M009 (**164**–**167**), and M007 (**168**). The implementer MUST confirm the next free number against `scripts/check-architecture-guards.sh` at execution time and MUST NOT renumber another milestone's checks.
   - require `docs/GUI_PLATFORM_QUALIFICATION.md` to exist;
-  - require a row for each of Linux, macOS, and Windows;
-  - require every status cell to be one of an enumerated set (`qualified`, `partially qualified`, `not qualified`, `pending M6`) — no blank, no free-text claim;
+  - require a row for each of Linux and macOS, and an explicitly **out of scope** row for Windows naming its root cause (`ADR-0010`);
+  - require every status cell to be one of an enumerated set (`qualified`, `partially qualified`, `not qualified`, `pending M6`, `out of scope`) — no blank, no free-text claim;
   - require `crates/eggsec-gui/tauri.conf.json` to keep `bundle.active: false`, or to name an ADR that supersedes the decision.
 
-  The guard is written in the style of the existing ones (an `echo "--- Check 163: …"` block, a `SECTION_FAIL` counter, and a `python3` heredoc — cf. `scripts/check-architecture-guards.sh:4665-4718`), and it is negative-tested.
+  The guard is written in the style of the existing ones (an `echo "--- Check 168: …"` block, a `SECTION_FAIL` counter, and a `python3` heredoc — cf. `scripts/check-architecture-guards.sh:4665-4718`), and it is negative-tested.
 
 ---
 
@@ -378,7 +383,7 @@ This is an operational milestone with a small production-code surface. The produ
 ### Work package A — Define the platform qualification matrix and its evidence mechanism
 
 **Intent:**
-Make "qualified" a checkable, reviewable claim instead of an assertion. The roadmap requires the GUI to carry "its own platform qualification evidence (launch, connect, submit, cancel, render) on each supported platform, since the `make check` contract does not exercise a windowed application" (`roadmap:645-647`), and the M7 exit conditions require "each supported platform builds and launches … known limitations are recorded" (`roadmap:526-527`).
+Make "qualified" a checkable, reviewable claim instead of an assertion. The roadmap requires the GUI to carry "its own platform qualification evidence (launch, connect, submit, cancel, render) on each supported platform, since the `make check` contract does not exercise a windowed application" (`roadmap:771-773`), and the M7 exit conditions require "each supported platform builds and launches … known limitations are recorded" (`roadmap:562-565`).
 
 **Required changes:**
 1. Create `docs/GUI_PLATFORM_QUALIFICATION.md` with a fixed schema:
@@ -393,21 +398,21 @@ Make "qualified" a checkable, reviewable claim instead of an assertion. The road
      | Cancel | The submitted task is cancelled and the GUI's dashboard reflects the terminal state. |
      | Render | The task's result renders in the dashboard (controls, result rows, counters). |
      | Export | The result exports to a report artefact (M6-dependent). |
-   - **Cell grammar**: every cell is one of `qualified` (with an evidence reference), `partially qualified` (with the qualified subset named and the missing part named as a gap), `not qualified` (with the root cause), or `pending M6` (with the blocking milestone named). No cell may be blank, and no cell may carry an unqualified claim.
+   - **Cell grammar**: every cell is one of `qualified` (with an evidence reference), `partially qualified` (with the qualified subset named and the missing part named as a gap), `not qualified` (with the root cause), or `pending M6` (with the blocking milestone named), or `out of scope` (with the decision that excludes the platform and its root cause). No cell may be blank, and no cell may carry an unqualified claim.
    - **Evidence reference grammar**: a path plus a command plus a date, e.g. `docs/evidence/gui-qualification/linux-2026-xx-xx.md` or a CI run URL. Evidence must be reproducible by the documented command.
 2. Add the **evidence-recording mechanism**: a checked-in `docs/evidence/gui-qualification/` directory (one Markdown file per qualification run) and a template that fixes the fields the matrix cell must point at — platform, host/OS version and architecture, commit SHA, toolchain, feature set, the exact commands run, the observed output, and the operator or CI job that produced it.
 3. Record the matrix's own **provenance**: it is regenerated by a documented procedure, and the header states the commit and the date it was last regenerated.
-4. Record the Windows finding from §3.3 as a **named, justified gap** rather than a blank or a hopeful cell — with the exact cross-compilation error text and the two unconditional unix-only imports that cause it.
+4. Record the Windows finding from §3.3 as the **out-of-scope row** that `ADR-0010` requires — not a blank, not a hopeful cell, and not a gap awaiting a workaround — with the exact cross-compilation error text, the two unconditional unix-only imports that cause it, and a pointer to the ADR that decides it.
 
 **Acceptance evidence:**
-- `docs/GUI_PLATFORM_QUALIFICATION.md` exists, contains exactly the three platform rows and the seven behaviour columns, and every cell matches the cell grammar.
+- `docs/GUI_PLATFORM_QUALIFICATION.md` exists, contains the two qualified rows (Linux, macOS) and the one out-of-scope row (Windows) and the seven behaviour columns, and every cell matches the cell grammar.
 - A reviewer can pick any non-gap cell and re-run its cited command to reproduce the cited result.
-- The Windows row cites the cross-compilation failure with its root cause, and the row's status is `not qualified` (or `partially qualified` if M007's later work package changes that) — never `qualified`.
+- The Windows row cites the cross-compilation failure with its root cause, names `ADR-0010` as the decision that excludes the platform, and the row's status is `out of scope` — never `qualified` and never `pending`.
 
 ### Work package B — Document the Linux system prerequisites and the supported Linux floor
 
 **Intent:**
-Satisfy the roadmap's exit condition "the Linux system prerequisites are documented" (`roadmap:527`) and discharge `ADR-0009`'s third condition, which the shell milestone was required to satisfy and which was not closed: "**Linux system-dependency declaration.** The GUI crate MUST declare its Linux prerequisites explicitly, and the supported Linux baseline MUST be recorded as a documented platform floor (webkit2gtk-4.1 implies Ubuntu 22.04 / Debian 12 or newer)" (`ADR-0009:235-240`).
+Satisfy the roadmap's exit condition "the Linux system prerequisites are documented" (`roadmap:562-565`) and discharge `ADR-0009`'s third condition, which the shell milestone was required to satisfy and which was not closed: "**Linux system-dependency declaration.** The GUI crate MUST declare its Linux prerequisites explicitly, and the supported Linux baseline MUST be recorded as a documented platform floor (webkit2gtk-4.1 implies Ubuntu 22.04 / Debian 12 or newer)" (`ADR-0009:235-240`).
 
 **Required changes:**
 1. Write the Linux prerequisite section with the package names **as the Tauri v2 documentation states them** (Tauri v2 "Prerequisites → Linux"):
@@ -420,6 +425,7 @@ Satisfy the roadmap's exit condition "the Linux system prerequisites are documen
 3. Reconcile with the repository's existing lists. The workspace's own CI installs a **subset** — `pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf` (`ci.yml:50-51`, `deep-checks.yml:30`, `:56`) — and `Makefile:17` carries a `GUI_SHELL_PREREQ_HINT` with the same names. The document MUST state which of the Tauri's names the workspace's own CI list omits (`build-essential`, `curl`, `wget`, `file`, `libxdo-dev`, `libssl-dev`) and whether that omission is safe on the CI images (it is, because the GitHub-hosted Ubuntu image pre-installs the build toolchain and `libssl-dev`), so an operator on a bare distribution is not misled into a partial install.
 4. Record the gate semantics alongside the prerequisites: on Linux the `make check` GUI line **skips** when `pkg-config` cannot find `webkit2gtk-4.1` or `webkit2gtk-4.0` (`Makefile:22-29`), so a green `make check` on Linux does not prove the shell compiles — `make check-gui` is the ungated check (`Makefile:187-190`). This is the same statement `docs/VERIFICATION.md:112-132` already makes; M007 links it rather than restating it.
 5. Add a **prerequisite probe** script or Makefile target that a host can run to report whether the GUI's shell profile can be built, so an operator does not have to install a full toolchain to find out.
+6. **Separate the shell's prerequisites from the daemon's.** The lists above are the **Tauri shell's** prerequisites, which the GUI needs. The **daemon's** engine-feature prerequisites are a different set, owned by **milestone 008**'s profile and its build recipe — and M007 links that profile's list rather than restating it, so the two cannot drift. Two measured facts belong in that link, because the repository's own prose is stale on both: `packet-inspection` needs **no** libpcap (it is pure Rust — `pnet`, `pnet_packet`, `libc`), and `nse` **vendors** OpenSSL (so it needs a C toolchain, not a system `libssl-dev`). M008's plan carries the corrections to `docs/PLATFORM.md`, `docs/FEATURE_MATRIX.md`, and `crates/eggsec/src/platform/prereqs.rs`; M007 MUST NOT reintroduce the stale claims when it writes the qualification record.
 
 **Acceptance evidence:**
 - The documented package names match the Tauri v2 documentation exactly (a reviewer checks them against the upstream prerequisites page).
@@ -438,13 +444,13 @@ Make the qualification reproducible and CI-enforced, and decide — explicitly a
 
 Rationale, stated against the milestone's own boundary:
 
-- The roadmap says M7 "does not own signing, notarization, or installers" (`roadmap:521`) and that installers are "owned by the separate distribution workstream" (`roadmap:529-530`). `ADR-0007:88-91` and `:249-251` say the same.
+- The roadmap says M7 "does not own signing, notarization, or installers" (`roadmap:557`) and that installers are "owned by the separate distribution workstream" (`roadmap:567-568`). `ADR-0007:88-91` and `:249-251` say the same.
 - Enabling the Tauri bundler makes `cargo build`/`tauri build` emit `.deb`, `.rpm`, `.AppImage`, `.dmg`, `.app`, `.msi`, and `.exe` installers — precisely the artefacts M007 does not own.
 - The bundler also introduces platform-specific *build* requirements that are themselves packaging concerns: the Windows MSI path requires the VBSCRIPT optional feature, and the macOS path requires a bundle identifier and (for distribution) signing identity.
-- What the roadmap's user value actually requires — "an installable desktop build exists for the platforms the project supports" (`roadmap:523-524`) — is satisfied by a single self-contained binary plus a documented system-prerequisite list. The Linux prerequisite list is already a required deliverable (`roadmap:526-527`), which means the "install" step is documented prerequisites + a binary, not a package-manager artefact.
+- What the roadmap's user value actually requires — "an installable desktop build exists for the platforms the project supports" (`roadmap:559-560`) — is satisfied by a single self-contained binary plus a documented system-prerequisite list. The Linux prerequisite list is already a required deliverable (`roadmap:562-565`), which means the "install" step is documented prerequisites + a binary, not a package-manager artefact.
 - Enabling the bundler would also make `make check`'s GUI line produce installers as a side effect, polluting the mandatory contract with artefacts that are outside the milestone.
 
-**Therefore:** `bundle.active` remains `false`. M007 produces the **binary** and the **reproducible build recipe**; the distribution workstream inherits the binary and decides whether to enable the Tauri bundler, adopt another packaging route, or ship a raw artefact. Guard 163 enforces the decision until an ADR supersedes it.
+**Therefore:** `bundle.active` remains `false`. M007 produces the **binary** and the **reproducible build recipe**; the distribution workstream inherits the binary and decides whether to enable the Tauri bundler, adopt another packaging route, or ship a raw artefact. Guard 168 enforces the decision until an ADR supersedes it.
 
 *Decision 2 — a build recipe that is reproducible and honest about what it cannot do.*
 
@@ -460,7 +466,7 @@ Create `scripts/build_gui_release.sh` and a `make gui-release` target that:
 Add a `gui-platform` job to `.github/workflows/deep-checks.yml`, next to the existing `portability` job (`deep-checks.yml:60-76`), with:
 
 - `strategy.fail-fast: false` and `matrix.os: [ubuntu-latest, macos-latest]`.
-  - **Windows is excluded from the matrix at this baseline**, and the exclusion is stated in the job's own comment and in the qualification matrix. The reason is the measured failure in §3.3: the GUI's unconditional dependency `eggsec-frontend-client` does not compile on Windows, so a Windows leg would be **permanently red**. A red job is worse than an explicit, documented exclusion; adding the Windows leg is gated on the daemon-transport work named in §7 Work package E.
+  - **Windows is excluded from the matrix by decision** (`ADR-0010`), and the exclusion is stated in the job's own comment and in the qualification matrix. The reason is the measured failure in §3.3: the GUI's unconditional dependency `eggsec-frontend-client` does not compile on Windows, so a Windows leg would be **permanently red**. A red job is worse than an explicit, documented exclusion; adding the Windows leg is gated on the daemon-transport milestone `ADR-0010` names as the re-entry path.
 - On Linux: install the documented prerequisites, then run `make check-gui` (the ungated escape hatch — not the gated `make check` line), `cargo test -p eggsec-gui --features shell --lib`, and `make gui-release`.
 - On macOS: run the same three commands (no system packages needed — the webview ships with the OS).
 - The job uploads the build metadata sidecar and the binary's checksum as artifacts so the matrix cell's evidence reference is a CI URL rather than a claim.
@@ -478,7 +484,7 @@ Add a `gui-platform` job to `.github/workflows/deep-checks.yml`, next to the exi
 ### Work package D — Execute the launch/connect/submit/cancel/render qualification procedure
 
 **Intent:**
-Produce the behavioural evidence the roadmap names — "launch, connect, submit, cancel, render" (`roadmap:645-647`) — for every platform the matrix claims, using a procedure that an operator or a CI job can execute and record.
+Produce the behavioural evidence the roadmap names — "launch, connect, submit, cancel, render" (`roadmap:771-773`) — for every platform the matrix claims, using a procedure that an operator or a CI job can execute and record.
 
 **Required changes:**
 
@@ -515,16 +521,16 @@ Hand the binary to the separately-managed distribution workstream with everythin
    - **Decisions the distribution workstream owns** — the list below.
    - **Decisions M007 made** — the `bundle.active` decision, the recipe, the supported-platform recommendation.
 2. Record the **known limitations** as an explicit, numbered list. At the baseline this list must include:
-   - Windows: the GUI does not compile, because `eggsec-frontend-client` (`crates/eggsec-frontend-client/src/daemon.rs:9`, `:56`) and `eggsec-daemon` (`crates/eggsec-daemon/src/server.rs:1`, `:5`) use Unix-domain-socket APIs unconditionally.
-   - The daemon's transport is a Unix domain socket at `/tmp/eggsec-daemon.sock` by default (`crates/eggsec-gui/src/config.rs:17`); there is no socket-path environment variable and no XDG lookup, and the default is duplicated in four places.
+   - Windows: **out of scope for the desktop GUI** by decision (`ADR-0010`), because `eggsec-frontend-client` (`crates/eggsec-frontend-client/src/daemon.rs:9`, `:56`) and `eggsec-daemon` (`crates/eggsec-daemon/src/server.rs:1`, `:5`) use Unix-domain-socket APIs unconditionally. The engine, CLI, TUI, and Python surfaces are unaffected.
+   - The daemon's transport is a Unix domain socket at `/tmp/eggsec-daemon.sock` by default (`crates/eggsec-gui/src/config.rs:17`); there is no socket-path environment variable and no XDG lookup, and the default is duplicated in six places.
    - The GUI does not manage the daemon's lifecycle (M6's).
-   - `ApprovePolicy` is unwired: the daemon answers it with `ErrorCode::Unsupported`, so the GUI can mark a task `awaiting_policy` but can offer no approval affordance and must not auto-approve (`roadmap:576-578`).
+   - `ApprovePolicy` is unwired: the daemon answers it with `ErrorCode::Unsupported`, so the GUI can mark a task `awaiting_policy` but can offer no approval affordance and must not auto-approve (`roadmap:702-704`).
    - The GUI's resident footprint was not measured before this milestone.
    - The `make check-deps` advisory failure, including the GUI-reachable share.
    - The `--all-features` `E0616` compile error.
    - The Linux platform floor and the distributions below it.
-3. **Recommend** the supported-platform matrix, with reasoning: **Linux and macOS are qualified; Windows is not qualified at this baseline and requires a daemon-transport milestone before it can be.** State clearly that the *decision* is the distribution workstream's (it owns the distribution policy named as M7's operational dependency at `roadmap:517`), and that M007 supplies the evidence and the recommendation.
-4. Name the **escalation** for the Windows gap precisely: a Windows daemon transport (named pipes) is a daemon-subsystem change; because it changes the transport kind rather than adding a read path, it is a candidate for the ADR the roadmap requires for "any change to the daemon protocol that is not strictly additive" (`roadmap:664-666`). M007 names the escalation; it does not implement it.
+3. **Record** the supported-platform matrix, which is **already decided** by `ADR-0010`: **Linux and macOS are qualified; Windows is out of scope** for the desktop GUI. M007 supplies the **evidence** for the two qualified platforms and the **root cause** for the out-of-scope row. The decision itself is no longer the distribution workstream's to make; what remains the distribution workstream's is the **distribution** policy — signing, notarization, installers, update channels (`roadmap:552-554`) — and §13 still makes its sign-off an acceptance precondition for M007's closure.
+4. Name the **re-entry path** for Windows precisely, as `ADR-0010` records it: a Windows daemon transport (named pipes, or an equivalent local IPC) is a **daemon-subsystem** change; because it changes the transport kind rather than adding a read path, it requires the ADR the roadmap demands for "any change to the daemon protocol that is not strictly additive" (`roadmap:791`). M007 names the re-entry path; it does not implement it, and it MUST NOT add a Windows transport to make the matrix green.
 
 **Acceptance evidence:**
 - `docs/GUI_DISTRIBUTION_HANDOFF.md` contains every required section, and each section names something concrete (a commit, a checksum, a package name, a file path, a decision) rather than a category.
@@ -545,14 +551,14 @@ Make the milestone's findings durable and guard-enforced, so the qualification c
    - "Make targets reference" gains `gui-release` and the prerequisite probe.
 3. Update `docs/PLATFORM.md` with a cross-reference stating that the GUI's platform requirements are **build-time** requirements documented in the qualification document, and that the GUI is **not** one of the six runtime probing domains (`docs/PLATFORM.md:11-14`).
 4. Update `.opencode/skills/eggsec-gui/SKILL.md` — its platform/packaging section must agree with `architecture/desktop_gui.md`, per the repository's skill-drift discipline. The skill points at `architecture/overview.md` for headline counts rather than restating them.
-5. Add **guard 163** as specified in §6 ("Documentation and static guards"), and negative-test it: introduce a deliberate violation (a blank cell, a missing platform row, or `bundle.active: true`), confirm the guard fails with a named reason, restore, and confirm it passes again.
+5. Add **guard 168** as specified in §6 ("Documentation and static guards"), and negative-test it: introduce a deliberate violation (a blank cell, a missing platform row, or `bundle.active: true`), confirm the guard fails with a named reason, restore, and confirm it passes again.
 6. Update `plans/registry.md` and the roadmap's milestone status table to record M7's status and the closure record's path — **as part of the closure record**, not as part of this plan's authoring. (This plan does not modify either file.)
 7. Run `python3 scripts/check_doc_references.py` and confirm the count has **not** increased beyond the baseline of **29**.
 8. Run `cargo fmt --all` before committing.
 
 **Acceptance evidence:**
-- `bash scripts/check-architecture-guards.sh` ends with `ALL PASSED: No architecture drift detected.`, including the new check 163. (The script prints **no** check count — the summary line is the only marker; do not assert a count in the closure record.)
-- The deliberate-violation run of check 163 fails with a named reason and the restore run passes again.
+- `bash scripts/check-architecture-guards.sh` ends with `ALL PASSED: No architecture drift detected.`, including the new check 168. (The script prints **no** check count — the summary line is the only marker; do not assert a count in the closure record.)
+- The deliberate-violation run of check 168 fails with a named reason and the restore run passes again.
 - `python3 scripts/check_doc_references.py` reports `Total missing: 29` (or lower).
 - `cargo fmt --all --check` is clean.
 - `architecture/desktop_gui.md`, `docs/VERIFICATION.md`, `docs/PLATFORM.md`, and `.opencode/skills/eggsec-gui/SKILL.md` all name the qualification document and the CI job consistently.
@@ -571,28 +577,28 @@ M007 is an operational milestone with a small production-code surface. Its seman
 | **Duplicate delivery** — the same qualification is recorded twice, or two operators run the procedure concurrently | The matrix's cells reference **evidence artefacts**, not prose. A second run produces a **new** evidence artefact with its own date and host, and updates the cell's reference. Two concurrent runs never edit the same artefact: each writes its own file under `docs/evidence/gui-qualification/`. The matrix records the **most recent** reference and keeps the superseded one in the evidence directory. |
 | **Process restart** — the matrix, the handoff artifact, and the evidence directory are checked-in documents; the build recipe is re-runnable | Re-running the recipe from a clean tree at the same commit reproduces the same binary hash **only if** the toolchain, the target, and the dependency versions are unchanged. The recipe records the toolchain and the `Cargo.lock` hash precisely so that a hash mismatch is **diagnosable** rather than mysterious. A hash change after a `cargo update` is a legitimate finding and MUST be recorded, not suppressed. |
 | **Cancellation races** | The procedure's cancel step is explicitly race-tolerant: cancellation is best-effort and a task that completes between the operator's click and the daemon's processing is **not** a failure (`crates/eggsec-gui/src/commands.rs:432-434`). The runbook records the **terminal state observed**, never the click. A procedure run that records a click instead of a state is invalid evidence. |
-| **Stale generations** — the matrix describes a GUI that has since changed | Every cell's evidence reference carries the commit SHA it was produced at. The matrix's header carries the commit it describes. A matrix whose header commit differs from the current HEAD is **stale** and MUST say so; guard 163 does not enforce freshness (it cannot), so freshness is a **review obligation** stated in the document and in the closure checklist. |
+| **Stale generations** — the matrix describes a GUI that has since changed | Every cell's evidence reference carries the commit SHA it was produced at. The matrix's header carries the commit it describes. A matrix whose header commit differs from the current HEAD is **stale** and MUST say so; guard 168 does not enforce freshness (it cannot), so freshness is a **review obligation** stated in the document and in the closure checklist. |
 | **Concurrent callers** — two operators, or an operator and a CI job, run the qualification at once | They write distinct evidence artefacts and race only on the matrix file. The matrix is updated by a single write per cell group; a conflicting concurrent edit is resolved by the last writer and is **detected** by the commit review, not by tooling. The CI job does not write the matrix — it uploads artefacts; a human curates the matrix from the artifacts. |
 
 ### 8.2 The runtime semantics M007 touches by measurement only
 
-- **The GUI holds no authoritative task state**; it requests cancellation through the protocol and consumes events from the daemon's subscription channel (`roadmap:588-591`). M007 changes none of this.
-- **A dropped subscription must not affect the running task** (`roadmap:590-591`). The connect procedure's evidence must show a task completing even if the GUI's event subscription is interrupted — recorded as an observation, not a new invariant.
-- **A GUI restart re-attaches to existing sessions and tasks** (`roadmap:590-591`). The procedure includes a restart step: disconnect the GUI, restart it against the same daemon, and record that the dashboard re-attaches to the still-running task. This is an M7-relevant observation of an existing guarantee.
-- **Spawned Tokio tasks in the GUI require 30–300 s timeout wrappers**, and failures are reported through `tracing` — never `let _ =`, never `filter_map(|e| e.ok())` (`roadmap:591-593`). M007 adds no spawned task; the rule continues to bind any task a future change adds.
-- **The GUI holds no unbounded event or result log** (`roadmap:606-609`); guard 160 enforces the bounded retention. M007's report-export qualification must not introduce a path that retains payloads without bound — the export procedure runs against the existing bounded store.
+- **The GUI holds no authoritative task state**; it requests cancellation through the protocol and consumes events from the daemon's subscription channel (`roadmap:714-717`). M007 changes none of this.
+- **A dropped subscription must not affect the running task** (`roadmap:716-717`). The connect procedure's evidence must show a task completing even if the GUI's event subscription is interrupted — recorded as an observation, not a new invariant.
+- **A GUI restart re-attaches to existing sessions and tasks** (`roadmap:716-717`). The procedure includes a restart step: disconnect the GUI, restart it against the same daemon, and record that the dashboard re-attaches to the still-running task. This is an M7-relevant observation of an existing guarantee.
+- **Spawned Tokio tasks in the GUI require 30–300 s timeout wrappers**, and failures are reported through `tracing` — never `let _ =`, never `filter_map(|e| e.ok())` (`roadmap:717-719`). M007 adds no spawned task; the rule continues to bind any task a future change adds.
+- **The GUI holds no unbounded event or result log** (`roadmap:732-735`); guard 160 enforces the bounded retention. M007's report-export qualification must not introduce a path that retains payloads without bound — the export procedure runs against the existing bounded store.
 
 ---
 
 ## 9. Compatibility and migration
 
-- **No data migration.** No milestone in the roadmap changes a persisted representation (`roadmap:555-557`), and M007 changes no persisted representation at all.
-- **No protocol change.** The daemon protocol is additive-only (`roadmap:559-566`) and M007 makes no change to it.
+- **No data migration.** No milestone in the roadmap changes a persisted representation (`roadmap:670-672`), and M007 changes no persisted representation at all.
+- **No protocol change.** The daemon protocol is additive-only (`roadmap:674-692`) and M007 makes no change to it.
 - **No configuration change.** `GuiOptions` keeps its shape (`crates/eggsec-gui/src/config.rs:21`); `--socket`, `--socket=`, `--help`, `-h` keep their meanings (`:47`, `:55`). The default socket path is unchanged (`crates/eggsec-gui/src/config.rs:17`).
 - **No compatibility shim.** M007 introduces no legacy path, so there is nothing to remove later and no removal criteria to state.
 - **The one compatibility surface M007 *does* touch** is the *operator-facing* one: the Linux prerequisite list. An operator on a distribution below the `webkit2gtk-4.1` floor is **newly** told that the GUI is unsupported there. This is a **documentation-only** change to the operator's expectations; no previously-working configuration stops working, because the GUI was never qualified on that distribution before.
-- **Backward compatibility of the daemon**: an older daemon answers the GUI's new read-only command with the protocol's existing `UnsupportedCommand` error, which the GUI MUST treat as a graceful degradation to a static form set rather than a launch failure (`roadmap:561-566`). M007's connect step must record which daemon version it ran against, so a degradation is distinguishable from a failure.
-- **The `bundle.active` decision is a one-way door in practice**: enabling the bundler later changes what `cargo build` emits for the GUI crate, so guard 163 makes that change require an explicit ADR rather than an accidental edit.
+- **Backward compatibility of the daemon**: an older daemon answers the GUI's new read-only command with the protocol's existing `UnsupportedCommand` error, which the GUI MUST treat as a graceful degradation to a static form set rather than a launch failure (`roadmap:676-692`). M007's connect step must record which daemon version it ran against, so a degradation is distinguishable from a failure.
+- **The `bundle.active` decision is a one-way door in practice**: enabling the bundler later changes what `cargo build` emits for the GUI crate, so guard 168 makes that change require an explicit ADR rather than an accidental edit.
 
 ---
 
@@ -600,7 +606,7 @@ M007 is an operational milestone with a small production-code surface. Its seman
 
 ### Focused unit tests
 
-- **Guard 163's own unit** (in the guard script's style): a blank status cell, a missing platform row, an unrecognised status string, and `bundle.active: true` each fail the guard with a named reason.
+- **Guard 168's own unit** (in the guard script's style): a blank status cell, a missing platform row, an unrecognised status string, and `bundle.active: true` each fail the guard with a named reason.
 - The GUI crate's existing 34 tests MUST continue to pass unchanged on every supported platform (§7 Work package C runs them in CI). M007 adds **no** unit test to the GUI crate unless a qualification procedure reveals a defect that must be fixed (§6 "Core/domain").
 - A test for the **build recipe's metadata sidecar**: it contains every field listed in §7 Work package C, and the recorded SHA-256 matches the emitted binary. The recipe is scriptable, so the check is a script assertion, not a Rust test.
 
@@ -613,8 +619,8 @@ M007 is an operational milestone with a small production-code surface. Its seman
 
 ### Restart and recovery tests
 
-- **GUI restart re-attach**: disconnect and restart the GUI against the same daemon; record that the dashboard re-attaches to the still-running task (`roadmap:590-591`).
-- **Daemon restart**: restart the daemon while the GUI is open; record the GUI's behaviour (it must surface the error in its own UI state, not crash, and not write to the terminal — `roadmap:599-600`).
+- **GUI restart re-attach**: disconnect and restart the GUI against the same daemon; record that the dashboard re-attaches to the still-running task (`roadmap:716-717`).
+- **Daemon restart**: restart the daemon while the GUI is open; record the GUI's behaviour (it must surface the error in its own UI state, not crash, and not write to the terminal — `roadmap:725-726`).
 - **Stale-matrix detection**: the qualification document's header commit is compared with HEAD at review time; a mismatch marks the matrix stale.
 - **Reproducible rebuild**: rebuilding at the same commit with the same toolchain yields the same binary hash; a mismatch is recorded as a finding with its cause.
 
@@ -626,17 +632,17 @@ M007 is an operational milestone with a small production-code surface. Its seman
 
 ### Security and negative tests
 
-- **No credentials in the logs.** The GUI MUST NOT persist credentials in its own state or logs (`roadmap:582`). The qualification run's captured output is scanned for credential-shaped strings; the GUI's error surfaces must carry the socket path and the start command but **no** secret material (`crates/eggsec-gui/src/connection.rs:199-215` is the existing model).
+- **No credentials in the logs.** The GUI MUST NOT persist credentials in its own state or logs (`roadmap:708`). The qualification run's captured output is scanned for credential-shaped strings; the GUI's error surfaces must carry the socket path and the start command but **no** secret material (`crates/eggsec-gui/src/connection.rs:199-215` is the existing model).
 - **No secrets in the artefact.** The built binary and its metadata sidecar are scanned for credential-shaped strings and for any `.env`-style input. The build recipe refuses to run on a dirty tree unless `--allow-dirty` is passed, and the dirty flag is recorded either way.
 - **The shipped binary carries no remote origin in its CSP.** The CSP is compiled into the binary from `crates/eggsec-gui/tauri.conf.json:22-24`; the negative test asserts the shipped binary's embedded CSP still admits no remote origin beyond `http://ipc.localhost`. This is the artefact-level counterpart to guard 158, which checks the source file (`scripts/check-architecture-guards.sh:4665-4718`).
 - **The shipped binary's capability set is `core:default` only** — no `http`, `shell`, `fs`, `process`, or `updater` plugin (`crates/eggsec-gui/capabilities/default.json`).
-- **The GUI performs no outbound HTTP of its own** (`roadmap:583-584`): the network-observation part of the launch check records no outbound connection attempt from the GUI process during a full connect → submit → cancel → render cycle.
+- **The GUI performs no outbound HTTP of its own** (`roadmap:709-710`): the network-observation part of the launch check records no outbound connection attempt from the GUI process during a full connect → submit → cancel → render cycle.
 - **The bundle stays inactive**: a negative test confirms that building the GUI crate does not produce `.deb`, `.rpm`, `.AppImage`, `.dmg`, `.app`, `.msi`, or `.exe` installer artefacts. This enforces the milestone's own boundary at the artefact level.
 
 ### Migration and compatibility tests
 
-- **No migration** exists; the equivalent check is that the qualification matrix, the handoff artifact, and the evidence directory introduce **no** runtime state and no new persisted representation (`roadmap:551-557`).
-- **Older-daemon degradation**: connecting to a daemon that answers the GUI's read-only schema command with `UnsupportedCommand` degrades to a static form set rather than failing the launch (`roadmap:561-566`). The connect step records which daemon version it ran against.
+- **No migration** exists; the equivalent check is that the qualification matrix, the handoff artifact, and the evidence directory introduce **no** runtime state and no new persisted representation (`roadmap:666-672`).
+- **Older-daemon degradation**: connecting to a daemon that answers the GUI's read-only schema command with `UnsupportedCommand` degrades to a static form set rather than failing the launch (`roadmap:676-692`). The connect step records which daemon version it ran against.
 - **The `check_doc_references.py` baseline** stays at 29 missing references or lower.
 - **The `deny.toml` outcome for the shipped closure** is re-verified at the milestone's commit and recorded in the handoff artifact, with the GUI-reachable advisory share named explicitly (§3.9).
 
@@ -667,7 +673,7 @@ make check-deps
 # MSRV contract, including the GUI's shell profile behind the gate
 make check-msrv
 
-# Architecture guards (163 after this milestone)
+# Architecture guards (168 after this milestone)
 bash scripts/check-architecture-guards.sh
 
 # Documentation reference baseline (must not exceed 29)
@@ -704,45 +710,45 @@ The closure record must report **only commands actually run**, with their observ
 | `docs/VERIFICATION.md` | Extend the "Desktop GUI platform prerequisites" table (`:102-110`) and "Prerequisite-skip semantics" (`:112-132`); add `gui-release` and the prerequisite probe to the make-target reference; state that `make check` does not run the GUI's test suite. |
 | `docs/PLATFORM.md` | Add a cross-reference: the GUI's platform requirements are build-time requirements, documented in the qualification document; the GUI is not one of the six runtime probing domains (`:11-14`). |
 | `.opencode/skills/eggsec-gui/SKILL.md` | Align the platform/packaging section with `architecture/desktop_gui.md`. Point at `architecture/overview.md` for headline counts rather than restating them. |
-| `scripts/check-architecture-guards.sh` | Add guard 163. |
+| `scripts/check-architecture-guards.sh` | Add guard 168. |
 | `plans/registry.md`, `plans/subsystems/desktop-gui-frontend-roadmap.md` | Updated **by the closure record**, recording M7's status and the closure record's path. Not touched by this plan. |
 
 ---
 
 ## 13. Acceptance criteria
 
-Externally observable and contract-level. Each maps to a roadmap M7 exit condition (`roadmap:526-527`) or a cross-cutting requirement.
+Externally observable and contract-level. Each maps to a roadmap M7 exit condition (`roadmap:562-565`) or a cross-cutting requirement.
 
 **Mapping to the roadmap's exit conditions:**
 
 | # | Acceptance criterion | Roadmap clause |
 |---|---|---|
-| A1 | `docs/GUI_PLATFORM_QUALIFICATION.md` exists and contains exactly one row per platform (Linux, macOS, Windows) and one column per required behaviour (build, launch, connect, submit, cancel, render, export). Every cell's status is one of `qualified`, `partially qualified`, `not qualified`, `pending M6` — no cell is blank and no cell carries an unqualified claim. | `roadmap:526` |
-| A2 | Every `qualified` cell cites a reproducible evidence artefact (a path plus the command that regenerates it plus a date), and a reviewer can reproduce the cited result by running the cited command. | `roadmap:526`, `roadmap:645-647` |
-| A3 | Every non-qualified cell names its **root cause** and the **escalation**, and no cell is left as an unexplained gap. | `roadmap:527` |
-| A4 | The Linux system prerequisites are documented with the per-distribution package names for Debian/Ubuntu, Fedora, and Arch, and the supported Linux floor is stated as a documented platform floor (`webkit2gtk-4.1` ⇒ Ubuntu 22.04 / Debian 12 or newer). | `roadmap:527`; `ADR-0009:235-240` |
-| A5 | A prerequisite probe reports the GUI shell profile as buildable or not on the executing host, and reports "not buildable" — never "skipped" — when the webview SDK is absent. | `roadmap:527`; `Makefile:22-29` |
-| A6 | A reproducible build recipe produces, from a clean tree at a pinned commit, a per-platform release binary plus a metadata sidecar recording the commit, tree state, toolchain, target triple, feature set, `Cargo.lock` hash, size, and SHA-256 — and **no** installer, signature, or notarization. | `roadmap:519-521` |
-| A7 | `crates/eggsec-gui/tauri.conf.json` keeps `bundle.active: false`, and guard 163 fails if it is changed without a superseding ADR. | `roadmap:521`, `:529-530`; `ADR-0007:88-91` |
-| A8 | A CI job builds the GUI and runs its test suite on every platform the matrix claims to qualify, and the matrix's Build column cites that job. The job is not red, and any platform it omits is stated in the job's own comment and in the matrix. | `roadmap:645-647` |
-| A9 | `cargo test -p eggsec-gui --features shell --lib` and `cargo test -p eggsec-gui --no-default-features --lib` both pass on every platform the matrix claims, and the GUI's 34 tests are executed in CI (they are not run by `make check` at this baseline). | `roadmap:623-624` |
-| A10 | `docs/GUI_DISTRIBUTION_HANDOFF.md` contains every required section, each naming something concrete; it states the recommended supported-platform matrix with its reasoning, and it states that the matrix **decision** belongs to the distribution workstream (the operational dependency named at `roadmap:517`). | `roadmap:519-520`, `:517` |
-| A11 | The known-limitations record is an explicit numbered list and includes, at minimum, the Windows transport gap, the duplicated socket-path default, the unwired `ApprovePolicy`, the absent daemon lifecycle management, the Linux platform floor, the `make check-deps` advisory failure with the GUI-reachable share, and the `--all-features` compile error. | `roadmap:527` |
-| A12 | The Windows limitation is stated as a **named gap with its root cause** — the unconditional `tokio::net::UnixStream` / `tokio::net::UnixListener` / `std::os::unix::fs::PermissionsExt` imports at `crates/eggsec-frontend-client/src/daemon.rs:9`, `crates/eggsec-daemon/src/server.rs:1`, `:5` — and **not** papered over by marking the Windows row qualified. | `roadmap:526-527` |
-| A13 | The handoff artifact states that nothing in the workspace installs `eggsec-daemon` and that the GUI binary does not ship a daemon, so the distribution workstream's daemon-delivery obligation is explicit. | `roadmap:519-520` |
-| A14 | The GUI's resident footprint is measured on each qualified platform and recorded in the handoff artifact. | `roadmap:604-606` |
-| A15 | `bash scripts/check-architecture-guards.sh` ends with `ALL PASSED: No architecture drift detected.`, including the new check 163, which was negative-tested (a deliberate violation failed with a named reason, and the restore passed). | `roadmap:630-637` |
-| A16 | `make check` shows no new failure relative to the inherited baseline, and every step of it that passes before `check-deps` still passes. | `roadmap:623-624` |
-| A17 | `make check-msrv` shows no new failure, including the GUI's shell profile behind the gate. | `roadmap:625-626` |
+| A1 | `docs/GUI_PLATFORM_QUALIFICATION.md` exists and contains the **two qualified rows (Linux, macOS)** and the **one out-of-scope row (Windows)** and one column per required behaviour (build, launch, connect, submit, cancel, render, export). Every cell's status is one of `qualified`, `partially qualified`, `not qualified`, `pending M6`, `out of scope` — no cell is blank and no cell carries an unqualified claim. | `roadmap:562-565` |
+| A2 | Every `qualified` cell cites a reproducible evidence artefact (a path plus the command that regenerates it plus a date), and a reviewer can reproduce the cited result by running the cited command. | `roadmap:562-565`, `roadmap:771-773` |
+| A3 | Every non-qualified cell names its **root cause** and the **escalation**, and no cell is left as an unexplained gap. | `roadmap:562-565` |
+| A4 | The Linux system prerequisites are documented with the per-distribution package names for Debian/Ubuntu, Fedora, and Arch, and the supported Linux floor is stated as a documented platform floor (`webkit2gtk-4.1` ⇒ Ubuntu 22.04 / Debian 12 or newer). | `roadmap:562-565`; `ADR-0009:235-240` |
+| A5 | A prerequisite probe reports the GUI shell profile as buildable or not on the executing host, and reports "not buildable" — never "skipped" — when the webview SDK is absent. | `roadmap:562-565`; `Makefile:22-29` |
+| A6 | A reproducible build recipe produces, from a clean tree at a pinned commit, a per-platform release binary plus a metadata sidecar recording the commit, tree state, toolchain, target triple, feature set, `Cargo.lock` hash, size, and SHA-256 — and **no** installer, signature, or notarization. | `roadmap:555-557` |
+| A7 | `crates/eggsec-gui/tauri.conf.json` keeps `bundle.active: false`, and guard 168 fails if it is changed without a superseding ADR. | `roadmap:557`, `:567-568`; `ADR-0007:88-91` |
+| A8 | A CI job builds the GUI and runs its test suite on every platform the matrix claims to qualify, and the matrix's Build column cites that job. The job is not red, and any platform it omits is stated in the job's own comment and in the matrix. | `roadmap:771-773` |
+| A9 | `cargo test -p eggsec-gui --features shell --lib` and `cargo test -p eggsec-gui --no-default-features --lib` both pass on every platform the matrix claims, and the GUI's 34 tests are executed in CI (they are not run by `make check` at this baseline). | `roadmap:749-750` |
+| A10 | `docs/GUI_DISTRIBUTION_HANDOFF.md` contains every required section, each naming something concrete; it states the **decided** supported-platform matrix — Linux and macOS qualified, Windows out of scope — and names `ADR-0010` as the decision that settles it, while stating that the **distribution** policy (signing, notarization, installers, update channels) remains the distribution workstream's (the operational dependency named at `roadmap:552-554`). | `roadmap:555-556`, `:552-554` |
+| A11 | The known-limitations record is an explicit numbered list and includes, at minimum, the Windows transport gap, the duplicated socket-path default, the unwired `ApprovePolicy`, the absent daemon lifecycle management, the Linux platform floor, the `make check-deps` advisory failure with the GUI-reachable share, and the `--all-features` compile error. | `roadmap:562-565` |
+| A12 | The Windows exclusion is stated as an **out-of-scope decision with its root cause and its re-entry path** — the unconditional `tokio::net::UnixStream` / `tokio::net::UnixListener` / `std::os::unix::fs::PermissionsExt` imports at `crates/eggsec-frontend-client/src/daemon.rs:9`, `crates/eggsec-daemon/src/server.rs:1`, `:5` — and **not** papered over by marking the Windows row qualified. | `roadmap:562-565` |
+| A13 | The handoff artifact states that nothing in the workspace installs `eggsec-daemon` and that the GUI binary does not ship a daemon, so the distribution workstream's daemon-delivery obligation is explicit. | `roadmap:555-556` |
+| A14 | The GUI's resident footprint is measured on each qualified platform and recorded in the handoff artifact. | `roadmap:730-732` |
+| A15 | `bash scripts/check-architecture-guards.sh` ends with `ALL PASSED: No architecture drift detected.`, including the new check 168, which was negative-tested (a deliberate violation failed with a named reason, and the restore passed). | `roadmap:756-763` |
+| A16 | `make check` shows no new failure relative to the inherited baseline, and every step of it that passes before `check-deps` still passes. | `roadmap:749-750` |
+| A17 | `make check-msrv` shows no new failure, including the GUI's shell profile behind the gate. | `roadmap:751-752` |
 | A18 | `python3 scripts/check_doc_references.py` reports 29 missing references or fewer. | repo baseline |
-| A19 | `cargo fmt --all --check` is clean. | `roadmap:623` |
-| A20 | The GUI remains a leaf application with no engine dependency, imports no enforcement internals, carries `core:default` capabilities only, and its CSP still admits no remote origin beyond `http://ipc.localhost`. | `roadmap:570-584`; guards 154–158 |
-| A21 | The frontend still has **zero** npm dependencies, and the produced binary's embedded CSP contains no remote origin. | `roadmap:667-670`; `crates/eggsec-gui/tauri.conf.json:22-24` |
-| A22 | The closure record names the distribution workstream's sign-off on the supported-platform matrix as a **precondition for M7's closure**, and states that M7 does not close while it is outstanding — unless the distribution workstream has already recorded that matrix. | `roadmap:517`, `:526` |
+| A19 | `cargo fmt --all --check` is clean. | `roadmap:749` |
+| A20 | The GUI remains a leaf application with no engine dependency, imports no enforcement internals, carries `core:default` capabilities only, and its CSP still admits no remote origin beyond `http://ipc.localhost`. | `roadmap:696-710`; guards 154–158 |
+| A21 | The frontend still has **zero** npm dependencies, and the produced binary's embedded CSP contains no remote origin. | `roadmap:793-796`; `crates/eggsec-gui/tauri.conf.json:22-24` |
+| A22 | The closure record names the distribution workstream's sign-off on the supported-platform matrix as a **precondition for M7's closure**, and states that M7 does not close while it is outstanding — unless the distribution workstream has already recorded that matrix. | `roadmap:552-554`, `:562-565` |
 
 **Preconditions that are explicitly *not* acceptance criteria** (they are inherited and recorded, not fixed):
 
-- `make check-deps` passing. The advisory failure is inherited; M007 records it and reports the GUI-reachable share. Admitting the exceptions is a maintainer decision (`roadmap:627-629`).
+- `make check-deps` passing. The advisory failure is inherited; M007 records it and reports the GUI-reachable share. Admitting the exceptions is a maintainer decision (`roadmap:753-755`).
 - `cargo check --workspace --all-features` passing. The `E0616` failure is inherited and outside this milestone.
 - Windows building. That requires a daemon-transport milestone; M007 records the gap.
 
@@ -753,11 +759,11 @@ Externally observable and contract-level. Each maps to a roadmap M7 exit conditi
 The implementer MUST stop and report rather than improvise when any of these occurs.
 
 1. **A platform where the GUI cannot build, and no pre-sanctioned fallback applies.** The escalation path is pre-sanctioned: `ADR-0009:242-246` — "If any of the three conditions above cannot be met, the GUI shell is implemented with egui instead, and the fallback is exercised behind the same `ADR-0007` boundary. The fallback is **sanctioned in advance** so that a switch is a contained change to `crates/eggsec-gui` rather than a re-plan." Switching to egui is a **major** change and is **not** an in-milestone decision: the implementer stops and reports, and the switch is taken as a separate recorded decision. `egui` 0.33.0 declares MSRV 1.88, below the workspace's 1.89 floor (`ADR-0009:90`, `:94-98`).
-2. **The daemon transport does not exist on a platform.** This is **already true for Windows at the baseline** (§3.3). The implementer MUST NOT add a Windows transport to make the matrix green: that is a daemon-subsystem change and a candidate for the ADR the roadmap requires for any non-additive protocol change (`roadmap:664-666`). Stop, record the gap, and escalate it in the handoff artifact.
-3. **The inherited `make check-deps` failure changes shape** — a *new* advisory appears that is reachable only through the GUI's closure, or the existing GUI-reachable advisories (`glib` RUSTSEC-2024-0429, `glib-macros` RUSTSEC-2024-0370, `unic-*` RUSTSEC-2025-0081/0075/0080/0100/0098) get worse. M007 reports; it does not write the `deny.toml` exception, which needs an owner and a review-by date (`roadmap:627-629`; `docs/DEPENDENCY_EXCEPTIONS.md`). The implementer stops if the fix would require a Tauri pin change, because the 2.11.x pin is what keeps MSRV 1.89 true (`ADR-0009:218-224`).
+2. **The daemon transport does not exist on a platform.** This is **already true for Windows at the baseline** (§3.3), and `ADR-0010` decides that Windows is out of scope for the desktop GUI. The implementer MUST NOT add a Windows transport to make the matrix green: that is a daemon-subsystem change and a candidate for the ADR the roadmap requires for any non-additive protocol change (`roadmap:791`). Stop, record the exclusion with its root cause and its re-entry path, and escalate it in the handoff artifact.
+3. **The inherited `make check-deps` failure changes shape** — a *new* advisory appears that is reachable only through the GUI's closure, or the existing GUI-reachable advisories (`glib` RUSTSEC-2024-0429, `glib-macros` RUSTSEC-2024-0370, `unic-*` RUSTSEC-2025-0081/0075/0080/0100/0098) get worse. M007 reports; it does not write the `deny.toml` exception, which needs an owner and a review-by date (`roadmap:753-755`; `docs/DEPENDENCY_EXCEPTIONS.md`). The implementer stops if the fix would require a Tauri pin change, because the 2.11.x pin is what keeps MSRV 1.89 true (`ADR-0009:218-224`).
 4. **The `--all-features` compile error blocks `make check-features-individual` or `make check-full`.** The implementer MUST NOT fix `crates/eggsec/src/fuzzer/advanced.rs:446` as part of M007 — it is a knowledge-corpus crate's field visibility, already recorded as a deliberate non-fix (`plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md:273`). Stop and report if a deep check is required for M007's acceptance.
-5. **The scope widens into signing, notarization, installers, or update channels.** These belong to the separately-managed distribution workstream (`roadmap:521`, `:529-530`; `ADR-0007:88-91`, `:249-251`). Enabling `bundle.active`, adding a code-signing identity, adding an updater plugin, or producing an installer is a **stop**, not a judgement call — M007's deliverable is the binary, the recipe, the prerequisites, the matrix, and the handoff artifact.
-6. **The supported-platform matrix cannot be decided.** The decision belongs to the distribution workstream (the operational dependency at `roadmap:517`). If the distribution workstream's position is unavailable, M007 delivers the evidence and the **recommendation**, records the decision as outstanding, and the closure names the sign-off as a precondition (A22) rather than inventing a decision.
+5. **The scope widens into signing, notarization, installers, or update channels.** These belong to the separately-managed distribution workstream (`roadmap:557`, `:567-568`; `ADR-0007:88-91`, `:249-251`). Enabling `bundle.active`, adding a code-signing identity, adding an updater plugin, or producing an installer is a **stop**, not a judgement call — M007's deliverable is the binary, the recipe, the prerequisites, the matrix, and the handoff artifact.
+6. **The supported-platform matrix cannot be decided.** The decision belongs to the distribution workstream (the operational dependency at `roadmap:552-554`). If the distribution workstream's position is unavailable, M007 delivers the evidence and the **recommendation**, records the decision as outstanding, and the closure names the sign-off as a precondition (A22) rather than inventing a decision.
 7. **M6 has not closed and the export cell is needed for the milestone's closure.** The export cell stays `pending M6`; it does not block the rest of the matrix, and M007 does not implement export.
 8. **A qualification procedure reveals a runtime defect in the GUI.** A defect found by the procedure is reported as a **separately-scoped finding** with its reproduction, not fixed inside the packaging milestone. Fixing it in M007 would silently widen a packaging milestone into a runtime milestone.
 9. **The prerequisite documentation would require a package name that cannot be supported.** The package names are stated **as the Tauri v2 documentation states them**; the implementer MUST NOT invent or guess a package name for a distribution the upstream documentation does not cover. For an uncovered distribution, the document says so and points at the egui fallback.
@@ -776,7 +782,7 @@ The closure record (`plans/closure/desktop-gui-frontend/007-packaging-and-platfo
 5. **The build metadata sidecar** from `make gui-release` for each qualified platform, including the binary's SHA-256 and the `Cargo.lock` hash.
 6. **The Linux prerequisite probe's output** on a host with the prerequisites and, if available, on one without — showing the "not buildable" verdict rather than a silent skip.
 7. **The resident-footprint measurement** per qualified platform, with the method used.
-8. **The handoff artifact** `docs/GUI_DISTRIBUTION_HANDOFF.md` as delivered, including the known-limitations list and the recommended supported-platform matrix with its reasoning.
+8. **The handoff artifact** `docs/GUI_DISTRIBUTION_HANDOFF.md` as delivered, including the known-limitations list and the **decided** supported-platform matrix (Linux and macOS qualified, Windows out of scope per `ADR-0010`).
 9. **The distribution workstream's position** on the supported-platform matrix — either the recorded decision, or an explicit statement that the sign-off is outstanding and that M7's closure is conditional on it (A22).
 10. **The guard's negative test** — the deliberate violation, the guard's failure output naming the reason, and the restore run's pass.
 11. **The verification commands actually run, with their observed output** — §11's list, with the exact command and the result. Commands that were **not** run are listed as not run, with the reason. No claim may appear for a command that was not executed.
@@ -795,7 +801,7 @@ The closure record (`plans/closure/desktop-gui-frontend/007-packaging-and-platfo
 - **`crates/eggsec-gui/icons/icon.png` MUST be kept.** Tauri's `tauri::generate_context!` panics without it ("failed to open icon"). The file is a generated 512×512 RGBA PNG (4 379 bytes). It is required at build time; it is not decoration and must not be deleted, moved, or "cleaned up" during a packaging cleanup.
 - **`crates/eggsec-gui/gen/schemas/` is git-ignored** (`.gitignore:10`, pattern `crates/*/gen/schemas/`). `tauri-build` regenerates it on every build, and `capabilities/default.json`'s `$schema` points into it only as an editor hint. Do not force-add it; do not delete it and commit the absence.
 - **Tauri's command arguments default to camelCase.** Every GUI command therefore declares `#[tauri::command(rename_all = "snake_case")]` — all eight of them (`crates/eggsec-gui/src/commands.rs:218`, `:265`, `:291`, `:338`, `:374`, `:435`, `:451`, `:463`). The in-crate test at `:641-655` fails if any command omits it. Any command added during M007 (none is planned) MUST declare it.
-- **The frontend has zero npm dependencies and that must stay true.** There is no `package.json`, no lockfile, no `node_modules`, and no bundler under `crates/eggsec-gui/frontend/`. Any JavaScript dependency admitted later requires a recorded policy with an owner and a review-by date (`roadmap:667-670`). The build recipe MUST NOT introduce an npm step.
+- **The frontend has zero npm dependencies and that must stay true.** There is no `package.json`, no lockfile, no `node_modules`, and no bundler under `crates/eggsec-gui/frontend/`. Any JavaScript dependency admitted later requires a recorded policy with an owner and a review-by date (`roadmap:793-796`). The build recipe MUST NOT introduce an npm step.
 - **`cargo fmt --all` before committing.** The mandatory contract starts with `cargo fmt --all --check` (`Makefile:155`).
 
 ### Resource constraints and environment
@@ -803,7 +809,7 @@ The closure record (`plans/closure/desktop-gui-frontend/007-packaging-and-platfo
 - **Other crates are busy in this workspace.** M007's implementer should prefer `cargo check -p eggsec-gui` / `cargo test -p eggsec-gui` over workspace-wide builds, and MUST NOT run a workspace-wide `--all-features` build as a routine step — it is currently broken anyway (§3.9, item 2).
 - **The Linux shell profile needs the webview SDK.** Without it, `make check`'s GUI line **skips** rather than fails (`Makefile:22-29`). On Linux, always use `make check-gui` for the shell profile; a green `make check` on a bare Linux host proves nothing about the GUI.
 - **The GUI's tests need no display, no socket, and no daemon** — verified by search: no `UnixStream`, `UnixListener`, `TcpStream`, `tauri::test`, `WebviewWindow`, or `std::process::Command` appears under `crates/eggsec-gui/src/`. They are safe to run unattended in CI.
-- **The `gui-platform` CI job needs macOS and Windows runners** for a full matrix; the Linux leg alone does not discharge the roadmap's platform-qualification requirement.
+- **The `gui-platform` CI job needs a macOS runner** to cover the second qualified platform; the Linux leg alone does not discharge the roadmap's platform-qualification requirement. No Windows leg is required or claimed — `ADR-0010` puts Windows out of scope.
 - **Cross-compilation for the Windows evidence** requires the `x86_64-pc-windows-msvc` target (`rustup target add x86_64-pc-windows-msvc`). A `cargo check` against it needs no linker; a *build* of the daemon additionally needs a cross C toolchain for `libsqlite3-sys`, which is why the daemon's own Windows check stopped in the build script during verification.
 
 ### Serial-test requirements

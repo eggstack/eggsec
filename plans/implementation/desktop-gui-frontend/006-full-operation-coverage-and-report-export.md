@@ -268,7 +268,7 @@ The GUI reads the same fact over the wire through
 ### 3.5 The daemon's readiness and lifecycle signals
 
 The roadmap makes the daemon-lifecycle decision **M6's** to make
-(`plans/subsystems/desktop-gui-frontend-roadmap.md:465-471`). The measured
+(`plans/subsystems/desktop-gui-frontend-roadmap.md:500-506`). The measured
 facts:
 
 | Fact | Evidence |
@@ -493,7 +493,7 @@ scope to fix them, and MUST NOT claim them as M006 regressions.
 | Failure | Evidence | Blocks |
 |---|---|---|
 | `make check-deps` fails on advisories. **Not all of them are unrelated to the GUI.** The engine-side entries are `zip 2.4.2` (RUSTSEC-2026-0367, -0368, -0369 — three, not two) and the `rustls 0.21.12` family via `tokio-rustls 0.24.1` → `tiberius 0.12.3` → `eggsec` (not `tiberius` → `sqlx-mysql`; `sqlx-mysql` is a sibling under `sqlx`). **Seven advisory entries are reachable only through the GUI's Tauri closure** and are therefore attributable to `crates/eggsec-gui`: `glib 0.18.5` (RUSTSEC-2024-0429), `glib-macros 0.18.5` → `proc-macro-error 1.0.4` (RUSTSEC-2024-0370), and the five `unic-*` crates (RUSTSEC-2025-0081, -0075, -0080, -0100, -0098). A further four (`rustls 0.23.45`, `rustls-webpki 0.103.15`, `webpki-root-certs 1.0.9`, `tokio 1.53.1`) are **shared** with the engine but are attributed by `cargo deny` to a chain that passes through `eggsec-gui` → `tauri` → `reqwest`, because `cargo deny` resolves over the lockfile graph while the GUI's feature-resolved build declines Tauri's `rustls-tls` feature. `bans ok, licenses ok, sources ok`. | `Cargo.lock` pins `zip 2.4.2` (`:11488-11489`) and `rustls 0.21.12` (`:7596-7597`); `deny.toml:25-37` records ignores for the *webpki* advisories on that path but not for the `zip` triple; `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` §3.9 carries the full per-advisory table | the `make check` contract, and therefore M6's closure |
-| `cargo check --workspace --all-features` fails with `E0616: field 'url' of struct 'WebSocketFuzzer' is private` | `WebSocketFuzzer.url` is `pub(crate)` in `crates/eggsec-payloads/src/websocket.rs:41-45`, but the engine reads it at `crates/eggsec/src/fuzzer/advanced.rs:446` | `make check-features-individual`, which the roadmap requires before M6 closure (`plans/subsystems/desktop-gui-frontend-roadmap.md:641-644`) |
+| `cargo check --workspace --all-features` fails with `E0616: field 'url' of struct 'WebSocketFuzzer' is private` | `WebSocketFuzzer.url` is `pub(crate)` in `crates/eggsec-payloads/src/websocket.rs:41-45`, but the engine reads it at `crates/eggsec/src/fuzzer/advanced.rs:446` | `make check-features-individual`, which the roadmap requires before M6 closure (`plans/subsystems/desktop-gui-frontend-roadmap.md:767-770`) |
 | `make check-python` was not run (needs `.venv-ci/`) | — | nothing in M6; recorded for completeness |
 
 Recording a `deny.toml` exception is a **maintainer decision** (owner +
@@ -582,7 +582,7 @@ review-by date), not an implementation task M006 may take on itself.
   `make check-deps` advisory failures** (§3.12). Both are recorded as stop
   conditions for the exit conditions they block.
 - **A strict or headless GUI mode** — an ADR decision point
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:662-665`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:788-791`).
 - **Interactive policy approval.** `ApprovePolicy` stays unwired; the GUI
   MUST NOT offer an approval affordance.
 - **Per-operation bespoke forms or result visuals.** M005's engine stays; M006
@@ -629,7 +629,7 @@ review-by date), not an implementation task M006 may take on itself.
   is **not** enabled — `crates/eggsec-gui/capabilities/default.json:6` — and
   MUST NOT be enabled for this).
 - No data migration is required, because no milestone changes an existing
-  persisted representation (`plans/subsystems/desktop-gui-frontend-roadmap.md:551-557`).
+  persisted representation (`plans/subsystems/desktop-gui-frontend-roadmap.md:666-672`).
 - The daemon-side report store (Work package D) is **engine/daemon-owned
   runtime state**, bounded and cleared with its session — not a persisted
   representation, so it needs no migration.
@@ -1080,7 +1080,7 @@ Required changes:
    **stops and escalates** (§14). The escalation is an ADR under `plans/adrs/`,
    because the roadmap names "Any change to the daemon protocol that is not
    strictly additive" as a decision point requiring an ADR
-   (`plans/subsystems/desktop-gui-frontend-roadmap.md:662-665`).
+   (`plans/subsystems/desktop-gui-frontend-roadmap.md:788-791`).
 
 Acceptance evidence:
 
@@ -1266,7 +1266,7 @@ Acceptance evidence:
   frontend-neutral (`crates/eggsec-frontend-client/src/lib.rs:66-88`).
 - **No data migration.** The GUI owns no authoritative storage, and the
   daemon-side report store is runtime state, not a persisted representation
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:551-557`).
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:666-672`).
 - **Configuration fallback.** The GUI's new option (`--daemon-bin`) is
   optional and defaults to "no spawn route", which is today's behaviour. An
   unparseable or empty value is a usage error, consistent with `--socket`
@@ -1515,7 +1515,7 @@ Stop and escalate rather than improvise if any of these arise:
   empty-payload contract.** `TaskResultEnvelope.payload` and `.artifacts` are
   pinned (`crates/eggsec/tests/runtime_contract_closure.rs:618-619`). Changing
   them is **not additive** and is an ADR decision point
-  (`plans/subsystems/desktop-gui-frontend-roadmap.md:662-665`). Escalate with
+  (`plans/subsystems/desktop-gui-frontend-roadmap.md:788-791`). Escalate with
   the ADR; do not fill the payload.
 - **The additive report read path turns out to require a new `TaskOutcome`
   variant.** An externally tagged serde enum is not wire-additive; an old
