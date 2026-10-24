@@ -619,3 +619,58 @@ Required in `plans/subsystems/desktop-gui-frontend-roadmap.md`:
 
 Both files are the session owner's to edit and were **not** touched by this
 milestone.
+
+## Addendum 2026-10-24 — ADR-0013 ratified; finding F1 closed
+
+The maintainer ratified `plans/adrs/ADR-0013-daemon-endpoint-default-and-bind-contract.md`
+on 2026-10-24. The ADR now carries `Status: accepted` and a `Ratified:
+2026-10-24` line, and its Decision section opens in the same form ADR-0009
+uses (`**Accepted: Option C — …**`, followed by the ratification sentence).
+**The decision text was not touched**: the ADR's Context, drivers, options,
+Decision, Consequences, compatibility, security and verification sections are
+byte-identical to the proposed version this milestone was implemented against,
+because an accepted ADR is a historical record and rewriting it would make a
+later decision appear original (`plans/adrs/README.md`).
+
+**Finding F1 is therefore closed.** §10 recorded it as *low* severity — the
+milestone's implementation was complete and followed the ADR's stated decision
+exactly (the owning crate is `eggsec-runtime`; the variable is
+`EGGSEC_DAEMON_SOCKET`; the precedence is flag → environment → built-in
+default; the bind contract is bind-first with an actionable refusal), but the
+milestone's ratification was outstanding. The maintainer's decision has now
+been given, and it ratified the decision as written — so no part of the
+milestone's work needs revisiting, and the §14 stop condition the plan named
+("not executable until the ADR is accepted") is discharged.
+
+The record's findings are not rewritten. The disposition of the remaining
+findings is:
+
+- **F2** (two files outside the handoff's file-ownership list) — **accepted**.
+  The plan's §6.4 puts the refusal's error type in
+  `crates/eggsec-daemon/src/error.rs`, and the seventh copy of the default
+  (in `docs/python/examples/local_vs_daemon_execution.py`) was the same
+  duplication the milestone exists to remove. The owner keeps both edits.
+- **F3** (the shared verification commands were red for reasons outside the
+  change) — **closed**. The owner's integration run re-ran the whole contract
+  over the tree with all four milestones landed: `make check` exit 0 (4315
+  tests across 77 test binaries, 190 guards, `cargo deny` green, clippy clean,
+  fmt clean), `make check-msrv` exit 0, and
+  `python3 scripts/check_doc_references.py` at the unchanged 29-reference
+  baseline. The smoke script's one-line fix landed in `42e3534b`.
+- **F4** (the reclamation window is one `remove_file` wide) — **accepted
+  residual**, as the plan states it.
+- **F5** (a daemon that does not answer `Health` within 5 s counts as *not
+  live*) — **accepted residual**, as the plan states it. "Proven dead" would
+  be a new variant and a new ADR.
+
+**Counts.** Nothing in this milestone's counted set changed: the GUI's IPC
+command count is still 13, the daemon's protocol is unchanged, and no crate,
+feature, operation, alias, tab, task kind, payload, technique, endpoint, probe
+or descriptor was added or removed.
+
+**Registry and roadmap.** `plans/registry.md` now lists ADR-0013 among the
+durable decisions as **accepted 2026-10-24**, in the desktop-GUI-frontend
+subsystem's governed-by list, and in the subsystem table; the subsystem
+roadmap's milestone-012 row records `ADR-0013` as **met — accepted 2026-10-24**
+in place of "implemented as written; acceptance is the maintainer's".
+

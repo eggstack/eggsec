@@ -1,8 +1,10 @@
 # ADR-0013: Daemon Endpoint Default and Bind Contract
 
-Status: proposed
+Status: accepted
 
 Date: 2026-10-24
+
+Ratified: 2026-10-24
 
 Decision owners: project maintainers
 
@@ -100,7 +102,10 @@ default, and a webview copy that can drift from the Rust copy.
 
 ## Decision
 
-**Option C.** `eggsec-runtime` owns the daemon's endpoint facts.
+**Accepted: Option C — the default lives in `eggsec-runtime`.**
+
+The maintainer ratified this proposal on 2026-10-24. `eggsec-runtime` owns the
+daemon's endpoint facts.
 
 1. **One owner.** `crates/eggsec-runtime/src/daemon_endpoint.rs` is the only
    place in the workspace's executable surface that states the daemon's default
