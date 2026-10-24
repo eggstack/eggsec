@@ -1070,9 +1070,11 @@ externally tagged, so an older client fails to deserialize an unknown variant.
 - The GUI surface is manual: permissive profile, operator overrides allowed,
   exactly like CLI and TUI manual sessions. Overrides are evaluated by the
   engine, never by the GUI.
-- Until the daemon's `ApprovePolicy` is wired, a GUI operating against a
-  remote daemon MUST fail closed on any operation requiring interactive
-  approval and MUST NOT auto-approve on the operator's behalf.
+- The daemon's `ApprovePolicy` is wired (milestone 011, `ADR-0012`). A GUI
+  operating against a remote daemon MAY answer a pending interactive approval
+  on the operator's behalf, and MUST NOT auto-approve without an operator's
+  answer. The answer names *yes* or *no*; it never names the authorisation,
+  which the policy kernel computes on the executor's side.
 - The schema artifact describes operation shapes across the whole operation
   surface. It is a reconnaissance aid and MUST be served only over the
   daemon's local transport under the same access controls as other commands.
@@ -1205,7 +1207,7 @@ This roadmap is closed when:
 | 8 — Daemon feature profile and build recipe | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | `plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md` | — |
 | 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
 | 10 — The daemon's full manual capability policy | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md` | `plans/closure/desktop-gui-frontend/010-daemon-full-manual-capability-policy-closure.md` | `ADR-0011` (**met** — accepted 2026-10-24); M9 (met — closed 2026-10-23) |
-| 11 — Daemon-mediated policy approval | **planned 2026-10-24** | — | — | M10 (hard — the approval path is only exercisable for published capabilities) |
+| 11 — Daemon-mediated policy approval | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/011-daemon-mediated-policy-approval.md` | `plans/closure/desktop-gui-frontend/011-daemon-mediated-policy-approval-closure.md` | M10 (met — implemented 2026-10-24); `ADR-0012` (implemented as written; acceptance is the maintainer's) |
 | 12 — The daemon's socket path and bind contract | **planned 2026-10-24** | — | — | — |
 | 13 — The report bridge's full coverage | **planned 2026-10-24** | — | — | M6 (met — implemented 2026-10-24) |
 | 14 — The GUI's qualification driver and runbook | **planned 2026-10-24** | — | — | M7 (met — conditionally closed 2026-10-23); M6 (met) |
