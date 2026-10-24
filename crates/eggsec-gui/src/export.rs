@@ -528,6 +528,50 @@ mod tests {
         );
     }
 
+    /// The format table agrees with the names the frontend offers and with
+    /// the files the writer produces.
+    ///
+    /// The frontend's format dropdown is rendered from `format_views()`, so a
+    /// name the view offers and the table cannot parse would be a control the
+    /// operator can pick and the export command cannot honour. And the file
+    /// the writer leaves must carry the suffix the table names — the record
+    /// in `docs/evidence/gui-qualification/` carries that suffix, so the two
+    /// have to agree.
+    #[test]
+    fn the_format_table_agrees_with_the_views_and_the_written_files() {
+        let views = format_views();
+        assert_eq!(
+            views.len(),
+            ReportFormat::ALL.len(),
+            "the frontend is offered a different number of formats than the table holds"
+        );
+
+        let report = sample_report();
+        let directory = temp_export_dir("format-table");
+        for format in ReportFormat::ALL {
+            let view = views
+                .iter()
+                .find(|view| view.value == format.value())
+                .unwrap_or_else(|| panic!("the frontend offers no view for {format:?}"));
+            assert_eq!(
+                ReportFormat::parse(&view.value),
+                Some(format),
+                "the frontend offers `{}`, which the format table does not parse",
+                view.value
+            );
+            assert_eq!(view.extension, format.extension());
+
+            let rendered = render(format, &report).expect("the format renders");
+            let path = directory.join(format!("report.{}", format.extension()));
+            write_export(&path, &rendered).expect("the format writes");
+            assert_eq!(
+                path.extension().and_then(|extension| extension.to_str()),
+                Some(format.extension()),
+                "the file the writer produced does not carry the suffix the table names"
+            );
+        }
+    }
+
     #[test]
     fn a_format_parses_case_insensitively_and_by_its_extension() {
         assert_eq!(ReportFormat::parse("JSON"), Some(ReportFormat::Json));

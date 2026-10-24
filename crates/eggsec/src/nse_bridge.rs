@@ -34,7 +34,11 @@ fn evidence_kind_to_output(kind: &crate::nse::report::NseEvidenceKind) -> Output
 }
 
 /// Map NseEvidenceKind to severity.
-fn evidence_kind_to_severity(kind: &crate::nse::report::NseEvidenceKind) -> Severity {
+///
+/// The mapping is the engine's single answer for "how severe is this kind of
+/// evidence". The report bridge reuses it rather than restating it, so the
+/// two paths cannot disagree.
+pub(crate) fn evidence_kind_to_severity(kind: &crate::nse::report::NseEvidenceKind) -> Severity {
     match kind {
         crate::nse::report::NseEvidenceKind::VulnerabilitySignal => Severity::Medium,
         crate::nse::report::NseEvidenceKind::Misconfiguration => Severity::Medium,

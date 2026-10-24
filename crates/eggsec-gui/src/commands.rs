@@ -267,6 +267,13 @@ pub struct DaemonStatusView {
     pub attachment: DaemonAttachment,
     /// The socket the GUI is talking to, when it is talking to one.
     pub socket_path: Option<String>,
+    /// The socket path this GUI uses when the operator has not chosen one.
+    ///
+    /// The `--socket` flag if the operator gave one, otherwise the resolved
+    /// default (the daemon's socket environment variable, else the built-in
+    /// default). It is the same value the GUI substitutes for an empty socket
+    /// field, so the webview never has to hold a copy of the default.
+    pub default_socket_path: String,
     /// The engine features the daemon published.
     ///
     /// `None` means the daemon did not publish a set: that is **unknown**,
@@ -312,10 +319,31 @@ pub enum TaskEvent {
     },
 }
 
+/// Resolve the socket path a connect request names.
+///
+/// An **empty** request means "the GUI's default": the webview holds no copy
+/// of the daemon's default path — it learns the path from `daemon_status` —
+/// so the Rust side resolves the empty request to the path the GUI was
+/// started with. An explicitly supplied socket is used verbatim.
+///
+/// Split from the Tauri command so that the rule can be asserted without a
+/// Tauri application handle.
+pub fn resolve_connect_socket(requested: &str, options: &crate::config::GuiOptions) -> String {
+    let requested = requested.trim();
+    if requested.is_empty() {
+        options.socket_path.clone()
+    } else {
+        requested.to_owned()
+    }
+}
+
 /// Connect to a daemon and return the catalog it published.
 ///
 /// The socket path comes from the webview so the operator can point the GUI
-/// at a different daemon without relaunching it.
+/// at a different daemon without relaunching it. An **empty** socket means
+/// "the GUI's default": the webview holds no copy of the default path, so the
+/// Rust side resolves it (the `--socket` flag if the operator gave one,
+/// otherwise the resolved default).
 ///
 /// When the socket cannot be reached, the GUI reports how to start a usable
 /// daemon — unless the operator named a daemon executable with
@@ -328,6 +356,9 @@ pub async fn connect_daemon(
     state: tauri::State<'_, GuiState>,
     socket: String,
 ) -> Result<CatalogView, String> {
+    // An empty socket is "the GUI's default", resolved here so the webview
+    // never needs a copy of the default path.
+    let socket = resolve_connect_socket(&socket, &state.options);
     let connection = match GuiConnection::connect(&socket).await {
         Ok(connection) => connection,
         Err(error) => {
@@ -642,10 +673,10 @@ pub async fn task_snapshot(state: tauri::State<'_, GuiState>) -> Result<TaskDash
 /// reachable from this GUI.
 ///
 /// The table is derived from what the daemon published — the catalog, the
-/// advertised capabilities, and the published enabled-feature set — plus the
-/// denials the GUI has learned from live failures. Nothing here is
-/// transcribed: a task kind the engine publishes tomorrow appears in this
-/// table without a line being added.
+/// advertised capabilities, the published enabled-feature set, and the
+/// published report-form coverage — plus the denials the GUI has learned from
+/// live failures. Nothing here is transcribed: a task kind the engine
+/// publishes tomorrow appears in this table without a line being added.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn coverage(state: tauri::State<'_, GuiState>) -> Result<Vec<TaskCoverage>, String> {
     let parts = state.parts().await?;
@@ -656,6 +687,7 @@ pub async fn coverage(state: tauri::State<'_, GuiState>) -> Result<Vec<TaskCover
         &parts.catalog.operations,
         &parts.capabilities.runtime.task_kinds,
         parts.capabilities.enabled_features.as_deref(),
+        parts.capabilities.report_forms.as_deref(),
         &ledger,
     ))
 }
@@ -685,10 +717,24 @@ pub async fn export_report(
         .client
         .get_task_report(&parts.session_id, &parsed)
         .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| {
-            format!("the daemon has no report for task `{task_id}`, so there is nothing to export")
-        })?;
+        .map_err(|error| error.to_string())?;
+
+    let Some(document) = document else {
+        // The daemon has no report for this task. When the GUI can resolve
+        // the task's operation and the daemon published why that operation
+        // has no report form, the message names the reason; when it cannot,
+        // the message keeps its plain wording. The GUI never claims a
+        // reason it does not have.
+        let reason = published_report_reason(&parts, &parsed).await;
+        return Err(match reason {
+            Some(reason) => {
+                format!("the daemon has no report for task `{task_id}`: {reason}")
+            }
+            None => format!(
+                "the daemon has no report for task `{task_id}`, so there is nothing to export"
+            ),
+        });
+    };
 
     let report: ScanReportData = serde_json::from_value(document).map_err(|error| {
         format!("the daemon's report for task `{task_id}` could not be read: {error}")
@@ -703,6 +749,56 @@ pub async fn export_report(
         format,
         extension: format.extension(),
     })
+}
+
+/// The reason the daemon published for a task's operation having no report.
+///
+/// `None` when the GUI cannot resolve one: the task is unknown to the GUI's
+/// registry, its task kind is not in the published catalog, the daemon
+/// published no coverage, or the coverage says the operation *does* have a
+/// report form. The GUI never claims a reason it does not have.
+async fn published_report_reason(parts: &ConnectionParts, task_id: &TaskId) -> Option<String> {
+    let variant = {
+        let registry = parts.tasks.lock().await;
+        let found = registry
+            .tasks()
+            .find(|task| task.task_id == *task_id)
+            .map(|task| task.variant.clone());
+        found
+    }?;
+
+    report_reason_for_variant(
+        Some(variant.as_str()),
+        &parts.catalog.task_kinds,
+        parts.capabilities.report_forms.as_deref(),
+    )
+}
+
+/// The published reason for a task kind's operation having no report form.
+///
+/// The pure half of the lookup: the caller supplies the task's wire variant,
+/// the published task kinds, and the published coverage. The join is by the
+/// published catalog's own operation identity, so the GUI names no
+/// operation id of its own.
+fn report_reason_for_variant(
+    variant: Option<&str>,
+    task_kinds: &[TaskKindDescription],
+    report_forms: Option<&[eggsec_runtime::report::ReportFormEntry]>,
+) -> Option<String> {
+    let variant = variant?;
+    let operation_id = task_kinds
+        .iter()
+        .find(|task_kind| task_kind.variant == variant)
+        .map(|task_kind| task_kind.operation_id.as_str())?;
+
+    let entry = report_forms?
+        .iter()
+        .find(|entry| entry.operation_id == operation_id)?;
+
+    match entry.form {
+        eggsec_runtime::report::ReportForm::NoCleanMapping => Some(entry.reason.clone()),
+        eggsec_runtime::report::ReportForm::Canonical => None,
+    }
 }
 
 /// The report of a completed task, as the webview renders it.
@@ -781,6 +877,14 @@ pub struct ReportResponse {
 /// *unknown*, not an empty one.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn daemon_status(state: tauri::State<'_, GuiState>) -> Result<DaemonStatusView, String> {
+    daemon_status_view(&state).await
+}
+
+/// The daemon status the webview is told.
+///
+/// Split from the Tauri command so that the view can be built — and
+/// asserted — without a Tauri application handle.
+async fn daemon_status_view(state: &GuiState) -> Result<DaemonStatusView, String> {
     let supervised = state.supervised();
     let inner = state.inner.lock().await;
     let connected = inner.as_ref();
@@ -828,6 +932,7 @@ pub async fn daemon_status(state: tauri::State<'_, GuiState>) -> Result<DaemonSt
     Ok(DaemonStatusView {
         attachment,
         socket_path,
+        default_socket_path: state.options.socket_path.clone(),
         enabled_features,
         advertised_capability_count,
         task_kind_count,
@@ -1073,6 +1178,45 @@ mod tests {
         );
     }
 
+    /// The export path writes **no file** for a task with no report: the
+    /// error is raised before the document is rendered and before anything is
+    /// written, so "no report" can never leave an empty artifact behind.
+    #[test]
+    fn the_export_path_writes_no_file_for_a_task_with_no_report() {
+        let source = include_str!("commands.rs");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("the module has a production half");
+        let command = production
+            .split("pub async fn export_report(")
+            .nth(1)
+            .expect("the export command exists");
+        let command = command
+            .split("#[tauri::command")
+            .next()
+            .expect("the command body is bounded");
+
+        let no_report = command
+            .find("there is nothing to export")
+            .expect("the export command states the no-report message");
+        let render = command
+            .find("export::render(")
+            .expect("the export command renders");
+        let write = command
+            .find("export::write_export(")
+            .expect("the export command writes");
+
+        assert!(
+            no_report < render,
+            "the error is raised before the document is rendered"
+        );
+        assert!(
+            no_report < write,
+            "the error is raised before the file is written"
+        );
+    }
+
     /// The availability rules are stated once and applied consistently.
     #[test]
     fn unavailability_is_explained() {
@@ -1086,5 +1230,123 @@ mod tests {
         assert!(unavailable_reason(false, false)
             .expect("a reason")
             .contains("manual surface"));
+    }
+
+    /// A published task kind, for the lookup tests below.
+    fn task_kind(variant: &str, operation_id: &str, capability_name: &str) -> TaskKindDescription {
+        TaskKindDescription {
+            variant: variant.to_owned(),
+            operation_id: operation_id.to_owned(),
+            capability_name: capability_name.to_owned(),
+            request_schema: serde_json::Value::Null,
+        }
+    }
+
+    /// The export message names the reason when the GUI can resolve one: the
+    /// task's variant maps to an operation, and the daemon published why that
+    /// operation has no report form.
+    #[test]
+    fn the_export_message_names_the_reason_when_it_has_one() {
+        let kinds = [task_kind("WafDetect", "waf-detect", "waf")];
+        let published = [eggsec_runtime::report::ReportFormEntry {
+            operation_id: "waf-detect".to_owned(),
+            form: eggsec_runtime::report::ReportForm::NoCleanMapping,
+            reason: "neither variant carries a target".to_owned(),
+        }];
+
+        let reason = report_reason_for_variant(Some("WafDetect"), &kinds, Some(&published));
+
+        assert_eq!(
+            reason.as_deref(),
+            Some("neither variant carries a target"),
+            "the message names the reason the daemon published"
+        );
+    }
+
+    /// The export message falls back to its plain wording whenever the GUI
+    /// cannot resolve a reason. The GUI never states a reason it does not
+    /// have.
+    #[test]
+    fn the_export_message_falls_back_when_it_cannot_resolve_one() {
+        let kinds = [task_kind("WafDetect", "waf-detect", "waf")];
+        let published = [eggsec_runtime::report::ReportFormEntry {
+            operation_id: "waf-detect".to_owned(),
+            form: eggsec_runtime::report::ReportForm::NoCleanMapping,
+            reason: "neither variant carries a target".to_owned(),
+        }];
+
+        // The daemon published no coverage at all.
+        assert_eq!(
+            report_reason_for_variant(Some("WafDetect"), &kinds, None),
+            None,
+            "an unpublished coverage resolves no reason"
+        );
+        // The task's variant is not in the published catalog.
+        assert_eq!(
+            report_reason_for_variant(Some("Unknown"), &kinds, Some(&published)),
+            None,
+            "an unknown task kind resolves no reason"
+        );
+        // The GUI does not know the task's variant.
+        assert_eq!(
+            report_reason_for_variant(None, &kinds, Some(&published)),
+            None,
+            "an unknown task resolves no reason"
+        );
+        // The coverage says the operation does have a report form.
+        let canonical = [eggsec_runtime::report::ReportFormEntry {
+            operation_id: "waf-detect".to_owned(),
+            form: eggsec_runtime::report::ReportForm::Canonical,
+            reason: String::new(),
+        }];
+        assert_eq!(
+            report_reason_for_variant(Some("WafDetect"), &kinds, Some(&canonical)),
+            None,
+            "a canonical operation has no missing-fact reason"
+        );
+    }
+
+    /// The GUI resolves an empty socket request to its own default.
+    ///
+    /// The webview holds no copy of the daemon's default path, so an empty
+    /// socket is the request for "the GUI's default" — and the Rust side is
+    /// what resolves it.
+    #[test]
+    fn an_empty_socket_request_resolves_to_the_guis_default() {
+        let options = crate::config::GuiOptions {
+            socket_path: "/run/eggsec.sock".to_owned(),
+            daemon_bin: None,
+        };
+        assert_eq!(resolve_connect_socket("", &options), "/run/eggsec.sock");
+        assert_eq!(resolve_connect_socket("   ", &options), "/run/eggsec.sock");
+    }
+
+    /// An explicitly supplied socket is used verbatim.
+    #[test]
+    fn an_explicit_socket_request_is_used_verbatim() {
+        let options = crate::config::GuiOptions {
+            socket_path: "/run/eggsec.sock".to_owned(),
+            daemon_bin: None,
+        };
+        assert_eq!(
+            resolve_connect_socket("/tmp/other.sock", &options),
+            "/tmp/other.sock"
+        );
+    }
+
+    /// The status view reports the path the GUI would use by default.
+    ///
+    /// This is how the webview learns the default: the view carries it, so
+    /// the webview never needs a copy of it.
+    #[tokio::test]
+    async fn the_status_view_reports_the_guis_default_socket_path() {
+        let state = GuiState::new(crate::config::GuiOptions {
+            socket_path: "/run/eggsec.sock".to_owned(),
+            daemon_bin: None,
+        });
+        let view = daemon_status_view(&state)
+            .await
+            .expect("the status view is always available");
+        assert_eq!(view.default_socket_path, "/run/eggsec.sock");
     }
 }

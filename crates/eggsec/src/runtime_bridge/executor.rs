@@ -172,6 +172,25 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
         self.reports.get(task_id)
     }
 
+    /// The report-form coverage this engine build publishes.
+    ///
+    /// `Some` is correct here: this executor links the engine, so the
+    /// coverage table is a knowable build fact. The rows are the engine's
+    /// own, projected into the wire DTO — nothing is restated here, and the
+    /// daemon republishes exactly what it gets.
+    fn report_forms(&self) -> Option<Vec<eggsec_runtime::report::ReportFormEntry>> {
+        Some(
+            super::report_coverage::REPORT_COVERAGE
+                .iter()
+                .map(|row| eggsec_runtime::report::ReportFormEntry {
+                    operation_id: row.operation_id.to_string(),
+                    form: row.form,
+                    reason: row.reason.to_string(),
+                })
+                .collect(),
+        )
+    }
+
     fn execute(
         &self,
         task_id: TaskId,
@@ -369,7 +388,11 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
             // path from the task envelope: the envelope's payload and
             // artifacts stay empty, and the report body is served from the
             // store instead.
-            if let Some(report) = super::report::report_for_result(&task_result) {
+            //
+            // The coverage table decides *whether* a document is built and
+            // the result decides *how*; the operation id is the canonical
+            // identity of the task kind that produced the result.
+            if let Some(report) = super::report::report_for_operation(&operation_id, &task_result) {
                 match serde_json::to_value(&report) {
                     Ok(document) => reports.insert(task_id, document),
                     Err(error) => tracing::warn!(
@@ -392,6 +415,31 @@ mod tests {
     use super::*;
     use eggsec_runtime::request::{FuzzParams, StressTestParams, TaskKind};
     use eggsec_runtime::{RunRequest, RuntimeEvent};
+
+    /// The engine publishes the coverage table itself: one row per canonical
+    /// operation, projected into the wire DTO without restating anything.
+    #[test]
+    fn the_executor_publishes_the_coverage_table() {
+        let executor = EggsecRuntimeExecutor::new();
+        let forms = executor
+            .report_forms()
+            .expect("the engine links the coverage table");
+
+        assert_eq!(
+            forms.len(),
+            super::super::report_coverage::REPORT_COVERAGE.len(),
+            "one published row per coverage row"
+        );
+
+        for (published, row) in forms
+            .iter()
+            .zip(super::super::report_coverage::REPORT_COVERAGE.iter())
+        {
+            assert_eq!(published.operation_id, row.operation_id);
+            assert_eq!(published.form, row.form);
+            assert_eq!(published.reason, row.reason);
+        }
+    }
 
     /// A policy that permits the intrusive operation and its capability.
     ///

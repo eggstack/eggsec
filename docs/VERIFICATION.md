@@ -76,7 +76,7 @@ See [The published-coverage contract test](#the-published-coverage-contract-test
 | `cargo check -p eggsec-gui --features shell` (gated) | Desktop GUI shell-profile regressions | The GUI's shell profile needs the platform webview SDK; the gate SKIPs with the reason named when it is absent |
 | `cargo check -p eggsec-cli --features daemon-client` | The CLI's daemon-client profile failing to compile | The `daemon`/`session`/`task` subcommands are behind a non-default feature, so without this line they sit outside the merge gate entirely |
 | `cargo test -p eggsec-cli --features daemon-client` | Behavioural regressions in the CLI's daemon path | The readiness wait, the pre-flight liveness check, and the derived capability list only exist in this profile |
-| `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests; guards 161 and 162 pin the GUI's derived coverage model and its remote-origin-free report display |
+| `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests; guards 161 and 162 pin the GUI's derived coverage model and its remote-origin-free report display; guard 190 pins the dependency-exception contract — every `deny.toml` ignore must carry a reason that names the exception document, and every ignored advisory ID must have a record in `docs/DEPENDENCY_EXCEPTIONS.md` with a non-empty owner and a dated review-by |
 
 ## Mandatory Python contributor contract
 

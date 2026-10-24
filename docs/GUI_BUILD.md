@@ -77,6 +77,19 @@ are the same package under three names: they provide the XTest library the
 Tauri webdriver tooling uses. They are needed to *drive* the shell, not to
 compile it.
 
+**The repository's own qualification procedure does not use the webdriver
+tooling.** `scripts/gui_qualification.sh` measures what a machine can measure
+— the build, the daemon, the harness, the window's existence — and leaves the
+operator-visible window to the operator's attestation. There is no Node client,
+no npm dependency, and no window-automation driver in this repository, and the
+zero-npm posture is why. The XTest library above is listed because the
+document names the Tauri webdriver tooling as an *operator option* for driving
+the shell; it is not a prerequisite of the procedure in §5.
+
+`xdotool` **is** used by the procedure, as the Linux window probe (§5). Its
+absence is a named skip, not a failure: the probe reports that it could not
+look, and the matrix cell that depends on it stays unpromoted.
+
 ### 2.3 macOS
 
 The webview ships with the OS as WKWebView, so no system packages are
@@ -361,7 +374,7 @@ and there is no embedded-runtime path in the GUI crate. The daemon is
 therefore started **separately**, and the GUI is pointed at it.
 
 ```bash
-eggsec-daemon --full-executor --socket-path /tmp/eggsec-daemon.sock
+eggsec-daemon --full-executor
 ```
 
 `--full-executor` only has an effect if the daemon binary was **built with**
@@ -372,21 +385,26 @@ obtainability recipe is milestone 009's
 ([`docs/DAEMON.md`](DAEMON.md)); its engine-feature profile is milestone
 008's ([`docs/DAEMON_FEATURE_PROFILE.md`](DAEMON_FEATURE_PROFILE.md)).
 
-**The daemon's lifecycle is milestone 006's.** The GUI does not start,
-supervise, or stop the daemon. Until M6 closes, the operator starts the
-daemon by hand as above and points the GUI at it.
+**The daemon's lifecycle is not the GUI's.** The GUI never starts, supervises,
+or stops the daemon: it is a daemon-only frontend (`ADR-0007`), and the
+daemon is a separate process with its own lifecycle. That is an architectural
+boundary, not an open milestone — there is no milestone left to close here.
+The **procedure** in this document starts a daemon of its own (or attaches to
+one the operator started) and points the GUI at it; the GUI itself does not.
 
 **The socket path.** The GUI takes `--socket <path>`
-(`crates/eggsec-gui/src/config.rs:47`). Its default is
-`/tmp/eggsec-daemon.sock` (`crates/eggsec-gui/src/config.rs:17`), which is
-the same default the daemon binary, the daemon's config, the CLI, and the
-webview each spell out again — **six production sites** in total. Use an
-explicit path in qualification runs so that the record says which socket
-was used.
+(`crates/eggsec-gui/src/config.rs:56`). The daemon's socket path follows the
+precedence **explicit `--socket-path` flag → `EGGSEC_DAEMON_SOCKET` → built-in
+default**. The built-in default (`/tmp/eggsec-daemon.sock`) is stated once, in
+`crates/eggsec-runtime/src/daemon_endpoint.rs`, and every surface — the daemon
+binary, the daemon's own config, the CLI, the TUI and the GUI — resolves
+through that one resolver. The webview holds no copy of it at all: it learns
+the path from Rust through the `daemon_status` command. Use an explicit path
+in qualification runs so that the record says which socket was used.
 
 **The scope.** The GUI carries **no scope of its own** and has no scope
 field. The daemon opens the GUI's session with the scope it constructs
-(`crates/eggsec-daemon/src/server.rs:476-483` — `RuntimeSurface::DesktopGuiManual`
+(`crates/eggsec-daemon/src/server.rs:524-527` — `RuntimeSurface::DesktopGuiManual`
 with an implicit `gui-default` scope). The scope in force for a run is
 therefore the daemon's, and it is recorded in the evidence file as the
 daemon's configuration, not as a GUI setting.
@@ -418,7 +436,7 @@ the matrix as a partial qualification, not smoothed into a pass.
 | | |
 |---|---|
 | **Precondition** | The daemon is running on `<path>`; the GUI is launched. |
-| **Action** | Type `<path>` into the socket field and press **Connect**. This invokes the `connect_daemon` IPC command (`crates/eggsec-gui/frontend/app.js:1284-1288`). |
+| **Action** | Type `<path>` into the socket field and press **Connect**. This invokes the `connect_daemon` IPC command (`crates/eggsec-gui/frontend/app.js:1682`). |
 | **Pass criterion** | The connection badge (`#connection-badge`) changes from "Not connected" to "Connected"; the operation list in the sidebar populates from the daemon's catalogue; the "no-op executor" badge (`#no-op-badge`) stays hidden, because a daemon built without the engine features reports a no-op executor. |
 | **Evidence artefact** | A screenshot of the connected window, plus the daemon's log line showing the client's session. |
 
@@ -427,7 +445,7 @@ the matrix as a partial qualification, not smoothed into a pass.
 | | |
 |---|---|
 | **Precondition** | Connected; an operation kind selected in the sidebar; the form populated with values that pass the three-layer validation (required fields, per-field schema, operation-level constraints). |
-| **Action** | Press **Run** (`crates/eggsec-gui/frontend/app.js:604-609`, submit handler at `:626`). The frontend invokes `submit_task` with the variant and the values. |
+| **Action** | Press **Run** (`crates/eggsec-gui/frontend/app.js:1006`, the `submit_task` invocation). The frontend invokes `submit_task` with the variant and the values. |
 | **Pass criterion** | A task appears in the Tasks panel with a task id and a non-terminal status; the daemon's audit trail records the dispatch. A rejection is a legitimate observation and is recorded as such — the daemon enforces, and the GUI's only job is to surface the refusal. |
 | **Evidence artefact** | A screenshot of the task card with its task id, and the daemon's audit record. |
 
@@ -436,7 +454,7 @@ the matrix as a partial qualification, not smoothed into a pass.
 | | |
 |---|---|
 | **Precondition** | A task is in a non-terminal state. |
-| **Action** | Press the task's **Cancel** button (`crates/eggsec-gui/frontend/app.js:896-904`, `cancel_task`) or the panel's **Cancel active** button (`crates/eggsec-gui/frontend/app.js:1128`, `cancel_active`). |
+| **Action** | Press the task's **Cancel** button (`crates/eggsec-gui/frontend/app.js:1525`, `cancel_task`) or the panel's **Cancel active** button (`crates/eggsec-gui/frontend/app.js:1538`, `cancel_active`). |
 | **Pass criterion** | The **terminal state observed in the event stream** is the criterion — not the click, and not the cancel request's own acknowledgement. |
 | **Evidence artefact** | A screenshot of the task's terminal status, and the daemon's audit record. |
 
@@ -444,7 +462,7 @@ the matrix as a partial qualification, not smoothed into a pass.
 that completes between the operator's click and the daemon's processing is a
 legitimate outcome: the cancellation lost a race it was never guaranteed to
 win. The event stream is authoritative for terminal state
-(`crates/eggsec-gui/src/commands.rs:432`), so the runbook records the
+(`crates/eggsec-gui/src/commands.rs:572-573`), so the runbook records the
 terminal state that was **observed**, and a `completed` terminal state after
 a cancel click is recorded as a completed task, not as a failed
 cancellation.
@@ -462,14 +480,37 @@ cancellation.
 
 | | |
 |---|---|
-| **Precondition** | Milestone 006 closed. |
-| **Action** | *Not yet defined.* The GUI frontend has no export affordance today — there is no `export` reference anywhere in `crates/eggsec-gui/frontend/app.js`. |
-| **Pass criterion** | *Not yet defined.* |
-| **Evidence artefact** | *Not yet defined.* |
+| **Precondition** | A task reached `completed` and carries a report; the Tasks panel shows that task's result. |
+| **Action** | Open the task's **Export** control and choose a format. The frontend invokes the `export_report` IPC command (`crates/eggsec-gui/frontend/app.js:1624`), which renders the daemon's report and writes it through the GUI's own writer (`crates/eggsec-gui/src/export.rs`). |
+| **Pass criterion** | The command exits 0; the chosen file exists; **the file's bytes equal the renderer's output** for the report the daemon published; the file's SHA-256 matches the digest the record carries; and, where the destination already existed, the prior content is preserved at `<path>.bak`. The six formats are `json`, `csv`, `html`, `md`, `sarif`, and `xml` (JUnit) — the same six the CLI emits, and not PDF, because the PDF renderer lives in the engine and the GUI links no engine crate. |
+| **Evidence artefact** | The exported file itself, under `docs/evidence/gui-qualification/`, with its SHA-256 recorded in the run record's `export` column. |
 
-The procedure is written and reviewed, but the **matrix cell stays `pending
-M6`** until M6 closes. A procedure without a feature behind it is not
-evidence of anything.
+**The panel's controls.** The export control sits on the task card in the
+Tasks panel; it is disabled until a task has a report to export, and the
+format is chosen from a dropdown that lists the daemon's advertised formats
+(`state.daemon.report_formats`, `crates/eggsec-gui/frontend/app.js:354`).
+
+**The two refusals, and why they matter.** The GUI's writer refuses to write
+over anything that is not a regular file, and it moves an existing export
+aside to `<path>.bak` before replacing it
+(`crates/eggsec-gui/src/export.rs`). A directory, a device, and a symlink are
+refused with a named error and nothing is written; a regular file is backed
+up, not destroyed. An export that silently overwrote something that was not an
+export would be a defect, so the refusal cases are part of the pass
+criterion rather than a footnote.
+
+**What the harness measures.** `crates/eggsec-gui/tests/qualification.rs`
+exercises this step end to end against a live daemon: it fetches the daemon's
+report for a completed task, renders it in all six formats, writes each one,
+and compares each written file's bytes with the renderer's output. The
+export's digest is what the record carries and what the matrix's validator
+checks, so a cell that claims `qualified` names an artefact that can be
+re-digested.
+
+**The cell does not promote itself.** A recorded export is what the matrix's
+rule P4 needs, but rule P4 also needs the operator's attestation. Until an
+operator-attested run exists, the cell says what the harness measured and
+what is still missing.
 
 ### 5.8 The repeatability contract
 
@@ -493,3 +534,20 @@ named `<platform>-<YYYY-MM-DD>.md`, following
 file. The rules for what an evidence file must contain, and how a matrix cell
 may cite a CI run instead, are in
 [`docs/GUI_PLATFORM_QUALIFICATION.md`](GUI_PLATFORM_QUALIFICATION.md) §4.
+
+The procedure itself is `scripts/gui_qualification.sh`: it runs the steps
+above, runs the harness (`crates/eggsec-gui/tests/qualification.rs`), and
+writes the run record — the evidence file **and** the machine-readable
+`eggsec-gui-qualification-record/v1` block the validator reads.
+
+**The export artefact.** A run that reached Step 7 leaves the exported report
+itself under `docs/evidence/gui-qualification/`, named
+`<platform>-<date>.export.<extension>`, with its SHA-256 in the record's
+`export` column. It is the artefact the export cell names, and it is the file
+a validator re-digests when it checks that cell. The run's build sidecar is
+left the same way, as `<platform>-<date>.build.json`.
+
+`scripts/check_gui_qualification.py` enforces the matrix's promotion rules
+against these artefacts. It reads the rules from
+[`docs/GUI_PLATFORM_QUALIFICATION.md`](GUI_PLATFORM_QUALIFICATION.md) §6, so
+there is exactly one statement of what promotes a cell.

@@ -26,6 +26,11 @@
 # What the script never does: no signing, no bundling, no packaging, no
 # installer, no updater, no npm step. It produces a binary and a record.
 #
+# The script carries no copy of the daemon's default socket path: the binary
+# owns that default and honours `EGGSEC_DAEMON_SOCKET` itself. The printed
+# hint names the operator's override when there is one, and otherwise lets the
+# binary apply its own default.
+#
 # The probe calls the engine's OWN platform matrix
 # (`crates/eggsec/src/platform/prereqs.rs` -> `PlatformReport::collect` ->
 # `report_for` per domain) through `eggsec doctor`'s JSON mode, so it reports
@@ -42,7 +47,11 @@ OUT_DIR=""
 ALLOW_DIRTY=0
 MSRV_FLOOR="1.89"
 VALID_PROFILES="service"
-SOCKET_PATH="${EGGSEC_DAEMON_SOCKET:-/tmp/eggsec-daemon.sock}"
+# The script carries no copy of the daemon's default socket path. The binary
+# owns that default (`eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH`) and honours
+# `EGGSEC_DAEMON_SOCKET` itself, so the hint below only has to name the
+# operator's override when there is one.
+SOCKET_PATH="${EGGSEC_DAEMON_SOCKET:-}"
 
 ENGINE_MANIFEST="crates/eggsec/Cargo.toml"
 DAEMON_MANIFEST="crates/eggsec-daemon/Cargo.toml"
@@ -511,4 +520,9 @@ echo "metadata sidecar:   $METADATA_PATH"
 echo ""
 echo "Next step (the runtime flag is unchanged — it is a different mechanism"
 echo "from the cargo feature, and it still selects the engine executor):"
-echo "  $BINARY_PATH --full-executor --socket-path $SOCKET_PATH"
+if [[ -n "$SOCKET_PATH" ]]; then
+  echo "  $BINARY_PATH --full-executor --socket-path $SOCKET_PATH"
+else
+  echo "  $BINARY_PATH --full-executor"
+  echo "  (the daemon applies its own default socket path; set EGGSEC_DAEMON_SOCKET to choose another)"
+fi

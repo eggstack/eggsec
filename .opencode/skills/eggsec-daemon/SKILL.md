@@ -52,11 +52,16 @@ cargo install --path crates/eggsec-cli --features daemon-client --locked
 
 `full-executor` is a deprecated alias for `service`; `service` is the canonical
 spelling. The resulting daemon defaults to the socket path
-`/tmp/eggsec-daemon.sock`, the data directory `$HOME/.local/share/eggsec/daemon`,
-10 max clients, and the `info` log level. The recipe does not produce a
-packaged, signed, or auto-updating artefact, and it does not cover Windows
-(`ADR-0010`: the daemon's transport is a Unix domain socket). See
-`docs/DAEMON.md` for the full recipe and its limits.
+`/tmp/eggsec-daemon.sock` — the built-in default, stated once in
+`crates/eggsec-runtime/src/daemon_endpoint.rs` — and honours the
+`EGGSEC_DAEMON_SOCKET` environment variable when it is set. The precedence is
+**explicit `--socket-path` flag → `EGGSEC_DAEMON_SOCKET` → built-in default**,
+and it is applied by the same resolver in the daemon binary, the CLI, the TUI
+and the GUI. The daemon also defaults to the data directory
+`$HOME/.local/share/eggsec/daemon`, 10 max clients, and the `info` log level.
+The recipe does not produce a packaged, signed, or auto-updating artefact, and
+it does not cover Windows (`ADR-0010`: the daemon's transport is a Unix domain
+socket). See `docs/DAEMON.md` for the full recipe and its limits.
 
 ## Capability honesty
 

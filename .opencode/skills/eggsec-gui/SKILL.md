@@ -19,7 +19,7 @@ through the daemon's Unix socket and nothing else.
 | Shell framework | Tauri v2, confined to this crate (`crates/eggsec-gui/src/shell.rs:3`) |
 | Frontend | Buildless: hand-written HTML, CSS, and vanilla JavaScript, **zero npm dependencies** |
 | Features | `default = ["shell"]`; the crate compiles with `--no-default-features` (`crates/eggsec-gui/Cargo.toml:24`) |
-| Enforced by | architecture guards 155–172 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, and the daemon's derived capability list) |
+| Enforced by | architecture guards 155–189 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, the daemon's derived capability list, the daemon endpoint's single default and bind contract, the report bridge's single coverage table, and the platform qualification's procedure and promotion rules) |
 
 Headline crate and surface counts live in `architecture/overview.md` — point at
 it rather than restating the numbers.
@@ -192,6 +192,25 @@ them.
 - A **learned denial wins** over every static verdict
   (`crates/eggsec-gui/src/coverage.rs:106-133`). The ledger holds one entry per
   published task kind, so it is bounded by the catalog's size.
+
+### The report-form column
+
+The coverage table carries a second, independent verdict: **does this task
+kind's operation produce a report document?** It comes from the daemon's
+published `report_forms` coverage — the engine's own table, republished
+verbatim — and is joined by the published catalog's operation id, so the GUI
+names no operation id of its own.
+
+| Verdict | What produces it |
+|---|---|
+| `available` | The daemon published the operation as canonical: it produces a report document. |
+| `unavailable` | The daemon published the operation as having no clean mapping, and the row carries the reason. |
+| `unknown` | The daemon published no coverage, or none for this operation. |
+
+- **An unpublished coverage is not an empty one.** `None` means unknown, so
+  the column reads `unknown` — never `unavailable`. The GUI must never render
+  a report-form verdict it was not told.
+- The reason text comes from the daemon verbatim. The GUI never writes one.
 
 ### The availability resolver
 
@@ -429,7 +448,12 @@ cargo run -p eggsec-gui --features shell -- --socket /tmp/eggsec-daemon.sock
 
 The GUI's own flags are `--socket <PATH>`/`--socket=<PATH>` and
 `--daemon-bin <PATH>`/`--daemon-bin=<PATH>`; the default socket path is
-`/tmp/eggsec-daemon.sock` (`crates/eggsec-gui/src/config.rs:19`).
+`/tmp/eggsec-daemon.sock`, stated once in
+`crates/eggsec-runtime/src/daemon_endpoint.rs` and re-exported by
+`crates/eggsec-gui/src/config.rs`. The precedence is **explicit `--socket`
+flag → `EGGSEC_DAEMON_SOCKET` → built-in default**. The webview holds no copy
+of the default: it learns the path from Rust through `daemon_status`, and an
+empty socket field is resolved by the Rust side of `connect_daemon`.
 
 ## Report export and display
 
@@ -474,6 +498,50 @@ extension is `.xml` and Markdown's is `.md`, while the wire name stays
 - The exported HTML is still the CLI's document byte for byte
   (`convert_to_html`), remote chart-library reference and all, because the
   exported file is the operator's artifact, opened in the operator's browser.
+- **"No report" now says why, when the daemon said why.** The export command
+  knows the task id, the GUI's task registry carries the task's wire variant,
+  and the published catalog maps that variant to its operation id — so the
+  export message can name the reason the daemon published for that operation
+  having no report form: *"the daemon has no report for task `<id>`: `<the
+  reason>`"*. When the GUI cannot resolve one — an unknown task kind, or a
+  daemon that published no coverage — the message keeps its plain wording. No
+  file is written either way: the error is raised before the render and the
+  write.
+
+## Platform qualification
+
+`docs/GUI_PLATFORM_QUALIFICATION.md` states which platforms the GUI is
+qualified on. Three entry points make that statement checkable:
+
+| Entry point | What it does |
+|---|---|
+| `scripts/gui_qualification.sh` | The operator procedure. It builds the shell, starts a `service`-profile daemon, runs the harness, probes for the window, and writes the run record. It is hermetic: it writes only under `--out` and `${TMPDIR:-/tmp}`, and it never needs root. |
+| `crates/eggsec-gui/tests/qualification.rs` | The assertion harness. Two halves: Tier A is the export path with no daemon and no window; Tier B connects to a live daemon over its Unix socket, submits a task, cancels it, renders the result, and exports it. It adds no dependency, opens no HTTP client, and SKIPs with a named reason when no daemon is reachable. |
+| `scripts/check_gui_qualification.py` | The validator. It reads the matrix, reads the promotion rules **from the matrix's own §6 rules table**, and rejects any cell whose claim is not backed by a run record whose artefacts exist and whose digests match. It also writes the run record, so the record's shape exists in exactly one place. |
+
+The run record is `docs/evidence/gui-qualification/<platform>-<date>.md`, and
+it carries a machine-readable `eggsec-gui-qualification-record/v1` block. A
+CI run may be cited instead of a checked-in file; the runs are indexed in
+`docs/evidence/gui-qualification/CI-RUNS.md`.
+
+**A cell is promoted by a rule, not by a claim.** The rules are P1–P6 in the
+matrix's §6, and the validator enforces them. The behavioural columns need
+both halves: `scripted` (what the harness measured) **and** `operator` (what
+a person attested). The harness proves the cause; only the operator proves the
+effect. A promotion resting on the harness alone is not a promotion.
+
+```bash
+bash scripts/gui_qualification.sh --platform macos --mode ci --daemon-bin <path>
+cargo test -p eggsec-gui --no-default-features --test qualification
+python3 scripts/check_gui_qualification.py
+```
+
+The harness's live half needs a daemon built with the `service` cargo
+feature; a daemon without it is a no-op executor that refuses every task, and
+the harness records that as a named skip rather than as a failed submission.
+The harness's target is the **loopback fixture** (`127.0.0.1`), and the
+engine admits a loopback target only when `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1`
+is set in the daemon's environment — the procedure sets it.
 
 ## Known gaps
 
@@ -485,15 +553,19 @@ extension is `.xml` and Markdown's is `.md`, while the wire name stays
   relaxed: the report's content is attacker-influenced, and the CSP is the
   control that stops it acting. The exported HTML file is still the CLI's
   document byte for byte (`convert_to_html`); only the *display* path differs.
-- **The socket-path default is duplicated in six places** — the CLI's
-  `--socket` (`crates/eggsec/src/cli/mod.rs:249`), the daemon's
-  `DaemonConfig::default` (`crates/eggsec-daemon/src/config.rs:22`), the daemon
-  binary's `--socket-path` (`crates/eggsec-daemon/src/main.rs:20`), the GUI's
-  own Rust default (`crates/eggsec-gui/src/config.rs:19`), and twice in the
-  GUI's frontend (`crates/eggsec-gui/frontend/app.js:23`,
-  `crates/eggsec-gui/frontend/index.html:25`). There is no socket-path
-  environment variable. Collapsing the duplication, and introducing one,
-  belongs to a corrective plan.
+- **The socket-path default now has one owner.** It used to be duplicated in
+  six places — the CLI's `--socket`, the daemon's `DaemonConfig::default`,
+  the daemon binary's `--socket-path`, the GUI's Rust default, and twice in
+  the GUI's frontend — and there was no environment variable at all.
+  Milestone 012 collapsed the duplication: the default, the
+  `EGGSEC_DAEMON_SOCKET` name and the precedence rule live in
+  `crates/eggsec-runtime/src/daemon_endpoint.rs`, the webview holds no copy,
+  and guard 177 fails if any other site transcribes the literal.
+- **The window half of the qualification is an operator observation.** The
+  procedure probes for a window titled `Eggsec` and records what it found; it
+  does not drive the window, click, or type. There is no window-automation
+  driver and no Node client in this repository, and the zero-npm posture is
+  why. The `windows` row of the matrix stays `out of scope` by `ADR-0010`.
 - **Binary distribution, signing, notarization, and installers are out of
   scope** — handled separately.
 
@@ -506,5 +578,9 @@ extension is `.xml` and Markdown's is `.md`, while the wire name stays
 - `architecture/frontend_client.md` — the shared runtime-client contract.
 - `architecture/daemon.md` — the daemon side of the protocol.
 - `architecture/ui_model.md` — the view DTOs and the renderer registry.
+- `docs/GUI_PLATFORM_QUALIFICATION.md` — the qualification matrix, its status
+  vocabulary, and the promotion rules P1–P6.
+- `docs/GUI_BUILD.md` — the build recipe and the operator runbook (§5).
+- `docs/evidence/gui-qualification/TEMPLATE.md` — the run record's fields.
 - `.opencode/skills/eggsec-frontend-client/SKILL.md`,
   `.opencode/skills/eggsec-daemon/SKILL.md` — the two seams the GUI sits on.

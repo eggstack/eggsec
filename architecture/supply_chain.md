@@ -342,6 +342,47 @@ Total: **41 unit tests** across all files.
 
 **Confirmed bugs: 0.** No division-by-zero, no panicking unwraps, no silent error suppression in production code.
 
+## Repository Dependency Policy — Advisory Backlog Closure (Milestone 015)
+
+This section is about the **repository's own dependency posture**, not about the
+`eggsec::supply_chain` module described above. The module analyses *other*
+projects' supply chains; the policy below governs *this* repository's. It is
+recorded here so the supply-chain area of the architecture docs does not drift
+from `deny.toml`, which remains the single canonical dependency-policy source.
+
+**Milestone 015 (2026-10-24) closed the workspace's advisory backlog.** The
+baseline was 23 advisory entries across 20 advisory IDs (14 `vulnerability`,
+7 `unmaintained`, 2 `unsound`), measured with `cargo deny --workspace
+--all-features check advisories`. They were disposed of as follows:
+
+| Disposition | Count | What happened |
+|-------------|-------|---------------|
+| Cleared by a lockfile refresh | 9 | `cargo update` moved `ctutils` 0.4.2→0.4.5, `rustls` 0.23.45→0.23.46, `rustls-webpki` 0.103.15→0.103.16, `tokio` 1.53.1→1.54.1, `webpki-roots` 1.0.9→1.0.11, `webpki-root-certs` 1.0.9→1.0.11. No manifest change. |
+| Cleared by a major bump | 3 | `zip` 2.4.2 → 9.x in `eggsec-mobile-lab` and `eggsec`. `zip` 9.1.0 declares `rust-version = "1.88"`, below the workspace floor, so the MSRV did not move. |
+| Recorded as owned exceptions | 11 | Four clusters, listed below. Each carries an owner, a `2026-12-12` review-by date, and the exact clearing condition. |
+
+**The four exception clusters** (all recorded in `deny.toml`'s `[advisories]`
+`ignore` array and in `docs/DEPENDENCY_EXCEPTIONS.md`):
+
+| Cluster | Advisory IDs | Owner | Why the upgrade is not adopted |
+|---------|--------------|-------|--------------------------------|
+| `glib` 0.18.5 / `proc-macro-error` 1.0.4 | RUSTSEC-2024-0429, RUSTSEC-2024-0370 | `eggsec-gui` | gtk-rs 0.20 is unreachable: no published `muda`/`tao`/`wry` uses gtk-rs 0.20+, and `tauri` 2.12.5 still requires `gtk ^0.18`. Upstream-blocked, not policy-blocked. |
+| `rustls` 0.21.12 / `rustls-webpki` 0.101.7 | RUSTSEC-2026-0346, -0349, -0382 | `eggsec-db-lab` | `tiberius` 0.13.0 reaches `rustls` 0.23 only through `tokio-rustls` with default features, which enables the `aws-lc-rs` provider that `[bans] deny = ["aws-lc-rs"]` forbids (ring-only TLS). Policy-blocked. |
+| `unsafe-libyaml` 0.2.11 | RUSTSEC-2024-0449 | `eggsec (config)` / `eggsec-web-proxy` | 0.2.11 is the latest published version and `serde_yaml_neo` 0.11.0 hard-depends on it. The advisory kind is `unmaintained`, not a vulnerability; the parser *is* exercised, on partly-downloaded template content. |
+| `unic-*` 0.9.0 (×5) | RUSTSEC-2025-0075, -0080, -0081, -0098, -0100 | `eggsec-gui` | `urlpattern` 0.6.0 drops the set, but `tauri-utils` 2.10.x declares MSRV 1.90, above the workspace's 1.89 floor. MSRV-gated, not upgrade-less. |
+
+**Guard Check 190** (`scripts/check-architecture-guards.sh`) makes "no
+unowned exception" a mechanically enforced property rather than a review
+convention: every `deny.toml` ignore must carry a non-empty reason naming
+`docs/DEPENDENCY_EXCEPTIONS.md`, every ignored ID must have a record with a
+non-empty `| Owner |` and a dated `| Review-by |`, and no `RESOLVED` record
+may keep a live ignore. The check fails closed — an unparseable policy file
+is a failure, not a pass.
+
+Nothing in this milestone changed the ring-only TLS rule, the MSRV floor, the
+`[advisories]` `unmaintained`/`unsound` settings, the `[licenses]` allow list,
+or the `[bans]` deny list.
+
 ---
 
 *Last verified against source: 2026-08-25; counts re-verified 2026-09-22 (systematic review); line cites refreshed 2026-09-25 (sbom 790 / scanner 767, ManifestType scanner.rs:31, known list 42 verified)*

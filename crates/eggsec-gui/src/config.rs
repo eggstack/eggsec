@@ -1,10 +1,11 @@
 //! Command-line configuration for the desktop GUI.
 //!
-//! The GUI is configured by flags only. The workspace has no socket-path
-//! environment variable and no XDG lookup today — the default is hardcoded in
-//! three independent places — so introducing one here would create a second,
-//! differently-named source of truth. Collapsing the duplication is a
-//! separate corrective milestone.
+//! The GUI is configured by flags. The daemon's socket path has **one** owner
+//! in the workspace — `eggsec-runtime`'s `daemon_endpoint` module — so the
+//! GUI resolves the same path by the same rule as the daemon binary, the CLI
+//! and the TUI: an explicit `--socket` flag wins, then the daemon's socket
+//! environment variable
+//! (`eggsec_runtime::DAEMON_SOCKET_ENV_VAR`), then the built-in default.
 
 use std::path::PathBuf;
 
@@ -12,11 +13,16 @@ use crate::GuiError;
 
 /// The default path of the daemon's Unix socket.
 ///
-/// This matches the three existing defaults in the workspace:
-/// `crates/eggsec/src/cli/mod.rs` (the global `--socket` flag),
-/// `crates/eggsec-daemon/src/config.rs` (`DaemonConfig::default`), and
-/// `crates/eggsec-daemon/src/main.rs` (the binary's `--socket-path` flag).
-pub const DEFAULT_SOCKET_PATH: &str = "/tmp/eggsec-daemon.sock";
+/// This is the canonical constant, re-exported from the crate that owns it
+/// (`eggsec-runtime`), so the GUI keeps its public name and holds no second
+/// value.
+pub use eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH as DEFAULT_SOCKET_PATH;
+
+/// The environment variable that overrides the daemon's default socket path.
+///
+/// Re-exported from the crate that owns the name, so the usage text can name
+/// it without transcribing it.
+pub const DAEMON_SOCKET_ENV_VAR: &str = eggsec_runtime::DAEMON_SOCKET_ENV_VAR;
 
 /// The options the GUI was started with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,7 +40,7 @@ pub struct GuiOptions {
 impl Default for GuiOptions {
     fn default() -> Self {
         Self {
-            socket_path: DEFAULT_SOCKET_PATH.to_owned(),
+            socket_path: eggsec_runtime::daemon_socket_path_from_env(),
             daemon_bin: None,
         }
     }
@@ -100,7 +106,7 @@ pub fn usage() -> String {
          Usage: eggsec-gui [--socket <PATH>] [--daemon-bin <PATH>]\n\n\
          Options:\n  \
            --socket <PATH>   Path of the running daemon's Unix socket\n                       \
-           (default: {DEFAULT_SOCKET_PATH})\n  \
+           (default: ${DAEMON_SOCKET_ENV_VAR}, else {DEFAULT_SOCKET_PATH})\n  \
            --daemon-bin <PATH>\n                    \
            The daemon executable to spawn and supervise\n                       \
            (default: none — the GUI never starts a daemon it was not told to)\n  \
@@ -130,8 +136,14 @@ mod tests {
     #[test]
     fn default_socket_path_matches_the_workspace_defaults() {
         let options = GuiOptions::from_args(args(&[])).expect("no arguments is valid");
-        assert_eq!(options.socket_path, DEFAULT_SOCKET_PATH);
-        assert_eq!(options.socket_path, "/tmp/eggsec-daemon.sock");
+        assert_eq!(
+            options.socket_path,
+            eggsec_runtime::daemon_socket_path_from_env(),
+            "the GUI must resolve the socket path through the canonical resolver"
+        );
+        if std::env::var_os(eggsec_runtime::DAEMON_SOCKET_ENV_VAR).is_none() {
+            assert_eq!(options.socket_path, DEFAULT_SOCKET_PATH);
+        }
     }
 
     #[test]

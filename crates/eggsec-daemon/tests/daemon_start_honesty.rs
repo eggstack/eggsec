@@ -495,10 +495,14 @@ async fn the_protocol_version_is_unchanged() {
 /// publishes: the milestone changes what a capability carries, never how a
 /// capability is shaped.
 ///
-/// The one deliberate exception is the additive `enabled_features` key. It
-/// is optional on the wire (`#[serde(default)]`), so a daemon that predates
-/// it and a client that predates it both still work, but the published key
-/// set has grown by exactly that one key.
+/// The deliberate exceptions are the additive `enabled_features` key and the
+/// additive `report_forms` key. Each is optional on the wire
+/// (`#[serde(default)]`), so a daemon that predates it and a client that
+/// predates it both still work, but the published key set has grown by
+/// exactly those two keys. `report_forms` carries the report-form coverage
+/// the connected daemon's build publishes (milestone 013); it rides on the
+/// capabilities message because it is a build fact about the executor, which
+/// is what that message already carries, and the protocol version stays 2.
 #[tokio::test]
 async fn the_capabilities_message_shape_is_unchanged() {
     let host = DaemonHost::new(DaemonConfig::default(), RejectingExecutor, noop_store());
@@ -532,6 +536,7 @@ async fn the_capabilities_message_shape_is_unchanged() {
         vec![
             "enabled_features",
             "operation_schema",
+            "report_forms",
             "runtime",
             "transports"
         ]

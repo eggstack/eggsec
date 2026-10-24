@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use crate::capabilities::{RuntimeCapabilities, TaskCapability};
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskStatus};
 use crate::ids::{ClientId, SessionId, TaskId};
+use crate::report::ReportFormEntry;
 use crate::request::{RunRequest, RuntimeSurface};
 use crate::session::{
     RuntimeExecutionContext, RuntimeSession, SessionScope, SessionSnapshot, SessionSummary,
@@ -103,6 +104,24 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     fn report_for(&self, _task_id: &TaskId) -> Option<serde_json::Value> {
         None
     }
+
+    /// The report-form coverage this executor's build publishes.
+    ///
+    /// This is another *build* fact, like [`Self::enabled_features`]: it says
+    /// which canonical operations produce a report document and which do
+    /// not. A host publishes it so a client can tell an operator **why** a
+    /// completed task has no report, rather than only that it has none.
+    ///
+    /// `None` means **unknown**: the executor links no engine, or does not
+    /// publish the fact — the same distinction [`Self::enabled_features`]
+    /// draws. `Some(vec![])` means the executor published an empty coverage,
+    /// which is a different, knowable fact.
+    ///
+    /// The default is `None` so every existing implementor keeps its current
+    /// behaviour and no host has to change to compile.
+    fn report_forms(&self) -> Option<Vec<ReportFormEntry>> {
+        None
+    }
 }
 
 struct RuntimeState {
@@ -137,6 +156,15 @@ pub struct Runtime {
     /// same reason `supported_task_kinds` does: a host reads it synchronously
     /// while building its own published capability list.
     enabled_features: Option<Vec<String>>,
+    /// The executor's published report-form coverage, captured at construction.
+    ///
+    /// `None` means the executor did not publish one (it links no engine, or
+    /// predates the declaration). It lives outside the state mutex for the
+    /// same reason `enabled_features` does: a host reads it synchronously
+    /// while building its own published capability list. The coverage is
+    /// immutable for the life of the process, so every concurrent reader
+    /// observes the same rows.
+    report_forms: Option<Vec<ReportFormEntry>>,
     /// The runtime's enforced capability set, captured at construction.
     ///
     /// This is the configured set every session carries, and therefore the
@@ -167,6 +195,7 @@ impl Runtime {
         let (event_tx, _) = broadcast::channel(config.event_channel_capacity);
         let supported_task_kinds = executor.supported_task_kinds();
         let enabled_features = executor.enabled_features();
+        let report_forms = executor.report_forms();
         let enforced_task_kinds = config.capabilities.task_kinds.clone();
         let executor: Arc<dyn RuntimeTaskExecutor> = Arc::new(executor);
         Self {
@@ -178,6 +207,7 @@ impl Runtime {
             })),
             supported_task_kinds,
             enabled_features,
+            report_forms,
             enforced_task_kinds,
             executor,
             approvals: crate::approval::ApprovalGate::new(),
@@ -191,6 +221,19 @@ impl Runtime {
     /// features are enabled"; it means the answer is unknown.
     pub fn enabled_features(&self) -> Option<&[String]> {
         self.enabled_features.as_deref()
+    }
+
+    /// The report-form coverage the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. A caller MUST NOT read `None` as "no
+    /// operation has a report form"; it means the answer is unknown, exactly
+    /// as `None` means unknown for the feature set.
+    ///
+    /// The coverage is captured at construction and never changes, so every
+    /// reader observes the same rows.
+    pub fn report_forms(&self) -> Option<&[ReportFormEntry]> {
+        self.report_forms.as_deref()
     }
 
     /// The report document the executor recorded for a completed task.
@@ -919,6 +962,34 @@ mod tests {
             RuntimeCapabilities::canonical().task_kinds.len()
         );
         assert!(!declared.is_empty());
+    }
+
+    /// The default coverage declaration is `None`, which means **unknown**:
+    /// an executor that says nothing about report forms is not saying that
+    /// no operation has a report form.
+    #[test]
+    fn the_default_executor_publishes_no_coverage() {
+        struct DefaultExecutor;
+        impl RuntimeTaskExecutor for DefaultExecutor {
+            fn execute(
+                &self,
+                _task_id: TaskId,
+                _request: RunRequest,
+                _context: RuntimeExecutionContext,
+                _sink: RuntimeEventSink,
+                _cancel: CancellationToken,
+            ) -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                        + Send
+                        + 'static,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+            }
+        }
+
+        assert_eq!(DefaultExecutor.report_forms(), None);
     }
 
     /// The runtime reports the executor's declaration, so a host can derive

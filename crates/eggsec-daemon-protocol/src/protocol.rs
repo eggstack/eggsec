@@ -78,6 +78,19 @@ pub struct DaemonCapabilities {
     /// client that predates it ignores the field.
     #[serde(default)]
     pub enabled_features: Option<Vec<String>>,
+    /// The report-form coverage the connected daemon's build publishes.
+    ///
+    /// This is another *build* fact, like `enabled_features`: it says which
+    /// canonical operations produce a report document and which do not, so a
+    /// client can tell an operator **why** a completed task has no report
+    /// rather than only that it has none.
+    ///
+    /// `None` means **unknown** — the daemon links no engine, or predates
+    /// this field. `#[serde(default)]` so a newer daemon's capabilities still
+    /// decode against an older client, and vice versa, exactly as
+    /// `enabled_features` does.
+    #[serde(default)]
+    pub report_forms: Option<Vec<eggsec_runtime::report::ReportFormEntry>>,
 }
 
 /// Error codes returned by the daemon in response to client commands.
@@ -754,6 +767,7 @@ mod tests {
                 transports: vec![],
                 operation_schema: true,
                 enabled_features: None,
+                report_forms: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -761,6 +775,68 @@ mod tests {
         if let ServerMessage::Capabilities { capabilities, .. } = back {
             assert!(capabilities.runtime.supports_cancellation);
             assert!(capabilities.operation_schema);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    /// A client built before the coverage existed must still decode a newer
+    /// daemon's capabilities: the field defaults to `None`, which means
+    /// **unknown** — not "no operation has a report form".
+    #[test]
+    fn daemon_capabilities_decode_without_the_report_forms_field() {
+        let json = r#"{"runtime":{"task_kinds":[],"transports":[],"supports_cancellation":true,"supports_multiple_sessions":true,"supports_multiple_active_tasks":false},"transports":[]}"#;
+        let capabilities: DaemonCapabilities = serde_json::from_str(json).unwrap();
+        assert!(
+            capabilities.report_forms.is_none(),
+            "an absent field means unknown, not an empty coverage"
+        );
+    }
+
+    /// A client built **before** the coverage existed ignores the field: an
+    /// unknown field is not an error, and the client's behaviour is
+    /// unchanged. This is the other half of the additive contract.
+    #[test]
+    fn a_new_daemons_capabilities_decode_in_an_old_client() {
+        #[derive(serde::Deserialize)]
+        struct OldCapabilities {
+            #[serde(default)]
+            operation_schema: bool,
+        }
+
+        let json = r#"{"runtime":{"task_kinds":[],"transports":[],"supports_cancellation":true,"supports_multiple_sessions":true,"supports_multiple_active_tasks":false},"transports":[],"operation_schema":true,"report_forms":[{"operation_id":"scan-ports","form":"canonical","reason":""}]}"#;
+        let old: OldCapabilities =
+            serde_json::from_str(json).expect("an old client decodes a newer daemon");
+        assert!(old.operation_schema);
+    }
+
+    /// The published coverage survives the wire: the operation id, the
+    /// verdict, and the reason an operation has no report form.
+    #[test]
+    fn the_report_forms_coverage_round_trips() {
+        let msg = ServerMessage::Capabilities {
+            request_id: rid(),
+            capabilities: DaemonCapabilities {
+                runtime: RuntimeCapabilities::default(),
+                transports: vec![],
+                operation_schema: true,
+                enabled_features: None,
+                report_forms: Some(vec![eggsec_runtime::report::ReportFormEntry {
+                    operation_id: "scan-ports".to_owned(),
+                    form: eggsec_runtime::report::ReportForm::Canonical,
+                    reason: String::new(),
+                }]),
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::Capabilities { capabilities, .. } = back {
+            let forms = capabilities
+                .report_forms
+                .expect("the coverage is published");
+            assert_eq!(forms.len(), 1);
+            assert_eq!(forms[0].operation_id, "scan-ports");
+            assert_eq!(forms[0].form, eggsec_runtime::report::ReportForm::Canonical);
         } else {
             panic!("wrong variant");
         }
@@ -1548,6 +1624,7 @@ mod tests {
             transports: vec![],
             operation_schema: true,
             enabled_features: Some(vec!["cli".into(), "nse".into()]),
+            report_forms: None,
         };
         let json = serde_json::to_string(&capabilities).unwrap();
         let back: DaemonCapabilities = serde_json::from_str(&json).unwrap();

@@ -20,7 +20,6 @@
  */
 
 (function () {
-  const DEFAULT_SOCKET = "/tmp/eggsec-daemon.sock";
   const TASK_EVENT = "eggsec://task-event";
 
   /* Retention caps. The daemon caps its own rings; the window caps its copy
@@ -322,11 +321,14 @@
       el("th", { scope: "col", text: "Capability" }),
       el("th", { scope: "col", text: "Verdict" }),
       el("th", { scope: "col", text: "Reason" }),
+      el("th", { scope: "col", text: "Report" }),
     ]);
 
     const body = el("tbody", null, []);
     for (const row of rows) {
       const verdict = String((row && row.reachability) || "");
+      const reportForm = String((row && row.report_form) || "");
+      const reportReason = String((row && row.report_reason) || "");
       body.appendChild(
         el("tr", { class: "coverage-row" }, [
           el("td", { class: "coverage-cell coverage-cell--name", text: String(row.variant || "") }),
@@ -336,6 +338,18 @@
             el("span", { class: "coverage-verdict coverage-verdict--" + verdict, text: verdict }),
           ]),
           el("td", { class: "coverage-cell coverage-cell--reason", text: String(row.reason || "") }),
+          el("td", { class: "coverage-cell coverage-cell--report" }, [
+            el("span", {
+              class: "coverage-verdict coverage-verdict--" + reportForm,
+              text: reportForm,
+            }),
+            reportReason
+              ? el("span", {
+                  class: "coverage-cell--reason",
+                  text: reportReason,
+                })
+              : null,
+          ]),
         ])
       );
     }
@@ -1595,6 +1609,7 @@
     try {
       const status = await invoke("daemon_status");
       state.daemon = status || null;
+      applyDefaultSocketPath(state.daemon);
       renderDaemonStatus();
       renderExportFormats();
     } catch (error) {
@@ -1607,6 +1622,18 @@
         message: errorMessage(error),
       });
     }
+  }
+
+  /* The daemon's default socket path, as the Rust side resolved it. The
+     webview holds no copy of it: it learns the path from `daemon_status` and
+     shows it in an empty field. A path the operator typed is never
+     overwritten. */
+  function applyDefaultSocketPath(status) {
+    if (!status || !dom.socketInput) return;
+    const fallback = String(status.default_socket_path || "").trim();
+    if (!fallback) return;
+    if (String(dom.socketInput.value || "").trim()) return;
+    dom.socketInput.value = fallback;
   }
 
   async function exportReport(event) {
@@ -1669,7 +1696,11 @@
 
   async function connect(socketPath) {
     if (!requireIpc()) return;
-    const socket = String(socketPath || "").trim() || DEFAULT_SOCKET;
+    /* The socket may be empty. The webview holds no copy of the daemon's
+       default path, so an empty socket is not a blank field to be clobbered:
+       it is the request for "the GUI's default", and the Rust side resolves
+       it to the path the GUI was started with. */
+    const socket = String(socketPath || "").trim();
 
     state.connecting = true;
     if (dom.connectButton) dom.connectButton.disabled = true;
@@ -1787,7 +1818,7 @@
 
   /* ---------------------------------------------------------------- boot */
 
-  function boot() {
+  async function boot() {
     renderCatalog();
     renderBanners();
     renderTaskKinds();
@@ -1801,7 +1832,7 @@
     if (dom.connectForm) {
       dom.connectForm.addEventListener("submit", function (event) {
         event.preventDefault();
-        const socket = dom.socketInput ? dom.socketInput.value : DEFAULT_SOCKET;
+        const socket = dom.socketInput ? dom.socketInput.value : "";
         connect(socket);
       });
     }
@@ -1830,12 +1861,23 @@
 
     subscribeToTaskEvents();
 
+    /* The daemon's default socket path is learned from Rust — the webview
+       holds no copy of it — so the status is read before the automatic
+       connect, and the field is filled from it. */
+    await refreshDaemonStatus();
+
     /* One automatic connection attempt against the default socket, so the
        window shows the catalog when a daemon is already running. There is no
        retry loop: further attempts are operator-driven. */
-    const socket = dom.socketInput ? dom.socketInput.value : DEFAULT_SOCKET;
+    const socket = dom.socketInput ? dom.socketInput.value : "";
     connect(socket);
   }
 
-  boot();
+  boot().catch(function (error) {
+    setBanner("boot", {
+      level: "error",
+      title: "The window failed to start",
+      message: errorMessage(error),
+    });
+  });
 })();

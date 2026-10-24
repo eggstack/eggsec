@@ -1,7 +1,11 @@
 # GUI qualification evidence — TEMPLATE
 
 Copy this file to `docs/evidence/gui-qualification/<platform>-<YYYY-MM-DD>.md`
-and fill in every field. The qualification matrix
+and fill in every field. `scripts/gui_qualification.sh` writes a file in this
+shape for you; this template is what it fills in, and what a hand-written run
+must match.
+
+The qualification matrix
 (`docs/GUI_PLATFORM_QUALIFICATION.md`) cites these files as the evidence for
 its cells, so a cell that points at an evidence file must point at one whose
 fields are all populated — an evidence reference that does not resolve to a
@@ -62,13 +66,90 @@ succeeded".
 
 ## Pass criterion and outcome
 
+One row per column the run supports. The **Pass criterion** is the criterion
+the runbook's step states (`docs/GUI_BUILD.md` §5); the **Outcome** is what
+was observed. `scripted` is what the machine measured; `operator` is what a
+human attested.
+
 | Column | Pass criterion | Outcome | Met? |
 |---|---|---|---|
-| | | | yes / no / partial |
+| `build` | | | |
+| `launch` | | | |
+| `connect` | | | |
+| `submit` | | | |
+| `cancel` | | | |
+| `render` | | | |
+| `export` | | | |
 
 For a `partial` outcome, name the qualified subset and the missing part
 separately — a partial that does not say what is missing is indistinguishable
 from a pass.
+
+## The run record
+
+The block below is the machine-readable record. It is what
+`scripts/check_gui_qualification.py` reads when it checks a cell that claims
+`qualified`, so a file without it cannot promote a cell — it is simply not
+sufficient evidence.
+
+The schema string is `eggsec-gui-qualification-record/v1`. A record that
+declares another schema is rejected by name rather than half-read.
+
+```json
+{
+  "schema": "eggsec-gui-qualification-record/v1",
+  "platform": "<linux|macos>",
+  "date": "<YYYY-MM-DD>",
+  "commit": "<the commit the run was made at>",
+  "tree_state": "<clean|dirty>",
+  "host": {
+    "os": "<linux|macos>",
+    "os_version": "<uname -r>",
+    "arch": "<uname -m>",
+    "target_triple": "<rustc -vV host:>"
+  },
+  "toolchain": {
+    "rustc": "<rustc -V>",
+    "cargo": "<cargo -V>"
+  },
+  "features": {
+    "requested": ["shell"],
+    "resolved": ["default", "shell"]
+  },
+  "prerequisite_probe": {
+    "command": "bash scripts/check_gui_prereqs.sh",
+    "exit": 0,
+    "verdict": "<BUILDABLE|NOT BUILDABLE>"
+  },
+  "daemon": {
+    "socket": "<the socket the run used>",
+    "ready": true,
+    "version": "<the daemon's version line>",
+    "features": "<the cargo features it was built with>",
+    "scope": {
+      "surface": "DesktopGuiManual",
+      "source": "gui-default"
+    }
+  },
+  "window": {
+    "probe": "<xdotool|osascript|none>",
+    "windows": "<the number of matching windows>",
+    "screenshot": "<the screenshot's file name, or empty>",
+    "reason": "<why the probe ran, or why it was skipped>"
+  },
+  "columns": [
+    {
+      "column": "<build|launch|connect|submit|cancel|render|export>",
+      "scripted": "<pass|fail|skipped|not-performed|not-applicable>",
+      "operator": "<pass|fail|not-performed|not-applicable>",
+      "artifact": "<the artefact's file name under this directory, or empty>",
+      "sha256": "<the artefact's SHA-256, or empty>",
+      "reason": "<why the column landed where it did>"
+    }
+  ],
+  "deviations": []
+}
+```
 
 ## Deviations and notes
 

@@ -7,7 +7,7 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::DaemonError;
-use crate::host::DaemonHost;
+use crate::host::{probe_daemon_liveness, DaemonHost, DaemonLiveness, PREFLIGHT_PROBE_TIMEOUT};
 use crate::protocol::{
     ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
 };
@@ -133,18 +133,82 @@ fn refused_command_response(line: &str, parse_error: &serde_json::Error) -> Serv
 /// connections in a loop, reading one JSON line per command and writing
 /// one JSON line per response. The loop exits when `shutdown` is
 /// cancelled.
+///
+/// **The bind contract.** The server binds the socket path *without
+/// unlinking it first*, and refuses when the path is held by a live daemon.
+/// The sequence is:
+///
+/// 1. `UnixListener::bind(socket_path)`.
+///    - Success → this daemon owns the path. Nothing was removed, so nothing
+///      could have been displaced.
+///    - Failure with `AddrInUse` → the path is occupied; go to step 2.
+///    - Any other error → return it unchanged.
+/// 2. Ask whether the occupant is live, with the **shared** probe
+///    (`probe_daemon_liveness`) and the pre-flight's own bound. No second
+///    liveness notion is introduced.
+///    - `Live` → **refuse** ([`DaemonError::SocketPathHeld`]). The socket file
+///      is *not* removed: the live daemon's clients depend on it.
+///    - `NotLive` → the path holds no daemon; go to step 3.
+/// 3. Reclaim the stale path, **once**: remove the file (ignoring
+///    `NotFound`), then bind again.
+///    - Success → this daemon owns the path.
+///    - Failure with `AddrInUse` → **refuse**
+///      ([`DaemonError::SocketPathTaken`]): another daemon took the path in
+///      between. This daemon does not unlink again and does not take the
+///      socket.
+///    - Any other error → return it.
+///
+/// The residual is stated honestly: between the probe in step 2 and the
+/// `remove_file` in step 3, a third actor could remove the stale path and a
+/// live daemon could bind it. The window is one `remove_file` call wide.
 pub async fn run_server(
     host: Arc<DaemonHost>,
     shutdown: CancellationToken,
 ) -> Result<(), DaemonError> {
     let socket_path = &host.config().socket_path;
-    if let Err(error) = std::fs::remove_file(socket_path) {
-        if error.kind() != std::io::ErrorKind::NotFound {
-            tracing::warn!(path = %socket_path, error = %error, "Failed to remove stale daemon socket");
-            return Err(error.into());
+    let listener = match UnixListener::bind(socket_path) {
+        Ok(listener) => listener,
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+            match probe_daemon_liveness(socket_path, PREFLIGHT_PROBE_TIMEOUT).await {
+                DaemonLiveness::Live { protocol_version } => {
+                    tracing::warn!(
+                        path = %socket_path,
+                        protocol_version,
+                        "Refusing to displace the live daemon that holds the socket path"
+                    );
+                    return Err(DaemonError::SocketPathHeld {
+                        socket_path: socket_path.clone(),
+                        protocol_version,
+                    });
+                }
+                DaemonLiveness::NotLive => {
+                    // The path holds no daemon: reclaim it once, then bind.
+                    match std::fs::remove_file(socket_path) {
+                        Ok(()) => {}
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error) => {
+                            tracing::warn!(path = %socket_path, error = %error, "Failed to remove the stale daemon socket");
+                            return Err(error.into());
+                        }
+                    }
+                    match UnixListener::bind(socket_path) {
+                        Ok(listener) => listener,
+                        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+                            tracing::warn!(
+                                path = %socket_path,
+                                "Another daemon took the socket path while this daemon was reclaiming it"
+                            );
+                            return Err(DaemonError::SocketPathTaken {
+                                socket_path: socket_path.clone(),
+                            });
+                        }
+                        Err(error) => return Err(error.into()),
+                    }
+                }
+            }
         }
-    }
-    let listener = UnixListener::bind(socket_path)?;
+        Err(error) => return Err(error.into()),
+    };
 
     // Restrict the socket to its owner. With a permissive umask the socket
     // inherits world-connectable permissions, which would let any local user

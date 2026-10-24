@@ -109,10 +109,13 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | `transports` | `Vec<TransportCapability>` | Available daemon transports |
 | `operation_schema` | `bool` | Whether this daemon can publish the operation catalog and the derived request schema via `ClientCommand::DescribeOperations` |
 | `enabled_features` | `Option<Vec<String>>` | The engine features compiled into the connected daemon's build — `None` when the fact is unknown, `Some(vec![])` when an engine is linked with no features enabled |
+| `report_forms` | `Option<Vec<ReportFormEntry>>` | The report-form coverage of the connected daemon's build: which canonical operations produce a report document and which do not, with the reason for each exclusion — `None` when the fact is unknown |
 
 `operation_schema` is `#[serde(default)]`, so an older client still decodes a newer daemon's capabilities and vice versa — the field defaults to `false` rather than failing the whole handshake. A client that sees `false` — or that receives `ErrorCode::UnsupportedCommand` from a daemon too old to know the command — must **degrade to a static form set** rather than fail.
 
 `enabled_features` is `#[serde(default)]` as well, which keeps the field wire-additive in both directions: a daemon that predates it decodes as `None`, and a client that predates it ignores the field. It is a **build** fact rather than a runtime capability — it says which feature-gated operations the linked engine could run at all, so a client can tell "unavailable because the daemon was built without the feature" apart from "unavailable because the daemon does not advertise it".
+
+`report_forms` is `#[serde(default)]` too, with the same wire-additivity, and it is the same kind of **build** fact. The daemon republishes it **verbatim** from the engine's own coverage table (`crates/eggsec/src/runtime_bridge/report_coverage.rs`): it derives nothing and restates nothing, so the engine's table is the only place the fact lives. `None` means the daemon links no engine — the answer is **unknown**, which is not the same as "no operation has a report form", and a client MUST NOT collapse the two. A daemon with the `service` feature publishes twenty-eight rows, one per canonical operation.
 
 The three states are distinct and a client MUST NOT collapse them:
 
@@ -142,19 +145,30 @@ The HTTP/SSE transport is unchanged: no new axum route was added for this comman
 
 - **Read-only and additive**: it creates no session, mutates no task state, and takes part in no authorization decision beyond the ordinary read-only permission check. It adds no required field and removes no variant, so `DAEMON_PROTOCOL_VERSION` stays at `2` — the version is bumped only on breaking wire-format changes (`protocol.rs:6-14`).
 - **Permission**: `Observer` — the same read-only level as `GetTaskResult` (`client_registry.rs:76-78`). The report document is that task's result in report form, so it carries no wider access than the result read does.
-- **What the daemon serves**: whatever the engine already produced. `DaemonHost` answers from `Runtime::report_for(&task_id)` (`host.rs:660`), which delegates to the executor behind the runtime (`crates/eggsec-runtime/src/runtime.rs:179`). The daemon does not derive, re-derive, or re-render anything.
+- **What the daemon serves**: whatever the engine already produced. `DaemonHost` answers from `Runtime::report_for(&task_id)` (`host.rs:745`), which delegates to the executor behind the runtime (`crates/eggsec-runtime/src/runtime.rs:244`). The daemon does not derive, re-derive, or re-render anything.
 
 Where the report comes from, end to end:
 
-1. The engine derives the document from the completed task result through the **pure** bridge `eggsec::runtime_bridge::report::report_for_result` (`crates/eggsec/src/runtime_bridge/report.rs:54`). The bridge performs no I/O and reads no state, so the same result always yields the same document.
-2. The engine keeps the derived document in the runtime's bounded report store (`crates/eggsec-runtime/src/report.rs:42`), reached through the executor's `report_for` (`crates/eggsec/src/runtime_bridge/executor.rs:159`). Retention is capped at `MAX_RETAINED_REPORTS` = 64, oldest-first evicted (`crates/eggsec-runtime/src/report.rs:29`).
+1. The engine derives the document from the completed task result through the **pure** bridge `eggsec::runtime_bridge::report::report_for_operation` (`crates/eggsec/src/runtime_bridge/report.rs:111`), which consults the coverage table for the *whether* and `report_for_result` (`:69`) for the *how*. The bridge performs no I/O and reads no state, so the same result always yields the same document.
+2. The engine keeps the derived document in the runtime's bounded report store (`crates/eggsec-runtime/src/report.rs:77`), reached through the executor's `report_for` (`crates/eggsec/src/runtime_bridge/executor.rs:159`). Retention is capped at `MAX_RETAINED_REPORTS` = 64, oldest-first evicted (`crates/eggsec-runtime/src/report.rs:64`).
 3. The daemon serves it over `GetTaskReport` and the client reads it as JSON.
+
+**Which operations produce a document is a fact of its own**, and it is
+published rather than private. The engine's coverage table
+(`crates/eggsec/src/runtime_bridge/report_coverage.rs`) has one row per
+canonical operation id — twenty-eight — and each row names the variants that
+operation produces, the verdict, and the fact an excluded operation's result is
+missing. The executor projects it into the wire DTO, the daemon republishes it
+verbatim in `DaemonCapabilities.report_forms`, and a client can therefore say
+*why* a task has no report rather than only that it has none. The table is the
+**single** source of that fact: the daemon derives nothing from it and the GUI
+restates none of it.
 
 The **envelope contract is untouched**: `TaskResultEnvelope.payload` stays `json!({})` and `.artifacts` stays `vec![]`. The report body travels on its own path and is never folded into the envelope.
 
 The report document is carried as `serde_json::Value` rather than as a typed report-model struct, so the protocol crate keeps **no report-model dependency**; the consumer deserializes the JSON into the canonical report model.
 
-**No report available is not an error.** A task whose result has no report form simply has no report; the daemon answers `ErrorCode::TaskNotFound` with the request id echoed (`host.rs:667-671`), and the client turns that into "no report available" rather than a failure. A daemon too old to know the command answers `ErrorCode::UnsupportedCommand`, which the client degrades the same way. See [frontend_client.md](frontend_client.md) for the client's side of that contract.
+**No report available is not an error.** A task whose result has no report form simply has no report; the daemon answers `ErrorCode::TaskNotFound` with the request id echoed (`host.rs:752-756`), and the client turns that into "no report available" rather than a failure. A daemon too old to know the command answers `ErrorCode::UnsupportedCommand`, which the client degrades the same way. See [frontend_client.md](frontend_client.md) for the client's side of that contract.
 
 The HTTP/SSE transport is unchanged here as well: no axum route was added for this command, so the route table below still has 14 routes.
 
@@ -452,7 +466,7 @@ A desktop GUI session is therefore auditable as `desktop-gui-manual` and a TUI s
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `socket_path` | `String` | `/tmp/eggsec-daemon.sock` | Unix socket path |
+| `socket_path` | `String` | the canonical default (`crates/eggsec-runtime/src/daemon_endpoint.rs`), overridable by `EGGSEC_DAEMON_SOCKET` | Unix socket path. The precedence is **explicit `--socket-path` flag → `EGGSEC_DAEMON_SOCKET` → built-in default**, applied by the shared resolver. `DaemonConfig::default()` is pure: it returns the built-in default and does not read the environment |
 | `max_clients` | `usize` | `10` | Concurrent connection limit |
 | `default_surface` | `RuntimeSurface` | `Unknown` | Fallback for sessions without explicit surface |
 | `data_dir` | `Option<String>` | `None` (→ `~/.local/share/eggsec/daemon/`) | SQLite database directory |
@@ -486,7 +500,7 @@ A desktop GUI session is therefore auditable as `desktop-gui-manual` and a TUI s
 9. **Client ID tracking per connection**: Unix socket handler captures `client_id` from `DeclareClient` response; subsequent commands on same connection carry that ID
 10. **The published capability list is derived, not declared, and it is the admitted list**: it is the canonical capability list — derived from the task-kind set — intersected with the executor's declared support (`RuntimeTaskExecutor::supported_task_kinds()`), computed once at construction. The host then hands that list to the runtime as its enforced set, so publication and admission are the same object. A daemon that cannot execute anything therefore publishes **nothing** — the "advertises thirty, executes none" state is unrepresentable — and an executor that rejects everything must declare the empty set explicitly, because the trait's default is the canonical list. A *published* kind whose engine feature is off is a different matter: it is denied at dispatch with `FeatureMissing`, not `UnsupportedTaskKind`
 11. **Readiness is a protocol check, never a log scrape**: a start path proves the daemon is up by connecting and exchanging `Health`, bounded by a named timeout. Nothing depends on the daemon's `"Daemon listening on …"` log line — a log format is not a contract
-12. **The pre-flight liveness check belongs to the start paths**: before binding, a start path connects to the socket path and asks for `Health`. A daemon that answers owns the path: the start is refused, the socket is left untouched, and the command exits non-zero. The check is a **connection**, never a `stat` — a socket file left behind by a crashed daemon is indistinguishable from a live one by file existence. `run_server` still unlinks the socket path before binding, so the server-side hardening (refusing to bind over a *live* socket) is deferred to a daemon-subsystem milestone
+12. **The pre-flight liveness check belongs to the start paths**: before binding, a start path connects to the socket path and asks for `Health`. A daemon that answers owns the path: the start is refused, the socket is left untouched, and the command exits non-zero. The check is a **connection**, never a `stat` — a socket file left behind by a crashed daemon is indistinguishable from a live one by file existence. The **server-side** half landed in milestone 012 (`ADR-0013`): `run_server` binds the socket path *without* unlinking it, asks the same probe when the bind fails with `AddrInUse`, refuses over a live daemon (leaving its socket file in place) and reclaims a path the probe showed to hold no daemon — removing it once, and refusing again if another daemon took the path in between
 13. **A refusal must carry the request id it was asked about**: the client routes responses by request id, so a refusal with an empty request id resolves no pending request and the client waits out its 30s response timeout instead of learning that its command was refused. The daemon recovers the request id and the command type from the raw line (`server.rs:95`)
 14. **`enabled_features` is a build fact, and its absence is a fact too**: the daemon publishes the engine's compile-time feature registry filtered by the policy bridge's enabled-feature set. `None` means the daemon links no engine — the answer is unknown; `Some(vec![])` means an engine is linked with nothing enabled. The two are different facts and a client must not collapse them
 15. **The report read path is separate from the task envelope**: `TaskResultEnvelope.payload` stays `json!({})` and `.artifacts` stays `vec![]`. The report document travels on its own command, is produced by the engine from the completed result, and is retained in a bounded store — see [runtime.md](runtime.md)

@@ -150,9 +150,9 @@ the client:
 
 | Stage | Where | What happens |
 |-------|-------|--------------|
-| Produce | `crates/eggsec/src/runtime_bridge/report.rs:54` | `report_for_result(&TaskResult) -> Option<ScanReportData>` derives the canonical report document from a completed task result. The bridge is **pure**: it performs no I/O, reads no state, and consults no clock, so the same result always yields the same document. |
-| Keep | `crates/eggsec-runtime/src/report.rs:42` | The engine records the document in the runtime's bounded report store (`RuntimeReportStore`). Retention is capped at `MAX_RETAINED_REPORTS` = 64 with oldest-first eviction (`crates/eggsec-runtime/src/report.rs:29`) — the bound is what stops a long-lived daemon accumulating one report document per task for the life of the process. |
-| Serve | `crates/eggsec-daemon-protocol/src/protocol.rs:214` | `ClientCommand::GetTaskReport { request_id, session_id, task_id }` → `ServerMessage::TaskReport { …, report }` (`crates/eggsec-daemon-protocol/src/protocol.rs:398`). The document travels as JSON, so the protocol crate keeps no report-model dependency; the consumer deserializes it into the canonical model. |
+| Produce | `crates/eggsec/src/runtime_bridge/report.rs:111` | `report_for_operation(&str, &TaskResult) -> Option<ScanReportData>` decides **whether** a document is built from the coverage table, then `report_for_result(&TaskResult) -> Option<ScanReportData>` (`:69`) derives it. The bridge is **pure**: it performs no I/O, reads no state, and consults no clock, so the same result always yields the same document. |
+| Keep | `crates/eggsec-runtime/src/report.rs:77` | The engine records the document in the runtime's bounded report store (`RuntimeReportStore`). Retention is capped at `MAX_RETAINED_REPORTS` = 64 with oldest-first eviction (`crates/eggsec-runtime/src/report.rs:64`) — the bound is what stops a long-lived daemon accumulating one report document per task for the life of the process. |
+| Serve | `crates/eggsec-daemon-protocol/src/protocol.rs:227` | `ClientCommand::GetTaskReport { request_id, session_id, task_id }` → `ServerMessage::TaskReport { …, report }` (`crates/eggsec-daemon-protocol/src/protocol.rs:411`). The document travels as JSON, so the protocol crate keeps no report-model dependency; the consumer deserializes it into the canonical model. |
 | Read | `crates/eggsec-frontend-client/src/daemon.rs:257` | `DaemonRuntimeClient::get_task_report()` returns `Result<Option<serde_json::Value>>`. `Ok(None)` means **no report is available** — either the daemon has none for that task, or the daemon is too old to know the command. Both are degradable states, not failures. |
 
 The bridge covers the result families that have a natural report form — port
@@ -161,6 +161,83 @@ wireless, wireless-active, db-pentest, and c2, the last four reusing the
 engine's existing per-domain bridges verbatim. Every other result yields
 `None`: "no report available" is the honest answer for a result with no report
 form, and a lossy document pretending to be a report is not.
+
+### The report coverage table
+
+**Which** operations produce a report is a fact of its own, and it lives in
+exactly one place:
+`crates/eggsec/src/runtime_bridge/report_coverage.rs`. The table has one row
+per canonical operation id — **28 rows** — and each row names the
+`TaskResult` variants that operation can produce, the verdict, and — when the
+verdict is *no clean mapping* — the fact the result is missing.
+
+The verdict is per **operation**, not per variant: the GUI's coverage table has
+one row per published task kind, and three operations carry more than one
+variant (`waf-detect`, `storage`, `integrations`). In all three the variants
+agree, which is a measured fact about the result types.
+
+The arithmetic, over the engine's **35** `TaskResult` variants:
+
+| | Variants | Task kinds |
+|---|---|---|
+| Canonical (a report document is produced) | **17** | 18 |
+| Excluded (no clean report mapping) | **17** | 12 |
+| The terminal error shape (`Error`) | 1 | — |
+
+The seventeen canonical variants are the nine the bridge already mapped
+(port scan, pipeline, fingerprint, fuzz, recon, and the four reused domain
+bridges) plus eight new arms: **endpoint scan, graphql, oauth, auth test, nse,
+hunt, browser** and **compliance**.
+
+The eighteen excluded variants are the seventeen named below plus the terminal
+`Error` shape — a task's *failure*, not an operation's result, so a "report" of
+one would be a document with an empty target and no findings. Each excluded
+operation's reason names the fact its result is missing:
+
+| Operation | Variants | Why there is no clean mapping |
+|---|---|---|
+| `load-test` | `LoadTest` | the result carries only transport-error strings and a status-code count map, so it has no finding with a severity, a title or a location |
+| `stress-test` | `StressTest` | the result carries only counters — packets sent, bytes sent and error counts — and no finding, no port and no service |
+| `waf-detect` | `WafDetection`, `WafBypass` | neither variant carries a target: the detection and the bypass record the WAF's own facts, and the subject lives in the request |
+| `waf-stress` | `WafStress` | the result is a bare list of bypass attempts with no subject and no duration |
+| `packet-capture` | `PacketCapture` | the result names no interface and carries only a packet count and an output file, so the captured traffic has no home in the canonical model |
+| `packet` | `PacketTraceroute`, `PacketSend` | neither variant names the host it ran against: the hops and the two counters carry no subject |
+| `storage` | `Storage`, `StorageListScans`, `StorageListFindings` | the result is a bare acknowledgement or a catalogue read: stored scans and stored findings are lifecycle views, not a scan of one subject |
+| `integrations` | `Integrations`, `IntegrationsCreateIssue`, `IntegrationsSearchIssues` | the result is a tracker work item or a list of them and carries no target: an issue is not a fact about a scanned subject |
+| `workflow` | `Workflow` | the report carries counts and findings but no target field, so a workflow run is a lifecycle view over stored findings |
+| `vuln` | `Vuln` | the assessment carries no target and its prioritized findings carry no location, so there is no subject to report on |
+| `proxy-intercept` | `Intercept` | the session's target is optional and absent whenever the session had none, and the captured exchanges have no collection in the canonical model |
+| *(terminal)* | `Error` | the task failed: a terminal error is not a scan of a subject, so a document would carry an empty target and no findings |
+
+A **missing timestamp or duration does not disqualify** a variant: the bridge
+leaves those fields empty rather than inventing them, and the canonical model
+tolerates it. A missing **identity** does disqualify it — a document with an
+empty `target` does not say what it is about, and every renderer carries that
+emptiness into the artifact.
+
+The table is **published**, not merely consulted: the engine's executor
+projects it into the wire DTO (`eggsec_runtime::report::ReportFormEntry`), the
+daemon republishes it verbatim in its `Capabilities` reply, and the GUI joins
+it to its coverage table by operation id. `None` on the wire means **unknown**
+— a daemon that links no engine publishes no coverage — and never "no
+operation has a report form".
+
+### The `timestamp` semantics
+
+The workspace has **three** timestamp semantics and one empty case:
+
+| Semantics | Families |
+|---|---|
+| the scan's own start time | `pipeline` |
+| the report's own `timestamp` field | `c2`, `db-pentest` |
+| the report-generation time (a clock read) | `wireless`, `wireless-active` |
+| empty (no clock read) | `port-scan`, `fingerprint`, `fuzz`, `recon`, and the eight new families |
+
+None of the four *empty* families' result types carries a timestamp, so
+closing that gap requires adding a timestamp to those result types or giving
+the bridge a clock — and a clock would contradict the purity contract above.
+The eight new families therefore follow the majority precedent and carry an
+empty `timestamp`.
 
 The **task envelope contract is untouched** by this path:
 `TaskResultEnvelope.payload` stays `json!({})` and `.artifacts` stays `vec![]`

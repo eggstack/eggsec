@@ -276,7 +276,16 @@ version = "2"
 optional = true
 
 [dependencies.zip]
-version = "2"
+version = "9"
+# Only Stored/Deflated entries are read or written (see crates/eggsec-mobile-lab),
+# so the unused compression backends stay out of the graph: zip's default
+# `bzip2` feature pulls `libbz2-rs-sys`, whose `bzip2-1.0.6` licence expression
+# is not on the `deny.toml` allow list, and adding a licence is a policy
+# decision that milestone 015 does not own. `deflate` keeps both
+# Stored/Deflated writing and Deflated reading; `time` keeps the archive
+# timestamps exactly as they were.
+features = ["deflate", "time"]
+default-features = false
 optional = true
 
 [dependencies.plist]

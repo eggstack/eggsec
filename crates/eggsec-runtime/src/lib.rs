@@ -1,6 +1,7 @@
 pub mod approval;
 pub mod cancel;
 pub mod capabilities;
+pub mod daemon_endpoint;
 pub mod dispatcher;
 pub mod error;
 pub mod event;
@@ -17,6 +18,10 @@ pub mod session;
 pub use approval::{ApprovalAnswer, ApprovalGate, ApprovalRegistry};
 pub use cancel::race_with_cancel;
 pub use capabilities::{RuntimeCapabilities, TaskCapability};
+pub use daemon_endpoint::{
+    daemon_socket_path_from_env, resolve_daemon_socket_path, DAEMON_SOCKET_ENV_VAR,
+    DEFAULT_DAEMON_SOCKET_PATH,
+};
 pub use error::RuntimeError;
 pub use event::{
     ArtifactRef, LogLevel, PolicyPrompt, RuntimeAuditEvent, RuntimeErrorInfo, RuntimeEvent,

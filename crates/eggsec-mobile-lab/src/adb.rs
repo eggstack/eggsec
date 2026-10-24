@@ -1039,7 +1039,8 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-            let options = zip::write::SimpleFileOptions::default();
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             zip.start_file("AndroidManifest.xml", options).unwrap();
             zip.write_all(
                 br#"<?xml version="1.0" encoding="utf-8"?>

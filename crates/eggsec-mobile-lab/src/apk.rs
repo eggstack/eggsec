@@ -60,7 +60,17 @@ fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| MobileError::Validation(format!("zip entry error: {}", e)))?;
-        let raw_name = entry.name().to_string();
+        // zip 9.x decodes the entry name fallibly; take an owned copy so the
+        // borrow of the entry does not outlive this iteration.
+        let raw_name = match entry.name() {
+            Ok(name) => name.into_owned(),
+            Err(e) => {
+                return Err(MobileError::Validation(format!(
+                    "undecodable zip entry name in APK: {}",
+                    e
+                )));
+            }
+        };
 
         // ZipSlip / path traversal rejection (defense in depth, matches IPA)
         if raw_name.contains("..")
@@ -1020,7 +1030,7 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default()
+            let opts = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             zw.start_file("AndroidManifest.xml", opts).unwrap();
             zw.write_all(manifest.as_bytes()).unwrap();
@@ -1081,7 +1091,8 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default();
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             zw.start_file("../../evil.xml", opts).unwrap();
             zw.write_all(b"<manifest/>").unwrap();
             zw.finish().unwrap();
@@ -1099,7 +1110,8 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default();
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             zw.start_file("AndroidManifest.xml", opts).unwrap();
             zw.write_all(b"").unwrap();
             zw.finish().unwrap();
@@ -1117,7 +1129,8 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default();
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             zw.start_file("AndroidManifest.xml", opts).unwrap();
             zw.write_all(b"<manifest package=\"p\"><application/></manifest>")
                 .unwrap();
@@ -1185,7 +1198,8 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default();
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
             zw.start_file("AndroidManifest.xml", opts).unwrap();
             zw.write_all(MINIMAL_BINARY_AXML).unwrap();
             zw.finish().unwrap();
@@ -1238,7 +1252,7 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut zw = zip::ZipWriter::new(Cursor::new(&mut archive));
-            let opts = zip::write::FileOptions::<()>::default()
+            let opts = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             // Add a file that isn't AndroidManifest.xml
             zw.start_file("dummy.txt", opts).unwrap();

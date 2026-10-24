@@ -5482,11 +5482,15 @@ problems = []
 
 # The status vocabulary is closed. A cell that invents a status is not a
 # qualification.
+#
+# `pending M6` was retired by milestone 014: the token described a block that
+# no longer exists, and Check 182 forbids it outright now that the export
+# affordance exists. It is dropped here so this guard's vocabulary is the
+# matrix's vocabulary, not a superset of it.
 ALLOWED = {
     "qualified",
     "partially qualified",
     "not qualified",
-    "pending M6",
     "out of scope",
 }
 
@@ -5884,6 +5888,1014 @@ if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?action: "approve-policy"' "$HOST_RS"
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: the daemon audits the answer it accepts."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 177. The daemon's default socket path exists in exactly one place.
+# Milestone 012 (ADR-0013).
+#
+# The default socket path was transcribed in six places: the daemon binary's
+# flag default, the daemon's config default, the engine's global flag, the
+# GUI's Rust options, the GUI's webview (a JS constant and an HTML attribute)
+# and the daemon profile build script. A change to one copy would silently
+# fail to change the others, and the webview's copy could drift away from the
+# Rust one entirely.
+#
+# The canonical crate owns the literal. Documentation, skills and plan history
+# legitimately quote the operator-facing default, so the scan is scoped to
+# `crates/` and `scripts/` -- the same discipline `check_doc_references.py`
+# uses when it skips `plans/`.
+#
+# `code_search` is NOT used here: it strips string literals before matching
+# (`sed -e 's/"[^"]*"/""/g'`), so it would blank the very literal this guard
+# looks for and pass vacuously.
+echo ""
+echo "--- Check 177: the default socket path exists in exactly one place ---"
+SECTION_FAIL=0
+CANONICAL_CRATE="crates/eggsec-runtime"
+CANONICAL_RS="crates/eggsec-runtime/src/daemon_endpoint.rs"
+SOCKET_LITERAL="/tmp/eggsec-daemon.sock"
+# This guard has to NAME the literal in order to search for it, so the guard's
+# own file is excluded from its own scan. A check that matches itself is not a
+# check: without the exclusion this guard fails on its own search term and
+# says nothing about the repository.
+GUARD_SELF="scripts/check-architecture-guards.sh"
+
+# Every hit in the executable surface must live in the canonical crate. That
+# crate may hold more than one occurrence -- the constant and the test that
+# pins its value -- so the rule is the crate, not the file.
+while IFS= read -r HIT; do
+  [[ -z "$HIT" ]] && continue
+  HIT_FILE="${HIT%%:*}"
+  if [[ "$HIT_FILE" != "$CANONICAL_CRATE"/* ]]; then
+    echo "FAIL: the default socket path is stated outside the canonical crate: $HIT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done < <(rg -H -n --fixed-strings "$SOCKET_LITERAL" crates/ scripts/ 2>/dev/null | grep -v "^${GUARD_SELF}:" || true)
+
+# The GUI's webview assets must hold no copy: the webview learns the path
+# from Rust, through the existing `daemon_status` command.
+if rg -q --fixed-strings "$SOCKET_LITERAL" crates/eggsec-gui/frontend/ 2>/dev/null; then
+  echo "FAIL: the GUI's webview assets still hold a copy of the default socket path."
+  rg -H -n --fixed-strings "$SOCKET_LITERAL" crates/eggsec-gui/frontend/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The shell scripts must hold no copy, so the build script cannot re-introduce
+# one.
+SCRIPT_HITS="$(rg -H -n --fixed-strings "$SOCKET_LITERAL" scripts/ 2>/dev/null | grep -v "^${GUARD_SELF}:" || true)"
+if [[ -n "$SCRIPT_HITS" ]]; then
+  echo "FAIL: a shell script still holds a copy of the default socket path."
+  printf '%s\n' "$SCRIPT_HITS"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The canonical crate must still state it.
+if ! rg -q --fixed-strings "$SOCKET_LITERAL" "$CANONICAL_RS" 2>/dev/null; then
+  echo "FAIL: the canonical crate no longer states the default socket path."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the default socket path exists in exactly one place."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 178. The server refuses to bind over a live socket.
+# Milestone 012 (ADR-0013).
+#
+# `run_server` used to unlink the socket path before it bound, so a second
+# daemon displaced a live daemon's socket and its clients broke. The bind
+# guard binds first, asks the shared liveness probe whether the occupant is
+# live, and refuses without unlinking when it is.
+#
+# This guard pins the *shape*; the behaviour is pinned by the Rust tests,
+# because a static check cannot observe a race.
+echo ""
+echo "--- Check 178: the server refuses to bind over a live socket ---"
+SECTION_FAIL=0
+SERVER_RS="crates/eggsec-daemon/src/server.rs"
+
+# The hits in a file's PRODUCTION half. Comment lines, `pub use` re-exports
+# and the test module are all skipped, so a doc comment that NAMES a call --
+# or a test that mentions one -- can neither satisfy nor break a check.
+production_hits_fixed() {
+  local needle="$1" file="$2" limit
+  limit="$(rg -H -n --fixed-strings '#[cfg(test)]' "$file" 2>/dev/null | head -1 | cut -d: -f2 || true)"
+  [[ -z "$limit" ]] && limit=999999
+  rg -H -n --fixed-strings "$needle" "$file" 2>/dev/null \
+    | grep -v ':[[:space:]]*//' \
+    | grep -v 'pub use' \
+    | awk -F: -v limit="$limit" 'NF >= 2 && $2 + 0 < limit + 0' \
+    || true
+}
+
+# The first production line that mentions a needle.
+first_production_line() {
+  production_hits_fixed "$1" "$2" | head -1 | cut -d: -f2 || true
+}
+
+# The first removal of the socket path must come after the first bind. A
+# removal before the bind is the defect: it destroys the evidence of whether
+# the path held a live daemon.
+FIRST_BIND="$(first_production_line 'UnixListener::bind' "$SERVER_RS")"
+FIRST_REMOVE="$(first_production_line 'remove_file' "$SERVER_RS")"
+if [[ -z "$FIRST_BIND" ]]; then
+  echo "FAIL: the server no longer binds a Unix listener."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif [[ -n "$FIRST_REMOVE" ]] && (( FIRST_REMOVE < FIRST_BIND )); then
+  echo "FAIL: the server removes the socket path (line $FIRST_REMOVE) before it binds it (line $FIRST_BIND)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The refusal branch must exist.
+if [[ -z "$(production_hits_fixed 'AddrInUse' "$SERVER_RS")" ]]; then
+  echo "FAIL: the server has no AddrInUse refusal branch."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The bind path must consult the shared probe, so that a second liveness
+# notion cannot be introduced.
+if [[ -z "$(production_hits_fixed 'probe_daemon_liveness' "$SERVER_RS")" ]]; then
+  echo "FAIL: the server's bind path does not consult the shared liveness probe."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The liveness notion stays singular: no lock file, no PID file, no lease.
+for LOCK_LIKE in 'flock' 'lock_file' 'lockfile' 'pid_file' 'pidfile' '.lock'; do
+  if [[ -n "$(production_hits_fixed "$LOCK_LIKE" "$SERVER_RS")" ]]; then
+    echo "FAIL: the server's bind path references $LOCK_LIKE; the liveness notion must stay singular."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the server refuses to bind over a live socket."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 179. The environment override has one name and one resolver.
+# Milestone 012 (ADR-0013).
+#
+# The environment variable's name and the precedence rule live in one crate.
+# A second spelling of the name -- in the daemon, the engine, the GUI or the
+# CLI -- is a transcription that can drift from the rule it names.
+echo ""
+echo "--- Check 179: the environment override has one name and one resolver ---"
+SECTION_FAIL=0
+
+# The name may be stated only in the canonical crate.
+while IFS= read -r HIT; do
+  [[ -z "$HIT" ]] && continue
+  HIT_FILE="${HIT%%:*}"
+  if [[ "$HIT_FILE" != "$CANONICAL_CRATE"/* ]]; then
+    echo "FAIL: the socket environment variable's name is transcribed outside the canonical crate: $HIT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done < <(rg -H -n --fixed-strings 'EGGSEC_DAEMON_SOCKET' crates/ 2>/dev/null || true)
+
+# The canonical crate must own the four items the other surfaces name.
+for ITEM in \
+  'pub const DAEMON_SOCKET_ENV_VAR' \
+  'pub const DEFAULT_DAEMON_SOCKET_PATH' \
+  'pub fn resolve_daemon_socket_path' \
+  'pub fn daemon_socket_path_from_env'; do
+  if ! rg -q --fixed-strings "$ITEM" "$CANONICAL_RS" 2>/dev/null; then
+    echo "FAIL: the canonical crate does not declare $ITEM."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+# The four surfaces must resolve through the canonical items rather than
+# re-deriving the rule. A bare `pub use` re-export does not count, and
+# neither does a mention in the test module: the surface must actually
+# resolve a path through the canonical item.
+for SURFACE in \
+  "crates/eggsec-daemon/src/main.rs" \
+  "crates/eggsec/src/cli/mod.rs" \
+  "crates/eggsec-daemon/src/config.rs" \
+  "crates/eggsec-gui/src/config.rs"; do
+  if [[ ! -f "$SURFACE" ]]; then
+    echo "FAIL: $SURFACE is missing; the surface cannot be checked."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  SURFACE_LIMIT="$(rg -H -n --fixed-strings '#[cfg(test)]' "$SURFACE" 2>/dev/null | head -1 | cut -d: -f2 || true)"
+  [[ -z "$SURFACE_LIMIT" ]] && SURFACE_LIMIT=999999
+  SURFACE_HITS="$(rg -H -n 'daemon_socket_path_from_env|DEFAULT_DAEMON_SOCKET_PATH' "$SURFACE" 2>/dev/null \
+    | grep -v ':[[:space:]]*//' \
+    | grep -v 'pub use' \
+    | awk -F: -v limit="$SURFACE_LIMIT" 'NF >= 2 && $2 + 0 < limit + 0' \
+    || true)"
+  if [[ -z "$SURFACE_HITS" ]]; then
+    echo "FAIL: $SURFACE does not resolve the socket path through the canonical daemon endpoint."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the environment override has one name and one resolver."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 180. The report bridge's coverage table and the bridge's arms agree.
+# Milestone 013.
+#
+# The report bridge tells the operator which canonical operations produce a
+# report document. That answer lives in exactly one place -- the coverage
+# table in `crates/eggsec/src/runtime_bridge/report_coverage.rs` -- and the
+# bridge consults it before it builds anything.
+#
+# Three facts must not rot:
+#
+#   1. The table must account for EVERY result variant the engine declares.
+#      A new `TaskResult` variant that no row names would silently fall
+#      through the bridge and produce no report, with nothing to show for it.
+#   2. Every variant the table calls canonical must have a bridge arm, and
+#      every bridge arm must be a variant the table calls canonical. A
+#      disagreement between the two is the internal error the bridge logs at
+#      error level -- it must not be reachable from the source.
+#   3. The table must live in ONE place. A second copy would be a second
+#      hand-maintained catalog: it would drift silently, and the drift would
+#      show up as a missing row rather than as a failure.
+#
+# The names are READ FROM THEIR OWNERS, not transcribed here: a guard that
+# hardcoded the variant names would itself be the second source of truth this
+# check exists to prevent.
+#
+# The extractions are MULTILINE-AWARE (`rg -U`, and an awk that accumulates
+# across lines), because `rustfmt` breaks a long `variants:` array across
+# several lines. A single-line extraction would read a reformatted table as a
+# missing row, and the guard would fail on a tree that had not drifted.
+echo ""
+echo "--- Check 180: the report bridge's coverage table and its arms agree ---"
+SECTION_FAIL=0
+COVERAGE_SOURCE="crates/eggsec/src/runtime_bridge/report_coverage.rs"
+BRIDGE_SOURCE="crates/eggsec/src/runtime_bridge/report.rs"
+TYPES_SOURCE="crates/eggsec/src/dispatch/types.rs"
+EXECUTOR_SOURCE="crates/eggsec/src/runtime_bridge/executor.rs"
+
+# The variants the engine declares, read from the result type itself.
+ENUM_VARIANTS=""
+if [[ -f "$TYPES_SOURCE" ]]; then
+  ENUM_VARIANTS="$(sed -n '/^pub enum TaskResult {/,/^}/p' "$TYPES_SOURCE" \
+    | sed -n 's/^    \([A-Z][A-Za-z0-9]*\)[ ({,].*$/\1/p' | sort -u)"
+fi
+if [[ -z "$ENUM_VARIANTS" ]]; then
+  echo "FAIL: could not read the result variants from $TYPES_SOURCE; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  # The variants the coverage table names: the rows' variant lists plus the
+  # terminal result shape, which no operation produces.
+  COVERAGE_VARIANTS=""
+  if [[ -f "$COVERAGE_SOURCE" ]]; then
+    COVERAGE_VARIANTS="$(
+      {
+        rg -U -o 'variants: &\[[^\]]*\]' "$COVERAGE_SOURCE"
+        rg -U -o 'TERMINAL_RESULT_VARIANTS:[^=]*= *&\[[^\]]*\]' "$COVERAGE_SOURCE"
+      } | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u
+    )"
+  fi
+  if [[ -z "$COVERAGE_VARIANTS" ]]; then
+    echo "FAIL: could not read the coverage table's variants from $COVERAGE_SOURCE; the guard cannot run."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  elif [[ "$ENUM_VARIANTS" == "$COVERAGE_VARIANTS" ]]; then
+    echo "PASS: the coverage table accounts for every result variant the engine declares."
+  else
+    echo "FAIL: the coverage table and the engine's result variants disagree."
+    echo "  only in the result type:"
+    comm -23 <(printf '%s\n' "$ENUM_VARIANTS") <(printf '%s\n' "$COVERAGE_VARIANTS") | sed 's/^/    /'
+    echo "  only in the coverage table:"
+    comm -13 <(printf '%s\n' "$ENUM_VARIANTS") <(printf '%s\n' "$COVERAGE_VARIANTS") | sed 's/^/    /'
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # The table's rows, read as "verdict|variants". The awk accumulates across
+  # lines so a reformatted (multi-line) variants array reads as one row.
+  COVERAGE_ROWS=""
+  if [[ -f "$COVERAGE_SOURCE" ]]; then
+    COVERAGE_ROWS="$(awk '
+      /variants: &\[/ {
+        line = $0
+        sub(/^.*variants: &\[/, "", line)
+        if (line ~ /\]/) {
+          sub(/\].*$/, "", line)
+          names = line
+          collecting = 0
+        } else {
+          names = line
+          collecting = 1
+        }
+        next
+      }
+      collecting {
+        line = $0
+        if (line ~ /\]/) {
+          sub(/\].*$/, "", line)
+          names = names " " line
+          collecting = 0
+        } else {
+          names = names " " line
+        }
+        next
+      }
+      /form: ReportForm::/ {
+        verdict = $0
+        sub(/^.*form: ReportForm::/, "", verdict)
+        sub(/,.*$/, "", verdict)
+        print verdict "|" names
+        names = ""
+        next
+      }
+    ' "$COVERAGE_SOURCE")"
+  fi
+  if [[ -z "$COVERAGE_ROWS" ]]; then
+    echo "FAIL: could not read the coverage rows from $COVERAGE_SOURCE; the guard cannot run."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  else
+    CANONICAL_VARIANTS="$(printf '%s\n' "$COVERAGE_ROWS" \
+      | rg '^Canonical\|' | cut -d'|' -f2 | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u)"
+    EXCLUDED_VARIANTS="$(printf '%s\n' "$COVERAGE_ROWS" \
+      | rg '^NoCleanMapping\|' | cut -d'|' -f2 | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u)"
+
+    # The bridge's arms: the PRODUCTION half only. A test may name a variant
+    # as a fixture, but only a real arm counts here.
+    BRIDGE_PRODUCTION=""
+    BRIDGE_ARMS=""
+    if [[ -f "$BRIDGE_SOURCE" ]]; then
+      BRIDGE_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$BRIDGE_SOURCE")"
+      BRIDGE_ARMS="$(printf '%s' "$BRIDGE_PRODUCTION" | rg -o 'TaskResult::[A-Za-z][A-Za-z0-9]*' \
+        | sed 's/TaskResult:://' | sort -u)"
+    fi
+    if [[ -z "$BRIDGE_ARMS" ]]; then
+      echo "FAIL: could not read the bridge's arms from $BRIDGE_SOURCE; the guard cannot run."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    else
+      for variant in $CANONICAL_VARIANTS; do
+        if ! printf '%s' "$BRIDGE_PRODUCTION" | rg -q "TaskResult::${variant}\b"; then
+          echo "FAIL: the coverage table calls '$variant' canonical, but the bridge has no TaskResult::$variant arm."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+      for arm in $BRIDGE_ARMS; do
+        if ! printf '%s\n' "$CANONICAL_VARIANTS" | rg -qx "$arm"; then
+          echo "FAIL: the bridge has a TaskResult::$arm arm, but the coverage table does not call it canonical."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+      for variant in $EXCLUDED_VARIANTS; do
+        if printf '%s' "$BRIDGE_PRODUCTION" | rg -q "TaskResult::${variant}\b"; then
+          echo "FAIL: the bridge has a TaskResult::$variant arm, but the coverage table excludes that variant."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+    fi
+  fi
+
+  # The table lives in exactly one place.
+  COVERAGE_TABLE_FILES="$(rg -l 'pub const REPORT_COVERAGE' crates/ --glob '*.rs' 2>/dev/null | sort | tr '\n' ' ')"
+  COVERAGE_TABLE_FILES="${COVERAGE_TABLE_FILES% }"
+  if [[ "$COVERAGE_TABLE_FILES" != "$COVERAGE_SOURCE" ]]; then
+    echo "FAIL: the report coverage table must live in exactly one place; found: ${COVERAGE_TABLE_FILES:-none}"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # The engine publishes its own table; it does not restate it.
+  if [[ -f "$EXECUTOR_SOURCE" ]]; then
+    if ! rg -q 'REPORT_COVERAGE' "$EXECUTOR_SOURCE"; then
+      echo "FAIL: the engine's executor does not publish the coverage table; the daemon would have no coverage to republish."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the report bridge's coverage table and its arms agree."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 181. The export procedure is written.
+# Milestone 014.
+#
+# The export step is the step whose procedure was missing: a matrix column
+# with no procedure is a column nobody can run, and a procedure that still
+# says "not yet defined" is worse than no procedure, because it reads like
+# one.
+echo ""
+echo "--- Check 181: the export procedure is written ---"
+SECTION_FAIL=0
+BUILD_DOC="docs/GUI_BUILD.md"
+EXPORT_SECTION="$(sed -n '/^### 5\.7 Step 7 — Export/,/^### 5\.8 /p' "$BUILD_DOC")"
+if [[ -z "$EXPORT_SECTION" ]]; then
+  echo "FAIL: $BUILD_DOC has no §5.7 export step."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if printf '%s' "$EXPORT_SECTION" | rg -q 'Not yet defined'; then
+  echo "FAIL: $BUILD_DOC §5.7 still says 'Not yet defined'."
+  printf '%s' "$EXPORT_SECTION" | rg -n 'Not yet defined' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for ROW in 'Action' 'Pass criterion' 'Evidence artefact'; do
+  if ! printf '%s' "$EXPORT_SECTION" | rg -q "\| \*\*$ROW\*\* \| .+ \|"; then
+    echo "FAIL: $BUILD_DOC §5.7 has no non-empty $ROW row."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! printf '%s' "$EXPORT_SECTION" | rg -q 'export_report'; then
+  echo "FAIL: $BUILD_DOC §5.7 does not name the export_report command."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for FORMAT in json csv html md sarif xml; do
+  if ! printf '%s' "$EXPORT_SECTION" | rg -q "\`$FORMAT\`"; then
+    echo "FAIL: $BUILD_DOC §5.7 does not name the $FORMAT format."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the export procedure names its action, its criterion, its artefact, and its six formats."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 182. The retired milestone token stays retired.
+# Milestone 014.
+#
+# The matrix once claimed the GUI had no export affordance and blocked its
+# export column on a milestone. The affordance exists, so the token that
+# described the block is a token that lies. It expires with the affordance,
+# not with a date.
+echo ""
+echo "--- Check 182: the retired milestone token stays retired ---"
+SECTION_FAIL=0
+MATRIX="docs/GUI_PLATFORM_QUALIFICATION.md"
+APP_JS="crates/eggsec-gui/frontend/app.js"
+if rg -q 'export_report' "$APP_JS" 2>/dev/null; then
+  if rg -q 'pending M6' "$MATRIX" 2>/dev/null; then
+    echo "FAIL: $MATRIX still carries the retired 'pending M6' token, but the export affordance exists."
+    rg -n 'pending M6' "$MATRIX" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+else
+  echo "FAIL: the export affordance is gone from $APP_JS; guard 182's premise no longer holds."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the matrix carries no retired blocking token."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 183. `qualified` means resolvable evidence.
+# Milestone 014.
+#
+# A cell that claims `qualified` is a claim about a run that happened. If the
+# run record cannot be found, the claim is not a claim about anything, and the
+# matrix stops being a statement of fact and becomes a statement of intent.
+echo ""
+echo "--- Check 183: a qualified cell names resolvable evidence ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import os
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+evidence_dir = "docs/evidence/gui-qualification"
+ci_runs_path = os.path.join(evidence_dir, "CI-RUNS.md")
+
+with open(matrix_path, encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+ci_runs = ""
+if os.path.isfile(ci_runs_path):
+    with open(ci_runs_path, encoding="utf-8") as handle:
+        ci_runs = handle.read()
+
+failures = 0
+for number, line in enumerate(lines, start=1):
+    if not line.startswith("| `"):
+        continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    if len(cells) < 2:
+        continue
+    platform = cells[0].strip("`")
+    for index, cell in enumerate(cells[1:], start=1):
+        match = re.match(r"^\*\*([^*]+)\*\*", cell)
+        if match is None or match.group(1).strip() != "qualified":
+            continue
+        references = re.findall(r"docs/evidence/gui-qualification/([A-Za-z0-9._-]+\.md)", cell)
+        urls = re.findall(r"https://github\.com/\S+/actions/runs/\d+", cell)
+        if not references and not urls:
+            print(f"FAIL: {matrix_path}:{number} the {platform} cell names no evidence reference.")
+            failures += 1
+            continue
+        for name in references:
+            if not os.path.isfile(os.path.join(evidence_dir, name)):
+                print(f"FAIL: {matrix_path}:{number} cites `{name}`, which does not exist.")
+                failures += 1
+        for url in urls:
+            if url not in ci_runs:
+                print(f"FAIL: {matrix_path}:{number} cites {url}, which is not in {ci_runs_path}.")
+                failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every qualified cell names evidence that resolves."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 184. The matrix shape is exact.
+# Milestone 014.
+#
+# The matrix is read by a validator, a guard, and a runbook, and all three
+# read it by position. A column added in the middle, a row dropped, or a cell
+# removed silently changes what every one of those readers believes.
+echo ""
+echo "--- Check 184: the matrix shape is exact ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+header = "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |"
+
+with open(matrix_path, encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+failures = 0
+if not any(line.strip() == header for line in lines):
+    print(f"FAIL: {matrix_path} has no header row exactly `{header}`.")
+    failures += 1
+
+rows = []
+for line in lines:
+    if not line.startswith("| `"):
+        continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    platform = cells[0].strip("`")
+    if platform in ("linux", "macos", "windows"):
+        rows.append((platform, len(cells) - 1))
+
+if sorted(platform for platform, _ in rows) != ["linux", "macos", "windows"]:
+    print(f"FAIL: {matrix_path} must have exactly one row per platform (linux, macos, windows); found {sorted(platform for platform, _ in rows)}.")
+    failures += 1
+
+for platform, cells in rows:
+    if cells != 7:
+        print(f"FAIL: {matrix_path} the `{platform}` row has {cells} cells; it must have 7.")
+        failures += 1
+
+if failures == 0 and sum(cells for _, cells in rows) != 21:
+    print(f"FAIL: {matrix_path} has {sum(cells for _, cells in rows)} cells; it must have 21.")
+    failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the matrix has the exact header, three rows, and twenty-one cells."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 185. The runbook derives its steps from the matrix.
+# Milestone 014.
+#
+# The runbook is the procedure for the matrix's columns. If the two lists
+# drift, an operator follows a procedure for a column the matrix does not
+# have, and a cell the matrix does have has no procedure.
+echo ""
+echo "--- Check 185: the runbook's steps are the matrix's columns ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+build_path = "docs/GUI_BUILD.md"
+
+with open(matrix_path, encoding="utf-8") as handle:
+    matrix_lines = handle.read().splitlines()
+
+header = None
+for line in matrix_lines:
+    if line.strip() == "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |":
+        header = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        break
+
+if header is None:
+    print("FAIL: the matrix has no header row.")
+    sys.exit(1)
+
+columns = [column.lower() for column in header[1:]]
+
+with open(build_path, encoding="utf-8") as handle:
+    build_lines = handle.read().splitlines()
+
+steps = []
+for line in build_lines:
+    match = re.match(r"^### 5\.\d+ Step (\d+) — (.+)$", line.strip())
+    if match:
+        steps.append((int(match.group(1)), match.group(2).strip().lower()))
+
+failures = 0
+if [name for _, name in steps] != columns:
+    print(f"FAIL: {build_path} §5's steps are {[name for _, name in steps]}; the matrix's columns are {columns}.")
+    failures += 1
+for number, name in steps:
+    if number != steps.index((number, name)) + 1:
+        print(f"FAIL: {build_path} §5's step numbers are not 1..7 in order.")
+        failures += 1
+        break
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the runbook's seven steps are the matrix's seven columns, in order."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 186. The harness's identifiers are the matrix's columns.
+# Milestone 014.
+#
+# The harness reports on the matrix's columns. An identifier it invents, or a
+# column it forgets, is a column the matrix can never promote — and the run
+# record's schema is the contract every writer and every reader shares.
+echo ""
+echo "--- Check 186: the harness's identifiers and record schema are pinned ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+harness_path = "crates/eggsec-gui/tests/qualification.rs"
+schema = "eggsec-gui-qualification-record/v1"
+schema_files = [
+    harness_path,
+    "scripts/gui_qualification.sh",
+    "scripts/check_gui_qualification.py",
+    "docs/evidence/gui-qualification/TEMPLATE.md",
+]
+
+with open(matrix_path, encoding="utf-8") as handle:
+    matrix_lines = handle.read().splitlines()
+
+columns = []
+for line in matrix_lines:
+    if line.strip() == "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |":
+        columns = [
+            cell.strip().lower()
+            for cell in line.strip().strip("|").split("|")[1:]
+        ]
+        break
+
+if not columns:
+    print("FAIL: the matrix has no header row.")
+    sys.exit(1)
+
+with open(harness_path, encoding="utf-8") as handle:
+    harness = handle.read()
+
+match = re.search(
+    r"COLUMN_IDENTIFIERS[^=]*=\s*&?\[(.*?)\]", harness, re.DOTALL
+)
+if match is None:
+    print(f"FAIL: {harness_path} declares no COLUMN_IDENTIFIERS.")
+    sys.exit(1)
+
+identifiers = re.findall(r'"([a-z]+)"', match.group(1))
+failures = 0
+if identifiers != columns:
+    print(f"FAIL: {harness_path}'s identifiers are {identifiers}; the matrix's columns are {columns}.")
+    failures += 1
+
+for path in schema_files:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            content = handle.read()
+    except OSError:
+        print(f"FAIL: {path} does not exist.")
+        failures += 1
+        continue
+    if schema not in content:
+        print(f"FAIL: {path} does not carry the record schema `{schema}`.")
+        failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the harness's identifiers are the matrix's columns, and every writer and reader carries the same record schema."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 187. The procedure is hermetic.
+# Milestone 014.
+#
+# The procedure runs on a developer's machine and on a CI runner. It writes
+# artefacts, so it has to say where it writes them, and it must never need
+# privileges the operator has to go and find.
+echo ""
+echo "--- Check 187: the qualification procedure is hermetic ---"
+SECTION_FAIL=0
+PROCEDURE="scripts/gui_qualification.sh"
+if rg -q '\bsudo\b' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE elevates its privileges."
+  rg -n '\bsudo\b' "$PROCEDURE" || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'rm\s+-[a-z]*r' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE removes things recursively."
+  rg -n 'rm\s+-[a-z]*r' "$PROCEDURE" || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Every absolute path LITERAL the procedure names must be inside the
+# temporary root. A path built from a shell expansion ("$OUT_DIR/...") is not
+# a literal: it is wherever the caller pointed it, and the caller chooses.
+OFFENDING="$(python3 - "$PROCEDURE" <<'PYEOF'
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    body = handle.read()
+
+literals = set(re.findall(r"[\"'](/[^\"'\$]*)", body))
+allowed = {"/dev/null"}
+offending = sorted(
+    literal
+    for literal in literals
+    if literal not in allowed and not literal.startswith("/tmp/")
+    and literal != "/tmp"
+)
+for literal in offending:
+    print(literal)
+PYEOF
+)"
+if [[ -n "$OFFENDING" ]]; then
+  echo "FAIL: $PROCEDURE names absolute path literals outside the temporary root."
+  printf '%s\n' "$OFFENDING"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'TMPDIR' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE does not confine its scratch writes to the temporary root."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the procedure needs no privileges and writes only under its output and the temporary root."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 188. The promotion validator is green.
+# Milestone 014.
+#
+# The matrix's rules are enforced by a program, not by a reader's diligence.
+# If the validator fails, the matrix's claims are not being checked, and every
+# other check in this file is only a floor.
+echo ""
+echo "--- Check 188: the promotion validator passes ---"
+SECTION_FAIL=0
+if ! python3 scripts/check_gui_qualification.py; then
+  echo "FAIL: scripts/check_gui_qualification.py rejects the matrix."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the promotion validator is green."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 189. The CI job publishes the qualification record.
+# Milestone 014.
+#
+# A CI run that nobody can read is not evidence. The record has to leave the
+# runner as an artefact, or the Linux row can never be promoted by CI at all.
+echo ""
+echo "--- Check 189: the CI job publishes the qualification record ---"
+SECTION_FAIL=0
+WORKFLOW=".github/workflows/deep-checks.yml"
+GUI_JOB="$(sed -n '/^  gui-platform:/,/^  [a-z-]*:$/p' "$WORKFLOW")"
+if [[ -z "$GUI_JOB" ]]; then
+  echo "FAIL: $WORKFLOW has no gui-platform job."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'scripts/gui_qualification\.sh'; then
+  echo "FAIL: the gui-platform job does not run the qualification procedure."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'gui-qualification-\$\{\{ matrix\.os \}\}'; then
+  echo "FAIL: the gui-platform job does not publish a gui-qualification artefact."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'upload-artifact'; then
+  echo "FAIL: the gui-platform job does not upload the run record as an artefact."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the gui-platform job runs the procedure and publishes the run record."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 190. Every dependency exception is owned and dated.
+# Milestone 015.
+#
+# A dependency exception is a decision to ship a known-bad advisory. It is
+# only a decision while somebody owns it and somebody has promised to look
+# at it again. An ignore with no owner and no review-by date is a silent
+# permanent waiver, and the 23-entry advisory set that milestone 015 closed
+# was exactly a backlog of such waivers that nobody was tracking.
+#
+# `deny.toml` deliberately carries no owner field -- the house style puts the
+# ownership data in the exception document -- so the check has to read both
+# files. It must also fail closed: a parse that finds nothing is not
+# evidence that there is nothing to find. A guard that silently passes is
+# worse than none.
+echo ""
+echo "--- Check 190: every dependency exception is owned and dated ---"
+SECTION_FAIL=0
+DENY_TOML="deny.toml"
+EXCEPTIONS_DOC="docs/DEPENDENCY_EXCEPTIONS.md"
+
+if [[ ! -f "$DENY_TOML" ]]; then
+  echo "FAIL: $DENY_TOML is missing; the canonical dependency-policy source cannot be checked."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "$EXCEPTIONS_DOC" ]]; then
+  echo "FAIL: $EXCEPTIONS_DOC is missing; the exception record cannot be checked."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  # Slice the `[advisories]` ignore array out of the policy file. The array is
+  # the only place an advisory ID may be suppressed, so the parse is scoped to
+  # that section rather than to the whole file.
+  IGNORE_BLOCK=$(awk '
+    /^\[advisories\]/                 { in_adv = 1; next }
+    /^\[/                            { in_adv = 0 }
+    in_adv && /^[[:space:]]*ignore[[:space:]]*=/ { in_ign = 1; next }
+    in_ign && /^[[:space:]]*\]/      { in_ign = 0; next }
+    in_ign                           { print }
+  ' "$DENY_TOML" 2>/dev/null || true)
+
+  if [[ -z "$IGNORE_BLOCK" ]]; then
+    echo "FAIL: the [advisories] ignore array could not be parsed from $DENY_TOML."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  IGNORE_ENTRIES=$(rg -o '\{[^{}]*\}' <<< "$IGNORE_BLOCK" 2>/dev/null || true)
+  if [[ -z "$IGNORE_ENTRIES" ]]; then
+    echo "FAIL: no advisory ignore entries were parsed from $DENY_TOML."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # Every `###` section of the exception document, reduced to the facts the
+  # guard needs: the advisory IDs it covers, its owner, and its review-by date.
+  # A section runs from its heading to the next `###` or `##` heading.
+  SECTION_FACTS=$(awk '
+    function flush(   ids, s, id, n, arr, i) {
+      if (title == "") return;
+      ids = "";
+      s = title "\n" body;
+      while (match(s, /RUSTSEC-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]/)) {
+        id = substr(s, RSTART, RLENGTH);
+        if (index(" " ids " ", " " id " ") == 0) ids = ids (ids == "" ? "" : " ") id;
+        s = substr(s, RSTART + RLENGTH);
+      }
+      n = split(ids, arr, " ");
+      for (i = 1; i <= n; i++) {
+        if (arr[i] == "") continue;
+        printf "%s\t%s\t%s\t%s\n", arr[i], owner, reviewby, title;
+      }
+    }
+    /^### / {
+      flush(); title = $0; owner = ""; reviewby = ""; body = ""; next;
+    }
+    /^## / {
+      flush(); title = ""; owner = ""; reviewby = ""; body = ""; next;
+    }
+    {
+      if (title == "") next;
+      body = body $0 "\n";
+      if ($0 ~ /^\|[[:space:]]*Owner[[:space:]]*\|/) {
+        v = $0; sub(/^\|[[:space:]]*Owner[[:space:]]*\|/, "", v);
+        sub(/[[:space:]]*\|[[:space:]]*$/, "", v);
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); owner = v;
+      }
+      if ($0 ~ /^\|[[:space:]]*Review-by[[:space:]]*\|/) {
+        v = $0; sub(/^\|[[:space:]]*Review-by[[:space:]]*\|/, "", v);
+        sub(/[[:space:]]*\|[[:space:]]*$/, "", v);
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); reviewby = v;
+      }
+    }
+    END { flush() }
+  ' "$EXCEPTIONS_DOC" 2>/dev/null || true)
+
+  if [[ -z "$SECTION_FACTS" ]]; then
+    echo "FAIL: no exception records could be parsed from $EXCEPTIONS_DOC."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # Advisory IDs carried by a RESOLVED heading. Their ignores were removed
+  # when the dependency left the graph; a RESOLVED ID that is ignored again
+  # is a resurrected exception.
+  RESOLVED_IDS=$(awk '
+    /^### / {
+      if (title == "") { title = $0; next }
+      if (title ~ /RESOLVED/) {
+        s = title;
+        while (match(s, /RUSTSEC-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]/)) {
+          print substr(s, RSTART, RLENGTH);
+          s = substr(s, RSTART + RLENGTH);
+        }
+      }
+      title = $0;
+      next;
+    }
+    /^## / { title = ""; next }
+  ' "$EXCEPTIONS_DOC" 2>/dev/null || true)
+
+  # (a) Every ignore entry has a non-empty reason.
+  # (b) Every reason references the exception document.
+  # (c) Every ignored ID has an owned and dated record.
+  IGNORED_IDS=""
+  while IFS= read -r ENTRY; do
+    if [[ -z "$ENTRY" ]]; then continue; fi
+    ENTRY_ID=$(printf '%s\n' "$ENTRY" | rg -o 'RUSTSEC-[0-9]{4}-[0-9]{4}' | head -1 || true)
+    if [[ -z "$ENTRY_ID" ]]; then
+      echo "FAIL: an ignore entry in $DENY_TOML carries no advisory ID: $ENTRY"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    IGNORED_IDS="$IGNORED_IDS $ENTRY_ID"
+
+    ENTRY_REASON_RAW=$(printf '%s\n' "$ENTRY" | rg -o 'reason[[:space:]]*=[[:space:]]*"[^"]*"' || true)
+    if [[ -z "$ENTRY_REASON_RAW" ]]; then
+      echo "FAIL: $ENTRY_ID has no reason in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    ENTRY_REASON="${ENTRY_REASON_RAW#*\"}"
+    ENTRY_REASON="${ENTRY_REASON%\"}"
+    if [[ -z "${ENTRY_REASON//[[:space:]]/}" ]]; then
+      echo "FAIL: $ENTRY_ID has an empty reason in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    if [[ "$ENTRY_REASON" != *"docs/DEPENDENCY_EXCEPTIONS.md"* ]]; then
+      echo "FAIL: $ENTRY_ID's reason does not reference docs/DEPENDENCY_EXCEPTIONS.md."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+
+    # (c) The owner and the review-by date live in the exception document.
+    MATCHED=$(printf '%s\n' "$SECTION_FACTS" | rg "^${ENTRY_ID}	" || true)
+    if [[ -z "$MATCHED" ]]; then
+      echo "FAIL: $ENTRY_ID is ignored in $DENY_TOML but has no record in $EXCEPTIONS_DOC."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    OWNED_AND_DATED=0
+    while IFS=$'\t' read -r _SEC_ID _SEC_OWNER _SEC_REVIEW _SEC_TITLE; do
+      if [[ -z "${_SEC_OWNER//[[:space:]]/}" ]]; then continue; fi
+      if [[ "$_SEC_REVIEW" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$_SEC_REVIEW" == "— (closed)" ]]; then
+        OWNED_AND_DATED=1
+      fi
+    done <<< "$MATCHED"
+    if [[ $OWNED_AND_DATED -eq 0 ]]; then
+      echo "FAIL: $ENTRY_ID has no record with a non-empty '| Owner |' and a dated '| Review-by |' in $EXCEPTIONS_DOC."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done <<< "$IGNORE_ENTRIES"
+
+  # (d) No RESOLVED exception retains a live ignore.
+  while IFS= read -r RESOLVED_ID; do
+    if [[ -z "$RESOLVED_ID" ]]; then continue; fi
+    if [[ " $IGNORED_IDS " == *" $RESOLVED_ID "* ]]; then
+      echo "FAIL: $RESOLVED_ID is RESOLVED in $EXCEPTIONS_DOC but is still ignored in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done <<< "$RESOLVED_IDS"
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every dependency exception is owned and dated."
 else
   FAIL=$((FAIL + 1))
 fi

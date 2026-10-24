@@ -1,0 +1,25 @@
+{
+  "target": "127.0.0.1",
+  "scan_type": "port-scan",
+  "timestamp": "",
+  "findings": [],
+  "open_ports": [
+    {
+      "port": 22,
+      "status": "open",
+      "protocol": "tcp",
+      "state": null,
+      "service": "SSH",
+      "version": null,
+      "banner": null
+    }
+  ],
+  "services": [
+    {
+      "service": "SSH",
+      "version": null,
+      "banner": null
+    }
+  ],
+  "duration_ms": 1
+}

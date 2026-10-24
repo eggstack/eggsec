@@ -175,7 +175,7 @@ The cargo feature and the runtime flag are two different mechanisms:
 The runtime flag's **name and meaning are unchanged**. After building, run:
 
 ```bash
-eggsec-daemon --full-executor --socket-path /tmp/eggsec-daemon.sock
+eggsec-daemon --full-executor
 ```
 
 ## Conformance

@@ -249,8 +249,55 @@ Milestone 011 (`ADR-0012`) wired the daemon's `ApprovePolicy` command to the run
 - The confirmation-class→override mapping exists in **exactly one place** (Check 175): `ManualOverride::permitting_classes` must exist in `crates/eggsec-policy/src/decision.rs`, and neither the TUI's enforcement facade nor the engine's runtime bridge may assign one of the eight override-permitting fields itself — both must call the shared helper. A second copy of the table would let the two drift, and the drift would surface as an operator whose answer grants a class the kernel never demanded.
 - The daemon **audits** the answer it accepts (Check 176): the `ApprovePolicy` handler must record an audit event under the action `approve-policy`. An approval is an authorisation an operator gave; one that leaves no trace is indistinguishable from one that was never asked for.
 
+### Dependency-Exception Ownership Invariants (2026-10-24, guard Check 190)
+
+Milestone 015 closed the workspace's dependency advisory backlog: the 23 entries
+measured at the milestone-010 baseline were either upgraded away (9 by a
+lockfile refresh, 3 by the `zip` 9.x major bump) or recorded as owned,
+dated exceptions. One check keeps that state from rotting:
+
+- Every dependency exception is **owned and dated** (Check 190): every entry in
+  `deny.toml`'s `[advisories] ignore` array must carry a non-empty `reason`
+  that names `docs/DEPENDENCY_EXCEPTIONS.md`; every ignored advisory ID must
+  have a record in `docs/DEPENDENCY_EXCEPTIONS.md` carrying a non-empty
+  `| Owner |` and a `| Review-by |` that is an ISO date (`YYYY-MM-DD`) or the
+  literal `— (closed)`; and no `RESOLVED` record's advisory ID may remain in
+  the live `ignore` list. `deny.toml` deliberately carries no owner field — the
+  house style puts ownership and the review date in the exception document — so
+  the check reads both files. It fails closed: if either file cannot be
+  parsed, the check reports the failure rather than passing because it found
+  nothing, because a guard that silently passes is worse than none.
+
 ### Desktop-GUI Platform-Qualification Invariants (2026-10-23, guard Check 168)
-- The desktop GUI's platform qualification is machine-checked (Check 168): `docs/GUI_PLATFORM_QUALIFICATION.md` must carry a matrix with a row per platform and a cell per behaviour (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`, `Export`). Every cell must begin with one of the enumerated status tokens — `qualified`, `partially qualified`, `not qualified`, `pending M6`, `out of scope` — and no cell may be blank or carry an unqualified support claim. The `windows` row must be `out of scope` in every column and must name `ADR-0010`, the decision that excludes it. `crates/eggsec-gui/tauri.conf.json` must keep `bundle.active` false, because the installers belong to the distribution workstream.
+- The desktop GUI's platform qualification is machine-checked (Check 168): `docs/GUI_PLATFORM_QUALIFICATION.md` must carry a matrix with a row per platform and a cell per behaviour (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`, `Export`). Every cell must begin with one of the enumerated status tokens — `qualified`, `partially qualified`, `not qualified`, `out of scope` — and no cell may be blank or carry an unqualified support claim. The `windows` row must be `out of scope` in every column and must name `ADR-0010`, the decision that excludes it. `crates/eggsec-gui/tauri.conf.json` must keep `bundle.active` false, because the installers belong to the distribution workstream.
+
+### Daemon-Endpoint-Default-and-Bind-Contract Invariants (2026-10-24, guards Checks 177–179)
+
+Milestone 012 (`ADR-0013`) gave the daemon's socket path a single owner: the canonical default, the environment variable's name and the precedence rule live in `crates/eggsec-runtime/src/daemon_endpoint.rs`, and the server's bind refuses to displace a live daemon. Three checks pin it:
+
+- The default socket path exists in **exactly one place** (Check 177): the literal `/tmp/eggsec-daemon.sock` may appear only inside `crates/eggsec-runtime`. The GUI's webview assets (`crates/eggsec-gui/frontend/`) and the shell scripts (`scripts/`) must hold **zero** occurrences, so neither the webview nor the build script can keep a copy that drifts from the Rust one.
+- The server **refuses** to bind over a live socket (Check 178): `crates/eggsec-daemon/src/server.rs` must bind before it removes the socket path, must carry an `AddrInUse` refusal branch, and must consult the shared probe `probe_daemon_liveness` rather than a second liveness notion (no lock file, no PID file). A removal before the bind destroys the evidence of whether the path held a live daemon.
+- The environment override has **one name and one resolver** (Check 179): the literal `EGGSEC_DAEMON_SOCKET` may appear only inside `crates/eggsec-runtime`; the canonical crate must declare `DAEMON_SOCKET_ENV_VAR` and `DEFAULT_DAEMON_SOCKET_PATH` and define `resolve_daemon_socket_path` and `daemon_socket_path_from_env`; and the daemon binary's `--socket-path`, the engine's global `--socket`, the daemon's `DaemonConfig::default()` and the GUI's `GuiOptions::default()` must each resolve through the canonical items.
+
+### Report-Bridge Coverage Invariants (2026-10-24, guard Check 180)
+
+Milestone 013 gave the report bridge a **coverage table**: the single source of truth for which canonical operations produce a report document, and — for the ones that do not — the fact their result is missing. The table lives in `crates/eggsec/src/runtime_bridge/report_coverage.rs`; the engine publishes it, the daemon republishes it verbatim in `DaemonCapabilities.report_forms`, and the GUI renders it. One check pins it:
+
+- The coverage table and the bridge's arms **agree** (Check 180): the guard reads the `TaskResult` variants from `crates/eggsec/src/dispatch/types.rs` and the variant lists from `crates/eggsec/src/runtime_bridge/report_coverage.rs` and asserts that the two sets are equal, so a new result variant that no row names fails the check rather than silently producing no report. It also asserts that every variant the table calls *canonical* has a `TaskResult::` arm in `crates/eggsec/src/runtime_bridge/report.rs`, that every bridge arm is a canonical row, that an excluded variant has no arm, and that the table exists in exactly one place — a second copy would be a second hand-maintained catalog. The names are read from their owners, never transcribed in the guard.
+
+### Desktop-GUI Platform-Qualification Invariants (2026-10-24, guards Check 181–189)
+
+Milestone 014 made the desktop GUI's qualification matrix **checkable**. The matrix's behavioural columns were unpromotable because nothing produced the evidence they claim and nothing checked the claims that existed. The procedure (`scripts/gui_qualification.sh`), the harness (`crates/eggsec-gui/tests/qualification.rs`), and the validator (`scripts/check_gui_qualification.py`) close that loop, and nine checks pin it:
+
+- The **export procedure is written** (Check 181): `docs/GUI_BUILD.md` §5.7 must contain no `Not yet defined`, must have a non-empty Action row, a non-empty Pass criterion row, and a non-empty Evidence artefact row, must name the `export_report` command, and must name all six formats (`json`, `csv`, `html`, `md`, `sarif`, `xml`). A column with no procedure is a column nobody can run.
+- The **retired milestone token stays retired** (Check 182): if `crates/eggsec-gui/frontend/app.js` contains `export_report`, then `docs/GUI_PLATFORM_QUALIFICATION.md` contains no `pending M6`. The token described a block that no longer exists; a token that can outlive its cause is a token that lies.
+- A **qualified cell names resolvable evidence** (Check 183): every cell whose status is `qualified` must name either an existing `docs/evidence/gui-qualification/<file>.md` or a CI run URL that also appears in `docs/evidence/gui-qualification/CI-RUNS.md`. A claim about a run that cannot be found is not a claim about anything.
+- The **matrix shape is exact** (Check 184): the header row must be exactly `| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |`, there must be exactly three platform rows (`linux`, `macos`, `windows`), and the cell count must be 21. The matrix is read by position by a validator, a guard, and a runbook, and all three must read the same matrix.
+- The **runbook derives its steps from the matrix** (Check 185): `docs/GUI_BUILD.md` §5's step headings must be exactly `Step 1 — Build` … `Step 7 — Export`, one per matrix column, in the matrix's order. A runbook for a column the matrix does not have is a procedure nobody can cite.
+- The **harness's identifiers and record schema are pinned** (Check 186): the harness's identifier set must equal the matrix's column set, and the record schema string `eggsec-gui-qualification-record/v1` must be the same in the harness, the procedure script, the validator, and the evidence template. A record written under one shape and read under another is a record nobody can trust.
+- The **procedure is hermetic** (Check 187): `scripts/gui_qualification.sh` must not name `sudo`, must not remove anything recursively, and must name no absolute path outside the temporary root. The procedure runs on a developer's machine and on a CI runner; it must never need privileges the operator has to go and find.
+- The **promotion validator is green** (Check 188): `python3 scripts/check_gui_qualification.py` must exit 0. The matrix's rules are enforced by a program, not by a reader's diligence.
+- The **CI job publishes the qualification record** (Check 189): the `gui-platform` job in `.github/workflows/deep-checks.yml` must run `scripts/gui_qualification.sh` and must publish the run record as a job artefact named `gui-qualification-${{ matrix.os }}`. A CI run nobody can read is not evidence.
 
 ### NSE Subsystem Invariants
 - The standalone [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions) owns runtime-internal checks: resolver-only script/module loading, per-run `NseRunReport.libraries`, profile/executor construction, library registry consistency, capability wrappers, and runtime corpus assertions.

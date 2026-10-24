@@ -94,6 +94,13 @@ pub struct DaemonHost {
     /// it does not know the fact. The daemon publishes it verbatim so a
     /// client can explain WHY an operation is unavailable.
     enabled_features: Option<Vec<String>>,
+    /// The report-form coverage the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. The daemon publishes it **verbatim**: it
+    /// derives nothing and restates nothing, so the engine's table is the
+    /// only place the fact lives.
+    report_forms: Option<Vec<eggsec_runtime::report::ReportFormEntry>>,
 }
 
 /// Intersect an executor's declared support with the daemon's conservative
@@ -169,6 +176,8 @@ impl DaemonHost {
         };
         let runtime = Runtime::new(runtime_config, executor);
         let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The coverage is the executor's own build fact, republished verbatim.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
@@ -177,6 +186,7 @@ impl DaemonHost {
             store,
             published_task_kinds: published,
             enabled_features,
+            report_forms,
         }
     }
 
@@ -196,6 +206,10 @@ impl DaemonHost {
         // the daemon reports "unknown", which is not the same as "no
         // features are enabled".
         let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The same holds for the report-form coverage: the stub links no
+        // engine, so the daemon publishes "unknown" rather than an empty
+        // coverage.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
@@ -204,6 +218,7 @@ impl DaemonHost {
             store,
             published_task_kinds: published_task_kinds(&declared),
             enabled_features,
+            report_forms,
         }
     }
 
@@ -234,6 +249,8 @@ impl DaemonHost {
             });
         }
         let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The coverage is the executor's own build fact, republished verbatim.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
         Ok(Self {
             runtime,
             config,
@@ -242,6 +259,7 @@ impl DaemonHost {
             store,
             published_task_kinds: published,
             enabled_features,
+            report_forms,
         })
     }
 
@@ -499,6 +517,11 @@ impl DaemonHost {
                         // published; `None` means "unknown", which is not the
                         // same as "no features are enabled".
                         enabled_features: self.enabled_features.clone(),
+                        // The report-form coverage is the engine's own build
+                        // fact, republished verbatim. `None` means "unknown",
+                        // which is not the same as "no operation has a report
+                        // form".
+                        report_forms: self.report_forms.clone(),
                     },
                 }
             }
@@ -1566,6 +1589,100 @@ mod tests {
                 assert_eq!(
                     capabilities.enabled_features, None,
                     "an executor that publishes nothing leaves the feature set unknown"
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes a report-form coverage: the daemon
+    /// republishes it **verbatim**, row for row.
+    struct CoverageExecutor;
+
+    impl RuntimeTaskExecutor for CoverageExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
+        }
+
+        fn report_forms(&self) -> Option<Vec<eggsec_runtime::report::ReportFormEntry>> {
+            Some(vec![
+                eggsec_runtime::report::ReportFormEntry {
+                    operation_id: "scan-ports".to_owned(),
+                    form: eggsec_runtime::report::ReportForm::Canonical,
+                    reason: String::new(),
+                },
+                eggsec_runtime::report::ReportFormEntry {
+                    operation_id: "waf-detect".to_owned(),
+                    form: eggsec_runtime::report::ReportForm::NoCleanMapping,
+                    reason: "neither variant carries a target".to_owned(),
+                },
+            ])
+        }
+    }
+
+    /// The daemon's capabilities carry the coverage the executor published:
+    /// one row per operation, republished verbatim.
+    #[tokio::test]
+    async fn capabilities_publish_the_executor_report_coverage() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            CoverageExecutor,
+            crate::store::noop_store(),
+        );
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-coverage".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                let forms = capabilities
+                    .report_forms
+                    .expect("the executor's coverage is published");
+                assert_eq!(forms.len(), 2);
+                assert_eq!(forms[0].operation_id, "scan-ports");
+                assert_eq!(forms[0].form, eggsec_runtime::report::ReportForm::Canonical);
+                assert!(forms[0].reason.is_empty());
+                assert_eq!(forms[1].operation_id, "waf-detect");
+                assert_eq!(
+                    forms[1].form,
+                    eggsec_runtime::report::ReportForm::NoCleanMapping
+                );
+                assert_eq!(forms[1].reason, "neither variant carries a target");
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes no coverage leaves the daemon's answer
+    /// *unknown*, which is not the same as "no operation has a report form".
+    #[tokio::test]
+    async fn capabilities_report_an_unpublished_report_coverage_as_unknown() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-coverage-unknown".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.report_forms, None,
+                    "an executor that publishes nothing leaves the coverage unknown"
                 );
             }
             other => panic!("expected Capabilities, got {:?}", other),

@@ -12,6 +12,10 @@
 //! bound is small (see [`MAX_RETAINED_REPORTS`]) and the eviction order is
 //! oldest-first, so a burst of tasks cannot grow the store without limit.
 //!
+//! finding text and no credential. The engine owns the verdict; the runtime
+//! carries it; the daemon republishes it; the GUI renders it. The runtime
+//! crate still holds no report-model type and no domain type.
+//!
 //! The payload is `serde_json::Value` rather than a report-model type on
 //! purpose: the runtime crate deliberately carries no domain types, and a
 //! report document crosses the wire as JSON anyway. The consumer — the
@@ -20,7 +24,38 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
+
 use crate::ids::TaskId;
+
+/// Whether an operation's result has a clean report mapping.
+///
+/// This is the engine's verdict about one canonical operation, published so a
+/// client can say *why* a completed task has no report rather than only that
+/// it has none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportForm {
+    /// The operation's result maps onto the canonical report model.
+    Canonical,
+    /// The operation's result carries no clean report mapping.
+    NoCleanMapping,
+}
+
+/// One operation's report-form verdict.
+///
+/// The row names the canonical operation and, when the operation has no clean
+/// mapping, the fact its result is missing. The reason is empty for a
+/// canonical operation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportFormEntry {
+    /// The canonical operation id.
+    pub operation_id: String,
+    /// The operation's verdict.
+    pub form: ReportForm,
+    /// Why the operation has no report form; empty for a canonical one.
+    pub reason: String,
+}
 
 /// The maximum number of completed-task reports a runtime retains.
 ///
@@ -212,5 +247,42 @@ mod tests {
         store.clear();
         assert!(store.is_empty());
         assert!(store.get(&id).is_none());
+    }
+
+    #[test]
+    fn the_coverage_dto_round_trips() {
+        let entries = vec![
+            ReportFormEntry {
+                operation_id: "scan-ports".to_owned(),
+                form: ReportForm::Canonical,
+                reason: String::new(),
+            },
+            ReportFormEntry {
+                operation_id: "waf-detect".to_owned(),
+                form: ReportForm::NoCleanMapping,
+                reason: "the result carries no target field".to_owned(),
+            },
+        ];
+
+        let encoded = serde_json::to_string(&entries).expect("the coverage encodes");
+        let decoded: Vec<ReportFormEntry> =
+            serde_json::from_str(&encoded).expect("the coverage decodes");
+
+        assert_eq!(decoded, entries);
+        assert_eq!(decoded[0].form, ReportForm::Canonical);
+        assert!(
+            decoded[0].reason.is_empty(),
+            "a canonical operation carries no reason"
+        );
+        assert_eq!(decoded[1].form, ReportForm::NoCleanMapping);
+        assert!(decoded[1].reason.contains("no target"));
+    }
+
+    #[test]
+    fn the_coverage_form_is_named_on_the_wire() {
+        let encoded = serde_json::to_string(&ReportForm::NoCleanMapping).expect("the form encodes");
+        assert_eq!(encoded, "\"no_clean_mapping\"");
+        let decoded: ReportForm = serde_json::from_str(&encoded).expect("the form decodes");
+        assert_eq!(decoded, ReportForm::NoCleanMapping);
     }
 }

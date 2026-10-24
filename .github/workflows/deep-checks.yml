@@ -95,6 +95,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        # The platform label the qualification procedure records. It is the
+        # matrix's own fact, not the runner's name.
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
     permissions:
       contents: read
     steps:
@@ -140,6 +147,34 @@ jobs:
           path: |
             dist/gui/eggsec-gui.build.json
             dist/gui/SHA256SUMS
+          if-no-files-found: error
+      # The GUI reaches the engine only through a daemon that carries the
+      # engine executor, so the harness needs a `service`-profile daemon. The
+      # profile is heavy (it links the engine), which is why this job lives in
+      # the scheduled deep-checks workflow rather than in per-PR CI.
+      - name: Build the service-profile daemon
+        run: bash scripts/build-daemon-profile.sh --profile service --out "$RUNNER_TEMP/eggsec-daemon"
+      # The qualification procedure: the build, the daemon, the harness, the
+      # window probe, and the run record. A named skip does not fail the job;
+      # a failed column does.
+      - name: Run the GUI qualification procedure
+        run: |
+          bash scripts/gui_qualification.sh \
+            --platform "${{ matrix.platform }}" \
+            --mode ci \
+            --daemon-bin "$RUNNER_TEMP/eggsec-daemon/eggsec-daemon" \
+            --out "$RUNNER_TEMP/gui-qualification"
+      # The run record is the evidence a matrix cell cites. It is published
+      # even when the procedure failed, because a failed run's record is the
+      # evidence of the failure.
+      - name: Upload the qualification run record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gui-qualification-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/gui-qualification/*.md
+            ${{ runner.temp }}/gui-qualification/*.json
           if-no-files-found: error
 
   # Phase F: platform integration maturity (scheduled/manual only, never PR CI).

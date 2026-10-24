@@ -87,7 +87,28 @@ struct DaemonServer {
 
 impl DaemonServer {
     /// Wait for the server's own result after the shutdown was requested.
-    async fn stop(self) {
+    ///
+    /// The result may already have been taken: the server task can fail
+    /// before the daemon answers — the bind guard refuses a path a live
+    /// daemon holds — and tokio's oneshot **panics** when a completed
+    /// receiver is polled again. The result is therefore taken with
+    /// `try_recv` first, and awaited only while it is still pending.
+    async fn stop(mut self) {
+        match self.result.try_recv() {
+            Ok(Ok(())) => {
+                tracing::info!("Daemon server stopped cleanly");
+                return;
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(error = %error, "Daemon server stopped with an error");
+                return;
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                tracing::warn!("Daemon server result could not be received");
+                return;
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
+        }
         match tokio::time::timeout(SERVER_STOP_TIMEOUT, self.result).await {
             Ok(Ok(Ok(()))) => tracing::info!("Daemon server stopped cleanly"),
             Ok(Ok(Err(error))) => {
@@ -138,9 +159,10 @@ async fn start_daemon(
     shutdown: CancellationToken,
     readiness_timeout: Duration,
 ) -> (DaemonStartOutcome, Option<DaemonServer>) {
-    // Refuse to displace a live daemon. `run_server` unlinks the socket path
-    // before binding, so a second start would silently steal the first
-    // daemon's socket from under its clients.
+    // Refuse to displace a live daemon. The server's own bind guard refuses
+    // too — it binds without unlinking and asks the same probe — but this
+    // pre-flight answers first, so the operator is told before the server
+    // task is even spawned.
     match eggsec_daemon::host::probe_daemon_liveness(
         socket_path,
         eggsec_daemon::host::PREFLIGHT_PROBE_TIMEOUT,
@@ -401,9 +423,9 @@ fn start_failure_message(outcome: &DaemonStartOutcome) -> Option<String> {
         DaemonStartOutcome::Refused {
             socket_path,
             protocol_version,
-        } => Some(format!(
-            "refused to displace the live daemon already serving {socket_path} \
-             (protocol version {protocol_version}) — stop it first"
+        } => Some(eggsec_daemon::error::socket_path_held_message(
+            socket_path,
+            protocol_version,
         )),
         DaemonStartOutcome::Failed { socket_path, cause } => Some(format!(
             "could not bring up a daemon on {socket_path}: {cause}"
@@ -1138,6 +1160,7 @@ mod tests {
                             transports: vec![],
                             operation_schema: true,
                             enabled_features: None,
+                            report_forms: None,
                         },
                     },
                     _ => eggsec_daemon_protocol::protocol::ServerMessage::Health {
@@ -1295,6 +1318,44 @@ mod tests {
             failure.contains(&socket_path),
             "the failure message must name the socket path, got: {failure}"
         );
+    }
+
+    /// A failed server task must not panic the stop path.
+    ///
+    /// The readiness wait takes the server's result when the server task
+    /// fails; the later `stop()` must not poll that completed receiver
+    /// again — tokio's oneshot panics when it is.
+    #[tokio::test]
+    async fn the_stop_path_survives_a_server_task_that_already_failed() {
+        let socket_path = format!(
+            "{}/eggsec-m012-missing-{}-{}/daemon.sock",
+            std::env::temp_dir().display(),
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        );
+        let config = eggsec_daemon::config::DaemonConfig {
+            socket_path: socket_path.clone(),
+            ..Default::default()
+        };
+        let shutdown = CancellationToken::new();
+        let (outcome, server) = start_daemon(
+            &socket_path,
+            config,
+            shutdown.clone(),
+            Duration::from_secs(5),
+        )
+        .await;
+
+        assert!(
+            matches!(outcome, DaemonStartOutcome::Failed { .. }),
+            "the start path must fail, got {outcome:?}"
+        );
+        let server = server.expect("a failed start keeps the server handle");
+        // The stop path must not panic: the result was already taken.
+        server.stop().await;
     }
 
     /// The readiness wait gives up within its bound when no daemon appears.
@@ -1607,5 +1668,65 @@ mod tests {
             Ok(Err(error)) => panic!("the server failed: {error}"),
             Err(error) => panic!("the server task failed: {error}"),
         }
+    }
+
+    /// The pre-flight refusal names the path, the live daemon, and both
+    /// remedies.
+    #[test]
+    fn the_preflight_refusal_is_actionable() {
+        let outcome = DaemonStartOutcome::Refused {
+            socket_path: "/run/eggsec.sock".to_string(),
+            protocol_version: 2,
+        };
+        let message = start_failure_message(&outcome).expect("a refusal has a message");
+        assert!(
+            message.contains("/run/eggsec.sock"),
+            "the refusal must name the socket path, got: {message}"
+        );
+        assert!(
+            message.contains("live daemon"),
+            "the refusal must say a live daemon holds the path, got: {message}"
+        );
+        assert!(
+            message.contains("protocol version 2"),
+            "the refusal must give the live daemon's protocol version, got: {message}"
+        );
+        assert!(
+            message.contains("stop it first"),
+            "the refusal must name the first remedy, got: {message}"
+        );
+        assert!(
+            message.contains(eggsec_runtime::DAEMON_SOCKET_ENV_VAR),
+            "the refusal must name the environment override, got: {message}"
+        );
+    }
+
+    /// The server's own refusal survives the CLI's rendering.
+    ///
+    /// `describe_server_result` must not flatten the daemon's actionable
+    /// refusal into something unactionable.
+    #[test]
+    fn the_servers_refusal_survives_the_rendering() {
+        let cause =
+            describe_server_result(Ok(Err(eggsec_daemon::error::DaemonError::SocketPathHeld {
+                socket_path: "/run/eggsec.sock".to_string(),
+                protocol_version: 2,
+            })));
+        assert!(
+            cause.contains("/run/eggsec.sock"),
+            "the rendered cause must name the socket path, got: {cause}"
+        );
+        assert!(
+            cause.contains("live daemon"),
+            "the rendered cause must say a live daemon holds the path, got: {cause}"
+        );
+        assert!(
+            cause.contains("stop it first"),
+            "the rendered cause must name a remedy, got: {cause}"
+        );
+        assert!(
+            cause.contains(eggsec_runtime::DAEMON_SOCKET_ENV_VAR),
+            "the rendered cause must name the environment override, got: {cause}"
+        );
     }
 }

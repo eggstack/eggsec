@@ -24,7 +24,7 @@ daemon-only boundary), `plans/adrs/ADR-0009-gui-shell-technology-selection.md`
 | The daemon connection | `crates/eggsec-gui/src/connection.rs` | Client identity, protocol check, session, catalog fetch. |
 | The form engine | `crates/eggsec-gui/src/form.rs` | Schema property → control; control values → typed `RunRequest`. |
 | Task state and result views | `crates/eggsec-gui/src/tasks.rs` | Bounded per-task retention, status, result rendering. |
-| The coverage model | `crates/eggsec-gui/src/coverage.rs` | One derived reachability row per published task kind. |
+| The coverage model | `crates/eggsec-gui/src/coverage.rs` | One derived reachability row per published task kind, each carrying the published report-form verdict. |
 | The availability resolver | `crates/eggsec-gui/src/availability.rs` | The denial ledger: what a live refusal taught the GUI. |
 | The report path | `crates/eggsec-gui/src/export.rs` | The format map, the export rendering, the write discipline, the report view. |
 | The daemon lifecycle | `crates/eggsec-gui/src/daemon.rs` | The opt-in probe / spawn / supervise / stop route. |
@@ -157,6 +157,37 @@ what `make check` and `make check-msrv` build, so an unpinned `tauri-utils`
 would break the MSRV gate even though the shell is off
 (`crates/eggsec-gui/Cargo.toml`).
 
+### The advisory clusters behind these pins
+
+The pins above also decide which advisories the shell closure inherits. The
+GUI is the **only** workspace crate that reaches two of them, and both are
+recorded as owned, dated exceptions in `docs/DEPENDENCY_EXCEPTIONS.md` rather
+than resolved (milestone 015):
+
+- **`unic-*` 0.9.0** (RUSTSEC-2025-0075 / -0080 / -0081 / -0098 / -0100) is
+  reached only through `tauri-utils` 2.9.3 → `urlpattern` 0.3.0 →
+  `unic-ucd-ident`. Its clearing path is known and mechanical:
+  **`urlpattern` 0.6.0 drops the whole `unic-*` set**, and `tauri-utils`
+  2.10.x is the first line that requires `urlpattern ^0.6` — but every
+  `tauri-utils` 2.10.x declares `rust-version = "1.90"`, above this
+  workspace's 1.89 floor. So the `unic-*` cluster is **MSRV-gated, not
+  upgrade-less**: raising the floor to 1.90 and moving the closure to the
+  Tauri 2.12 line clears all five entries at once. The GUI's dependency
+  *direction* is unchanged by this — it still reaches the daemon only.
+- **`glib` 0.18.5** (RUSTSEC-2024-0429, unsound) and **`proc-macro-error`
+  1.0.4** (RUSTSEC-2024-0370, unmaintained) are reached only through
+  `tauri` 2.11.6 → `gtk` 0.18.2 (and `wry`/`tao` → `gtk`). This pair has
+  **no published clearing path**: the fix needs gtk-rs 0.20+, and no
+  published `muda`, `tao`, or `wry` version requires gtk-rs 0.20+ — and
+  `tauri` 2.12.5 itself still declares `gtk ^0.18`. Moving the Tauri line
+  therefore does **not** clear it; only an upstream move of the whole GTK
+  closure does. The `proc-macro-error` entry clears together with the
+  `glib` one, because the gtk-rs 0.20+ macro crates do not depend on it.
+
+Both clusters are Linux-only and confined to the shell closure. Neither
+changes the daemon-only boundary: the GUI links no engine, daemon, CLI, or
+TUI crate (guard Check 155), and it makes no outbound HTTP of its own.
+
 ## The Buildless Frontend
 
 `crates/eggsec-gui/frontend/` holds hand-written HTML, CSS and vanilla
@@ -251,13 +282,14 @@ lives on `GuiOptions.daemon_bin` and defaults to `None`
 
 The spawn route follows four rules:
 
-- **The pre-flight check is a connection, never a `stat`.** The daemon
-  unlinks its socket path before binding it, so a second daemon started at
-  the same path steals a live socket. Only a connection tells a live daemon
-  from a socket file left behind by a crashed one
-  (`crates/eggsec-gui/src/daemon.rs:96-109`). A stale socket file does not
-  block the spawn, and a live daemon is detected so the GUI does not steal it
-  (`crates/eggsec-gui/src/commands.rs:340-346`).
+- **The pre-flight check is a connection, never a `stat`.** The daemon binds
+  its socket path without unlinking it first and refuses when a live daemon
+  holds the path (`crates/eggsec-daemon/src/server.rs`, milestone 012's bind
+  guard), so a second daemon started at the same path cannot steal a live
+  socket. Only a connection tells a live daemon from a socket file left
+  behind by a crashed one (`crates/eggsec-gui/src/daemon.rs:96-109`). A stale
+  socket file does not block the spawn, and a live daemon is detected so the
+  GUI does not steal it (`crates/eggsec-gui/src/commands.rs:340-346`).
 - **The child is started from an argv vector, never a shell string.**
   `spawn_argv` builds `[daemon_bin, "--full-executor", "--socket-path",
   socket_path]` (`crates/eggsec-gui/src/daemon.rs:80-87`), so a binary path or
@@ -395,6 +427,27 @@ Two distinctions the model refuses to blur:
   feature."** A daemon that has every required feature and still does not
   advertise the capability is making a choice, not a build fact, and the
   reason says which one it is.
+
+### The report-form column
+
+The coverage row carries a second, independent verdict: **does this task
+kind's operation produce a report document?** It is not derived by the GUI —
+it is *published* by the daemon, which republishes the engine's coverage
+table (`crates/eggsec/src/runtime_bridge/report_coverage.rs`) verbatim in
+`DaemonCapabilities.report_forms`. The GUI joins that coverage to its rows by
+the published catalog's operation id, so it names no operation id of its own
+and writes no reason of its own.
+
+| Verdict | What produces it |
+|---|---|
+| `available` | The daemon published the operation as canonical: its result produces a report document. |
+| `unavailable` | The daemon published the operation as having no clean report mapping, and the row carries the reason it gave. |
+| `unknown` | The daemon published no coverage, or none for this operation. |
+
+- **An unpublished coverage is not an empty one.** `None` means *unknown*, so
+  the column reads `unknown` — never `unavailable`. The GUI must never render
+  a report-form verdict it was not told, and it never writes a reason it was
+  not given.
 
 ### The availability resolver and the denial ledger
 
@@ -595,6 +648,21 @@ regular file is **refused**, an existing regular file is **backed up** to
 a silent overwrite (`crates/eggsec-gui/src/export.rs:349-363`,
 `crates/eggsec-gui/src/export.rs:391-411`).
 
+### "No report" says why, when the daemon said why
+
+The export command knows the task id, the GUI's task registry carries the
+task's wire variant, and the published catalog maps that variant to its
+operation id — so the export message can name the reason the daemon published
+for that operation having no report form:
+
+> the daemon has no report for task `<id>`: `<the reason>`
+
+When the GUI cannot resolve one — an unknown task kind, an unknown task, or a
+daemon that published no coverage — the message keeps its plain wording. The
+GUI never states a reason it does not have, and **no file is written either
+way**: the error is raised before the render and the write, so "no report"
+never produces an empty artifact.
+
 ### The report-display decision
 
 **The GUI does not render the engine's HTML document.** That document carries
@@ -676,6 +744,33 @@ matrix is the authoritative statement of platform support; the CI job that
 promotes a cell is `gui-platform` in `.github/workflows/deep-checks.yml`
 (`ubuntu-latest` and `macos-latest`; Windows is excluded by `ADR-0010`).
 
+Three components make the matrix checkable rather than merely stated:
+
+| Component | Role |
+|---|---|
+| `scripts/gui_qualification.sh` | The **procedure**. It builds the shell, starts a `service`-profile daemon, runs the harness, probes for the window, and writes the run record. It is hermetic — it writes only under `--out` and `${TMPDIR:-/tmp}` — and it needs no privileges. |
+| `crates/eggsec-gui/tests/qualification.rs` | The **harness**. Tier A exercises the export path with no daemon and no window; Tier B drives the GUI's own client, form engine, and export path against a live daemon over its Unix socket. It adds no dependency and constructs no HTTP client. |
+| `scripts/check_gui_qualification.py` | The **validator**. It reads the matrix's promotion rules (P1–P6) from the matrix itself and rejects any cell whose claim is not backed by a run record whose artefacts exist and whose digests match. It also writes the run record, so the record's schema has exactly one definition in the repository. |
+
+The **promotion rule lives in the matrix** (§6), and the validator reads it
+from there. A rule added to the matrix is enforced without a second edit, and
+a rule removed from it stops being enforced. The rule has two halves: the
+`scripted` outcome is what the harness measured, and the `operator` outcome is
+what a person attested. The behavioural columns need both — the harness
+proves the cause, and only the operator proves the effect.
+
+The **run record** is `docs/evidence/gui-qualification/<platform>-<date>.md`
+and it carries a machine-readable `eggsec-gui-qualification-record/v1` block.
+A CI run may be cited instead of a checked-in file; the runs are indexed in
+`docs/evidence/gui-qualification/CI-RUNS.md`.
+
+**The harness's target is the loopback fixture** (`127.0.0.1`). The engine
+admits a loopback target only when `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` is set
+in the daemon's environment (`crates/eggsec/src/utils/parsing.rs:77`), and the
+procedure sets it. A qualification run therefore reaches nothing outside the
+host, and it changes **no** enforcement, authorisation, scope, or dispatch
+path: it drives the same paths the GUI's own commands drive, and it observes.
+
 ### The bundler and the distribution hand-off
 
 `bundle.active` stays `false` (`crates/eggsec-gui/tauri.conf.json:26-28`).
@@ -707,15 +802,18 @@ These are deliberate and documented, not oversights.
   requires an already-running `eggsec-daemon --full-executor` and never
   spawns, supervises, or stops one. With `--daemon-bin <PATH>` it starts
   that executable and stops it on exit — the opt-in route described above.
-- **The socket-path default is duplicated in six places.** The default
-  `/tmp/eggsec-daemon.sock` is hardcoded independently in the CLI
-  (`crates/eggsec/src/cli/mod.rs:249`), the daemon's config
-  (`crates/eggsec-daemon/src/config.rs:22`), the daemon's main
-  (`crates/eggsec-daemon/src/main.rs:20`), the GUI's Rust default
-  (`crates/eggsec-gui/src/config.rs:19`), and twice in the GUI's frontend
-  (`crates/eggsec-gui/frontend/app.js:23`,
-  `crates/eggsec-gui/frontend/index.html:25`). The GUI's `--socket` flag
-  overrides it.
+- **The socket-path default has one owner, and the webview has none.**
+  Milestone 012 (`ADR-0013`) moved the default, the environment variable's
+  name and the precedence rule into
+  `crates/eggsec-runtime/src/daemon_endpoint.rs`. The daemon binary's
+  `--socket-path`, the engine's global `--socket` (and therefore the CLI and
+  the TUI), the daemon's `DaemonConfig::default()` and the GUI's
+  `GuiOptions::default()` all resolve through that one resolver, with the
+  precedence **explicit flag → `EGGSEC_DAEMON_SOCKET` → built-in default**.
+  The GUI's webview holds no copy: it learns the path from Rust through the
+  existing `daemon_status` command (`default_socket_path`), and an empty
+  socket field is resolved by the Rust side of `connect_daemon`. The GUI's
+  `--socket` flag still overrides the default.
 
 ## Key Invariants
 

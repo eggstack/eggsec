@@ -31,11 +31,15 @@ the evidence that supports it or the root cause that prevents it.
 | `qualified` | The behaviour was observed on this platform and a reproducible evidence artefact exists. The cell names the artefact. |
 | `partially qualified` | Part of the behaviour was observed. The cell names **both** the qualified subset and the missing part. |
 | `not qualified` | The behaviour was not observed, or it failed. The cell names the root cause. |
-| `pending M6` | The behaviour cannot exist yet because milestone 006 has not closed. The cell names the blocking milestone. |
 | `out of scope` | The platform is excluded by a recorded decision. The cell names the decision and its root cause. |
 
-Two rules are absolute:
+The milestone-006 blocking token has been **retired**. The export affordance
+exists in the frontend (`crates/eggsec-gui/frontend/app.js:1624` invokes the
+`export_report` command), so a cell can no longer be blocked on the milestone
+that owned it, and the token is no longer part of the vocabulary. A token that
+can outlive its cause is a token that lies.
 
+Three rules are absolute:
 - **No cell is blank**, and no cell carries an unqualified support claim. A
   cell that says "works" without a status token, an evidence reference, or a
   root cause is a defect in this document, and the static guard
@@ -46,18 +50,21 @@ Two rules are absolute:
   `docs/evidence/gui-qualification/macos-2026-10-23.md` (run
   2026-10-23 with `bash scripts/build_gui_release.sh --out /tmp/eggsec-gui-release-test --allow-dirty`),
   or a CI run URL.
+- **No cell says `qualified` without a run record that satisfies the promotion
+  rules in §6.** The validator (`scripts/check_gui_qualification.py`) enforces
+  them, and it reads the rules from §6 rather than carrying its own copy.
 
 ---
 
 ## 2. The qualification matrix
 
-**Last regenerated:** 2026-10-23 — commit
-`7332baeafe5391e228a0b91fec48cf68999729f1`.
+**Last regenerated:** 2026-10-24 — commit
+`0f5dbb26e7ab215613e5b6e2295d9c124374bf9f`.
 
 | Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |
 |---|---|---|---|---|---|---|---|
-| `linux` | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **not qualified** — no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path | **pending M6** — milestone 006 owns the export path; the GUI frontend has no export affordance today |
-| `macos` | **qualified** — evidence: `docs/evidence/gui-qualification/macos-2026-10-23.md` (run 2026-10-23, `bash scripts/build_gui_release.sh --out /tmp/eggsec-gui-release-test --allow-dirty`); SHA-256 `22b44fc0f087994ec870b0b0fea45a548b5e4780b602156c2fecf83ae4253481` | **partially qualified** — qualified subset: the binary starts, registers with the macOS WindowServer, instantiates the WKWebView (three WebKit XPC helpers), emits no panic, and terminates on `SIGTERM`; missing part: the painted window was never observed (a full-screen capture showed no `eggsec-gui` window and the accessibility query returned zero windows), so the operator-visible window and its contents were not demonstrated; evidence: `docs/evidence/gui-qualification/macos-2026-10-23.md` | **not qualified** — the GUI connects only on an operator action (`connect_daemon` is invoked from the connect form's submit handler, `crates/eggsec-gui/frontend/app.js:1284`), and no windowed operator session or window-automation driver was available in this environment; the repository ships no such driver | **not qualified** — submitting requires a connected session (see the Connect cell), and the daemon's engine-feature profile and obtainability recipe (milestones 008 and 009) had not closed, so no operation could be dispatched | **not qualified** — a cancellation can only be observed against a live task, which requires a connected session and a dispatched task (see the Connect and Submit cells); the event stream's authority (`crates/eggsec-gui/src/commands.rs:432`) is implemented and unit-tested but was not exercised against a live daemon | **not qualified** — rendering a real result requires a completed task carrying a result payload, which requires the Connect and Submit cells; the empty dashboard was not observable either | **pending M6** — milestone 006 owns the export path; the GUI frontend has no export affordance today |
+| `linux` | **not qualified** — no Linux run had been recorded when this matrix was regenerated; the `gui-platform` CI job on `ubuntu-latest` runs the procedure (`bash scripts/gui_qualification.sh --platform linux --mode ci`) and publishes the run record as the `gui-qualification-ubuntu-latest` job artefact, which is the evidence path | **not qualified** — the procedure's window probe needs `xdotool` and an attached display server, and the `gui-platform` job installs neither, so the Linux leg records a named skip and no painted window has been observed | **not qualified** — the harness connects to a live daemon through the GUI's own client and identity, and the daemon it needs is the `service` profile; no Linux run had been recorded when this matrix was regenerated | **not qualified** — the submit path is the GUI's own form engine assembling a request from the daemon's advertised task kinds and the daemon accepting it; the harness measures that against the loopback fixture, and no Linux run had been recorded | **not qualified** — the cancellation's terminal state is read from the daemon's event stream, never from the cancel request's own acknowledgement; the harness measures that against a live task, and no Linux run had been recorded | **not qualified** — rendering a real result needs a completed task carrying a report; the harness renders the daemon's report for the loopback fixture, and no Linux run had been recorded | **not qualified** — the export affordance exists (`crates/eggsec-gui/frontend/app.js:1624` invokes `export_report`, and the procedure is `docs/GUI_BUILD.md` §5.7); the harness writes the daemon's report in the six formats and digests each file, and no Linux run had been recorded |
+| `macos` | **qualified** — evidence: `docs/evidence/gui-qualification/macos-2026-10-24.md` (run 2026-10-24, `bash scripts/gui_qualification.sh --platform macos --mode ci --daemon-bin <path>`); the record's `build` column carries the scripted outcome `pass`, and the build sidecar's SHA-256 is recorded beside it | **partially qualified** — qualified subset: the binary starts, registers with the macOS WindowServer, instantiates the WKWebView (three WebKit XPC helpers), emits no panic, and terminates on `SIGTERM`; missing part: the painted window was never observed (a full-screen capture showed no `eggsec-gui` window and the accessibility query returned zero windows), so the operator-visible window and its contents were not demonstrated; evidence: `docs/evidence/gui-qualification/macos-2026-10-23.md` | **not qualified** — the harness connected to a live `service`-profile daemon through the GUI's own client and identity, and the run record carries that outcome (`docs/evidence/gui-qualification/macos-2026-10-24.md`, run 2026-10-24); the missing part is the **operator attestation** that rule P1 requires, so the cell cannot be promoted on the harness's word alone | **not qualified** — the GUI's own form engine assembled the request from the daemon's advertised task kinds and the daemon accepted the task, and the run record carries that outcome (`docs/evidence/gui-qualification/macos-2026-10-24.md`, run 2026-10-24); the missing part is the **operator attestation** that rule P1 requires | **not qualified** — the daemon accepted the cancellation and its event stream reported the terminal state, and the run record carries that outcome (`docs/evidence/gui-qualification/macos-2026-10-24.md`, run 2026-10-24); the missing part is the **operator attestation** that rule P1 requires | **not qualified** — the daemon's report for a completed task rendered through the GUI's own rendering path, and the run record carries that outcome (`docs/evidence/gui-qualification/macos-2026-10-24.md`, run 2026-10-24); the missing part is the **operator attestation** that rule P1 requires | **not qualified** — the export affordance exists (`crates/eggsec-gui/frontend/app.js:1624` invokes `export_report`, and the procedure is `docs/GUI_BUILD.md` §5.7), and the harness wrote the daemon's report in the six formats with each written file's bytes equal to the renderer's output (`docs/evidence/gui-qualification/macos-2026-10-24.md`, run 2026-10-24); the missing part is the **operator attestation** that rule P4 requires |
 | `windows` | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows | **out of scope** — `ADR-0010` excludes Windows from the desktop GUI's supported platforms; the GUI's unconditional dependency `eggsec-frontend-client` imports `tokio::net::UnixStream` without a `cfg(unix)` gate, so the GUI does not compile for Windows |
 
 ### 2.1 Reading the matrix honestly
@@ -66,21 +73,32 @@ The matrix is mostly `not qualified`, and that is the accurate result of a
 milestone whose job is to *measure* rather than to assert. Three things are
 worth saying plainly:
 
-1. **The Linux row is empty because this environment has no Linux host.** It
-   is not empty because the GUI failed to build on Linux. The `gui-platform`
-   CI job added in this milestone is the evidence path that will promote the
-   Linux row; until that job has a green run and its artefact is recorded,
-   the row stays `not qualified`.
+1. **The Linux row is empty because no Linux run has been recorded.** It is
+   not empty because the GUI failed to build on Linux. The `gui-platform` CI
+   job runs the procedure on `ubuntu-latest` and publishes the run record as
+   a job artefact; until that job has a green run and its artefact is
+   recorded in `docs/evidence/gui-qualification/CI-RUNS.md`, the row stays
+   `not qualified`.
 2. **The macOS row is qualified only where there is an artefact.** `Build`
-   has one. `Launch` has a partial one — the process starts and the webview
-   comes up, but nobody saw the window, and the runbook's own criterion is a
-   *visible* window, so the cell does not claim more than was observed.
-3. **The behavioural columns are blocked on the daemon, not on the GUI
-   shell.** The GUI cannot connect to anything but a daemon, and the
-   daemon's engine-feature prerequisites (milestone 008) and obtainability
-   recipe (milestone 009) are separate, still-open milestones. Until they
-   close, the `Connect`, `Submit`, `Cancel`, and `Render` columns cannot be
-   exercised at all — on any platform.
+   has one — a run record whose build column carries the scripted outcome
+   `pass` and whose build sidecar's digest matches the file. `Launch` has a
+   partial one: the process starts and the webview comes up, but nobody saw
+   the window, and the runbook's own criterion is a *visible* window, so the
+   cell does not claim more than was observed.
+3. **The behavioural columns are measured, and the measurement is not the
+   whole of the promotion.** The harness drives the GUI's own client, form
+   engine, and export path against a live daemon, and the macOS run record
+   carries the outcomes. What rule P1 additionally requires is the
+   **operator's attestation**: a person who saw the behaviour. The harness
+   proves the cause; only the operator proves the effect. Until an
+   operator-attested run exists, those cells say what was measured and what
+   is still missing.
+4. **The export column is blocked on an attestation, not on a feature.** The
+   export affordance exists — the frontend invokes `export_report`
+   (`crates/eggsec-gui/frontend/app.js:1624`) — and the harness writes the
+   daemon's report in the six formats, byte for byte as the renderer
+   produced it. The earlier claim that the GUI had no export affordance at
+   all was false, and it has been corrected rather than repeated.
 
 ### 2.2 The bundler decision
 
@@ -103,17 +121,21 @@ procedure is:
 
 1. Run the qualification procedure in
    [`docs/GUI_BUILD.md`](GUI_BUILD.md) §5 on the platform being qualified.
-2. Write the run's evidence file under
+   The procedure is `scripts/gui_qualification.sh`; it runs the steps, runs
+   the harness, and writes the run's evidence file under
    `docs/evidence/gui-qualification/`, following
    `docs/evidence/gui-qualification/TEMPLATE.md`.
-3. For each column, set the cell to the status the evidence supports and
-   point it at the evidence file (or name the root cause / blocking
-   milestone).
-4. Update the **Last regenerated** line above with the new date and the
+2. For each column, set the cell to the status the evidence supports and
+   point it at the evidence file (or name the root cause). A cell may say
+   `qualified` only when the run record satisfies the rule that covers it
+   (§6).
+3. Update the **Last regenerated** line above with the new date and the
    commit the matrix was regenerated at.
-5. Re-run `python3 scripts/check_doc_references.py` and
+4. Re-run `python3 scripts/check_gui_qualification.py` (the promotion
+   validator), `python3 scripts/check_doc_references.py`, and
    `bash scripts/check-architecture-guards.sh` (check 168 enforces the cell
-   grammar).
+   grammar; checks 181–189 enforce the procedure, the harness, and the
+   promotion rules).
 
 The matrix is a claim about a specific commit. A matrix row that was
 qualified against an older commit is stale, not merely historical — which is
@@ -128,12 +150,23 @@ why the regeneration header carries the commit SHA.
 ```
 docs/evidence/gui-qualification/
   TEMPLATE.md                        # the fields every run must fill
+  CI-RUNS.md                         # the index of CI runs a cell may cite
   macos-2026-10-23.md                # one file per qualification run
+  macos-2026-10-24.md                #   ... and its artefacts beside it
+  macos-2026-10-24.build.json        #   the build sidecar
+  macos-2026-10-24.export.json       #   the exported report
 ```
 
 One file per run, named `<platform>-<YYYY-MM-DD>.md`. The filename is part of
 the evidence reference, so a cell that cites an evidence file cites it by
-name.
+name. The artefacts a run produced — the build sidecar, the exported report —
+are committed beside the record under the same prefix, because a cell's
+artefact reference has to resolve to a file whose digest the validator can
+re-check.
+
+`CI-RUNS.md` is the index of the CI runs a cell may cite instead of a
+checked-in file. A cell that cites a run URL the index does not carry is
+rejected.
 
 ### 4.2 What an evidence file must contain
 
@@ -209,7 +242,7 @@ and the daemon side is equally unconditional:
 
 - `crates/eggsec-daemon/src/server.rs:5` —
   `use tokio::net::UnixListener;`
-- `crates/eggsec-daemon/src/server.rs:95` — `UnixListener::bind(socket_path)?`
+- `crates/eggsec-daemon/src/server.rs:147` — `UnixListener::bind(socket_path)?`
 
 ### 5.1 The re-entry path
 
@@ -229,15 +262,42 @@ Until that ADR lands and the transport is implemented, the Windows row stays
 
 ## 6. What promotes a cell
 
-| From | To | Requires |
-|---|---|---|
-| `not qualified` (Linux row) | `qualified` | A green `gui-platform` CI run on `ubuntu-latest` whose artefacts are recorded, plus an operator run of the behavioural steps if the cell is a behavioural one. |
-| `not qualified` (behavioural columns) | `qualified` | Milestones 006, 008, and 009 closed, then the runbook steps in `docs/GUI_BUILD.md` §5 executed and recorded. |
-| `partially qualified` | `qualified` | The missing part of the cell is observed and recorded. |
-| `pending M6` | `qualified` | Milestone 006 closed and the export path exercised. |
+The rules below are the whole promotion rule. `scripts/check_gui_qualification.py`
+reads **this table** and enforces it: the validator does not carry a second
+copy of the rule, so a rule added here is enforced without a second edit, and
+a rule removed here stops being enforced the moment this table stops naming
+it.
 
-The `Export` column is `pending M6` on both in-scope platforms and stays that
-way until milestone 006 closes. The GUI frontend has no export affordance
-today — there is no `export` reference anywhere in
-`crates/eggsec-gui/frontend/app.js` — so the column is blocked on the
-milestone that owns the feature, not on a platform.
+The **Kind** column says what kind of rule a row is:
+
+- `evidence` — a cell may say `qualified` only when a run record satisfies
+  the row's requirements.
+- `status` — every cell the row covers carries the status the row names.
+- `completeness` — every cell the row covers carries a legal status and a
+  non-empty explanation.
+
+The **Required outcome** and **Required attestation** columns are what the run
+record's per-column fields must carry. `scripted` is what the machine
+measured; `operator` is what a human attested. A `not-applicable` attestation
+means the column does not call for a human, so the record may carry
+`not-applicable` or `pass` for it.
+
+| Rule | Kind | Platforms | Columns | Requires | Required outcome | Required attestation | Artefact |
+|---|---|---|---|---|---|---|---|
+| P1 | `evidence` | `linux`, `macos` | Connect, Submit, Cancel, Render | A run record for this platform whose `commit` is the matrix's regenerated-at commit or a descendant of it, whose `columns` carry this column exactly once, and whose `scripted` and `operator` outcomes are the ones this row names. The cell names that record in the §1 form: the path, the command that reproduces the run, and the date. | `pass` | `pass` | `optional` |
+| P2 | `evidence` | `linux`, `macos` | Build | A run record for this platform, as P1 requires, whose `build` column carries the scripted outcome `pass` and whose artefact is the build sidecar, which must exist under `docs/evidence/gui-qualification/` and whose recorded SHA-256 must match the file. The build criterion is machine-checkable end to end, so no operator attestation is required. | `pass` | `not-applicable` | `required` |
+| P3 | `evidence` | `linux`, `macos` | Launch | A run record for this platform, as P1 requires, whose `launch` column carries the scripted outcome `pass` and whose artefact is a screenshot of the painted window. The scripted half proves the window exists; the operator's attestation proves that a person saw it. | `pass` | `pass` | `required` |
+| P4 | `evidence` | `linux`, `macos` | Export | A run record for this platform, as P1 requires, whose `export` column carries the scripted outcome `pass` and whose artefact is an exported file whose bytes equal the renderer's output for the report the daemon published. | `pass` | `pass` | `required` |
+| P5 | `status` | `windows` | Build, Launch, Connect, Submit, Cancel, Render, Export | Every cell on the `windows` row carries the status this row names, and its explanation cites the decision that excludes the platform. | `out of scope` | — | — |
+| P6 | `completeness` | `linux`, `macos`, `windows` | Build, Launch, Connect, Submit, Cancel, Render, Export | Every cell carries a status token from §1 and a non-empty explanation. | — | — | — |
+
+**The two halves.** `scripted` proves the cause and `operator` proves the
+effect. A promotion resting on the scripted half alone is not a promotion: the
+harness can prove that the export path writes six formats, and it cannot prove
+that a person saw the window.
+
+**What the validator cannot check.** It checks that the artefacts exist, that
+their digests match, and that the record is internally consistent. It cannot
+check that a human observed what the record says they observed. That is the
+honest cost of the procedure route, and the matrix's own standard is
+reproducibility-by-command (§4.3).

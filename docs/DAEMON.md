@@ -55,6 +55,25 @@ feature* is off is denied at dispatch with `FeatureMissing`, not
 [Obtaining the daemon](#obtaining-the-daemon) says which build compiles which
 features.
 
+### The published report-form coverage
+
+The `Capabilities` reply also carries `report_forms`: the **report-form
+coverage** — which of the daemon's canonical operations produce a report
+document and which do not, with the reason for each exclusion.
+
+It is a build fact, republished **verbatim** from the engine's own coverage
+table (`crates/eggsec/src/runtime_bridge/report_coverage.rs`). The daemon
+derives nothing and restates nothing: the engine's table is the only place the
+fact lives. The daemon links the engine or it does not — a daemon with the
+`service` feature publishes twenty-eight rows, one per canonical operation; a
+daemon without it publishes `None`.
+
+`None` means **unknown**, not "no operation has a report form". A client that
+receives `None` must say "unknown" rather than "unavailable", exactly as it
+must for the published enabled-feature set. The field is `#[serde(default)]`,
+so a daemon too old to publish it decodes as `None` in a newer client and the
+protocol version stays **2**.
+
 ## Answering a policy decision
 
 A manual operation whose policy demands a confirmation is **held** at that
@@ -115,7 +134,7 @@ produces a CLI **without** the `daemon`, `session`, and `task` subcommands.
 
 | Setting | Default |
 |---------|---------|
-| Socket path | `/tmp/eggsec-daemon.sock` |
+| Socket path | `/tmp/eggsec-daemon.sock` — overridable with `EGGSEC_DAEMON_SOCKET`; the precedence is **explicit `--socket-path` flag → `EGGSEC_DAEMON_SOCKET` → built-in default**, and the built-in default is stated once, in `crates/eggsec-runtime/src/daemon_endpoint.rs` |
 | Data directory | `$HOME/.local/share/eggsec/daemon` |
 | Max clients | 10 |
 | Log level | `info` |
@@ -159,11 +178,16 @@ signed artifact, no installer, and no update feed behind it.
 Both start paths refuse to displace a daemon that is already serving the
 socket path, and both report success only after the daemon answers `Health`:
 
+The daemon's socket path is chosen by the precedence **explicit
+`--socket-path` flag → `EGGSEC_DAEMON_SOCKET` → built-in default**; the same
+resolver is used by the daemon binary, the CLI, the TUI and the GUI.
+
 - The **pre-flight** connects to the socket path and asks for `Health`. A
   daemon that answers owns the path: the start is refused, the socket is left
   untouched, and the command exits non-zero. An unreachable socket (a stale
-  file left by a crashed daemon) is *not* live — the start proceeds and the
-  server's own unlink clears it.
+  file left by a crashed daemon) is *not* live — the start proceeds, and the
+  server reclaims the stale path itself when its bind fails and the same
+  probe shows no daemon holding it.
 - The **readiness wait** polls `Health` (and `Capabilities`) until the daemon
   answers, bounded by a named timeout. The success message names the socket
   path, the protocol version, and the number of advertised task kinds; it
@@ -176,7 +200,7 @@ The daemon supports pluggable transport layers for client connectivity:
 
 | Transport | Feature Flag | Default | Description |
 |-----------|-------------|---------|-------------|
-| Unix socket | Built-in | Yes (`/tmp/eggsec-daemon.sock`) | JSON-line protocol over Unix domain socket; primary IPC transport |
+| Unix socket | Built-in | Yes (`/tmp/eggsec-daemon.sock`, overridable with `EGGSEC_DAEMON_SOCKET`) | JSON-line protocol over Unix domain socket; primary IPC transport |
 | HTTP/SSE | `http-api` | No (`127.0.0.1:9876`) | HTTP REST + Server-Sent Events via `axum`; 14 routes mapping to `ClientCommand`; loopback-only bind by default; requires explicit `http-api` feature |
 
 WebSocket and gRPC transports were evaluated but deferred — they are not implemented in Phase 12.

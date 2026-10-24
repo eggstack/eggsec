@@ -22,6 +22,11 @@
 //! is unavailable. In that case a task kind whose required features cannot
 //! be confirmed is `Unverified`, and the GUI shows it rather than hiding it.
 //!
+//! The **report-form coverage** is the same kind of fact: the daemon
+//! publishes which of its operations produce a report document, and
+//! `None` there means **unknown** as well. The GUI must never render
+//! "unavailable" for a fact it was not told.
+//!
 //! A **learned denial** wins over every static verdict: when the engine
 //! refuses an operation at run time, that refusal is the engine's own word
 //! about the running daemon, and no published list can overrule it.
@@ -29,6 +34,7 @@
 use eggsec_daemon_protocol::operations::{
     OperationDescription, TaskKindDescription, INTERFACE_BOUND_TARGET_POLICY,
 };
+use eggsec_runtime::report::{ReportForm, ReportFormEntry};
 use eggsec_runtime::TaskCapability;
 
 use crate::availability::DenialLedger;
@@ -54,6 +60,23 @@ pub enum Reachability {
     Blocked,
 }
 
+/// Whether an operation's result produces a report document.
+///
+/// This is the GUI's own projection of the daemon's published coverage. The
+/// third state is the important one: `Unknown` means the daemon did not
+/// publish the fact, which is **not** the same as "this operation has no
+/// report form".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportFormVerdict {
+    /// The operation's result produces a report document.
+    Available,
+    /// The operation's result has no report form.
+    Unavailable,
+    /// The daemon did not publish the fact.
+    Unknown,
+}
+
 /// One row of the coverage table: every published task kind, with the
 /// reason it is or is not reachable.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -70,6 +93,13 @@ pub struct TaskCoverage {
     pub reachability: Reachability,
     /// Why the verdict is what it is, in operator-readable words.
     pub reason: String,
+    /// Whether this task kind's operation produces a report document.
+    pub report_form: ReportFormVerdict,
+    /// Why it does not, in operator-readable words.
+    ///
+    /// Empty when a report is available, and empty when the verdict is
+    /// `Unknown` — the GUI must never state a reason it was not told.
+    pub report_reason: String,
 }
 
 /// Build the coverage table from what the daemon published.
@@ -84,17 +114,23 @@ pub struct TaskCoverage {
 /// means *unknown* — never "nothing is enabled". In that case a task kind
 /// whose required features cannot be confirmed is `Unverified`, not
 /// `FeatureDisabled`.
+///
+/// `report_forms` is `None` when the daemon did not publish the coverage,
+/// which means *unknown* — never "no operation has a report form". In that
+/// case the report-form verdict is `Unknown`.
 pub fn coverage_for(
     task_kinds: &[TaskKindDescription],
     operations: &[OperationDescription],
     advertised_capabilities: &[TaskCapability],
     enabled_features: Option<&[String]>,
+    report_forms: Option<&[ReportFormEntry]>,
 ) -> Vec<TaskCoverage> {
     coverage_for_with_ledger(
         task_kinds,
         operations,
         advertised_capabilities,
         enabled_features,
+        report_forms,
         &DenialLedger::default(),
     )
 }
@@ -110,6 +146,7 @@ pub fn coverage_for_with_ledger(
     operations: &[OperationDescription],
     advertised_capabilities: &[TaskCapability],
     enabled_features: Option<&[String]>,
+    report_forms: Option<&[ReportFormEntry]>,
     ledger: &DenialLedger,
 ) -> Vec<TaskCoverage> {
     task_kinds
@@ -136,6 +173,9 @@ pub fn coverage_for_with_ledger(
                 None => (reachability, reason),
             };
 
+            let (report_form, report_reason) =
+                resolve_report_form(report_forms, &task_kind.operation_id);
+
             TaskCoverage {
                 variant: task_kind.variant.clone(),
                 operation_id: task_kind.operation_id.clone(),
@@ -143,9 +183,35 @@ pub fn coverage_for_with_ledger(
                 required_features,
                 reachability,
                 reason,
+                report_form,
+                report_reason,
             }
         })
         .collect()
+}
+
+/// Join the published coverage to one operation.
+///
+/// The join is by **operation id**, which is the daemon's own canonical
+/// identity for the operation. An operation the daemon published no coverage
+/// for is `Unknown`: the GUI was not told, so it does not guess.
+fn resolve_report_form(
+    report_forms: Option<&[ReportFormEntry]>,
+    operation_id: &str,
+) -> (ReportFormVerdict, String) {
+    let Some(report_forms) = report_forms else {
+        return (ReportFormVerdict::Unknown, String::new());
+    };
+    let Some(entry) = report_forms
+        .iter()
+        .find(|entry| entry.operation_id == operation_id)
+    else {
+        return (ReportFormVerdict::Unknown, String::new());
+    };
+    match entry.form {
+        ReportForm::Canonical => (ReportFormVerdict::Available, String::new()),
+        ReportForm::NoCleanMapping => (ReportFormVerdict::Unavailable, entry.reason.clone()),
+    }
 }
 
 /// Decide one task kind's reachability.
@@ -321,7 +387,7 @@ mod tests {
         let operations = [description];
         let capabilities = [capability("wireless")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&enabled));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&enabled), None);
 
         assert_eq!(rows[0].reachability, Reachability::Available);
         assert!(
@@ -337,7 +403,7 @@ mod tests {
         let operations = [operation("scan-ports", true, &[])];
         let capabilities = [capability("port-scan")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]), None);
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].reachability, Reachability::Available);
@@ -350,7 +416,7 @@ mod tests {
         let operations = [operation("scan-ports", false, &[])];
         let capabilities = [capability("port-scan")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]), None);
 
         assert_eq!(rows[0].reachability, Reachability::NotExposed);
         assert!(rows[0].reason.contains("manual surface"));
@@ -362,7 +428,7 @@ mod tests {
         let operations = [operation("scan-ports", true, &[])];
         let capabilities: [TaskCapability; 0] = [];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]), None);
 
         assert_eq!(rows[0].reachability, Reachability::NotAdvertised);
         assert!(rows[0].reason.contains("does not advertise"));
@@ -375,7 +441,7 @@ mod tests {
         let capabilities: [TaskCapability; 0] = [];
         let features = vec!["nse".to_owned()];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features), None);
 
         assert_eq!(rows[0].reachability, Reachability::NotAdvertised);
         // "the daemon withholds it" and "the daemon lacks the feature" are
@@ -391,7 +457,7 @@ mod tests {
         let capabilities: [TaskCapability; 0] = [];
         let features = vec!["cli".to_owned()];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features), None);
 
         assert_eq!(rows[0].reachability, Reachability::NotAdvertised);
         assert!(rows[0].reason.contains("nse"));
@@ -404,7 +470,7 @@ mod tests {
         let capabilities = [capability("port-scan")];
         let features = vec!["cli".to_owned()];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features), None);
 
         assert_eq!(rows[0].reachability, Reachability::FeatureDisabled);
         assert!(rows[0].reason.contains("nse"));
@@ -417,7 +483,7 @@ mod tests {
         let operations = [operation("scan-ports", true, &["nse"])];
         let capabilities = [capability("port-scan")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, None);
+        let rows = coverage_for(&kinds, &operations, &capabilities, None, None);
 
         assert_eq!(rows[0].reachability, Reachability::Unverified);
         assert!(rows[0].reason.contains("unknown"));
@@ -429,7 +495,7 @@ mod tests {
         let operations = [operation("scan-ports", true, &[])];
         let capabilities = [capability("port-scan")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, None);
+        let rows = coverage_for(&kinds, &operations, &capabilities, None, None);
 
         assert_eq!(rows[0].reachability, Reachability::Available);
     }
@@ -441,7 +507,7 @@ mod tests {
         let capabilities = [capability("port-scan")];
         let features: Vec<String> = Vec::new();
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&features), None);
 
         assert_eq!(rows[0].reachability, Reachability::FeatureDisabled);
     }
@@ -458,7 +524,8 @@ mod tests {
             denial_from_message("required feature 'nse' is not enabled"),
         );
 
-        let rows = coverage_for_with_ledger(&kinds, &operations, &capabilities, Some(&[]), &ledger);
+        let rows =
+            coverage_for_with_ledger(&kinds, &operations, &capabilities, Some(&[]), None, &ledger);
 
         assert_eq!(rows[0].reachability, Reachability::Blocked);
         assert!(rows[0].reason.contains("nse"));
@@ -478,7 +545,8 @@ mod tests {
             },
         );
 
-        let rows = coverage_for_with_ledger(&kinds, &operations, &capabilities, None, &ledger);
+        let rows =
+            coverage_for_with_ledger(&kinds, &operations, &capabilities, None, None, &ledger);
 
         assert_eq!(rows[0].reachability, Reachability::Blocked);
         assert!(rows[0].reason.contains("nope"));
@@ -498,7 +566,8 @@ mod tests {
             },
         );
 
-        let rows = coverage_for_with_ledger(&kinds, &operations, &capabilities, Some(&[]), &ledger);
+        let rows =
+            coverage_for_with_ledger(&kinds, &operations, &capabilities, Some(&[]), None, &ledger);
 
         assert_eq!(rows[0].reachability, Reachability::Available);
     }
@@ -515,7 +584,7 @@ mod tests {
         ];
         let capabilities = [capability("port-scan"), capability("recon")];
 
-        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]));
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]), None);
 
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].variant, "Alpha");
@@ -601,5 +670,80 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A published coverage entry reaches the row: the verdict and the reason
+    /// come from what the daemon published, joined by operation id.
+    #[test]
+    fn a_coverage_row_carries_the_published_report_form() {
+        let kinds = [
+            task_kind("Alpha", "scan-ports", "port-scan"),
+            task_kind("Beta", "waf-detect", "waf"),
+        ];
+        let operations = [
+            operation("scan-ports", true, &[]),
+            operation("waf-detect", true, &[]),
+        ];
+        let capabilities = [capability("port-scan"), capability("waf")];
+        let published = [
+            ReportFormEntry {
+                operation_id: "scan-ports".to_owned(),
+                form: ReportForm::Canonical,
+                reason: String::new(),
+            },
+            ReportFormEntry {
+                operation_id: "waf-detect".to_owned(),
+                form: ReportForm::NoCleanMapping,
+                reason: "neither variant carries a target".to_owned(),
+            },
+        ];
+
+        let rows = coverage_for(
+            &kinds,
+            &operations,
+            &capabilities,
+            Some(&[]),
+            Some(&published),
+        );
+
+        assert_eq!(rows[0].report_form, ReportFormVerdict::Available);
+        assert!(rows[0].report_reason.is_empty());
+        assert_eq!(rows[1].report_form, ReportFormVerdict::Unavailable);
+        assert_eq!(rows[1].report_reason, "neither variant carries a target");
+    }
+
+    /// An **unpublished** coverage is unknown, never "unavailable": the GUI
+    /// must not state a fact the daemon did not tell it.
+    #[test]
+    fn an_unpublished_coverage_is_unknown_not_unavailable() {
+        let kinds = [task_kind("Alpha", "scan-ports", "port-scan")];
+        let operations = [operation("scan-ports", true, &[])];
+        let capabilities = [capability("port-scan")];
+
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&[]), None);
+
+        assert_eq!(rows[0].report_form, ReportFormVerdict::Unknown);
+        assert!(
+            rows[0].report_reason.is_empty(),
+            "the GUI holds no reason, so it states none"
+        );
+
+        // A coverage that does not mention this operation is the same
+        // unknown: the daemon published something, but not about this one.
+        let published = [ReportFormEntry {
+            operation_id: "some-other-operation".to_owned(),
+            form: ReportForm::NoCleanMapping,
+            reason: "a reason about another operation".to_owned(),
+        }];
+        let rows = coverage_for(
+            &kinds,
+            &operations,
+            &capabilities,
+            Some(&[]),
+            Some(&published),
+        );
+
+        assert_eq!(rows[0].report_form, ReportFormVerdict::Unknown);
+        assert!(rows[0].report_reason.is_empty());
     }
 }

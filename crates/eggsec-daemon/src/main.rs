@@ -17,7 +17,14 @@ use eggsec_runtime::RuntimeEvent;
 )]
 struct DaemonArgs {
     /// Unix socket path for client connections.
-    #[arg(short, long, default_value = "/tmp/eggsec-daemon.sock")]
+    ///
+    /// Defaults to the daemon's socket environment variable when it is set,
+    /// and to the built-in default otherwise.
+    #[arg(
+        short,
+        long,
+        default_value_t = eggsec_runtime::daemon_socket_path_from_env()
+    )]
     socket_path: String,
 
     /// Maximum number of concurrent client connections.
@@ -221,8 +228,8 @@ async fn main() -> Result<()> {
 /// The check is a connection plus a `Health` exchange, never a `stat`: a
 /// socket file left behind by a crashed daemon is indistinguishable from a
 /// live one by file existence, and only a connection tells them apart. A
-/// stale file is therefore *not* a refusal — the server's own unlink removes
-/// it before binding.
+/// stale file is therefore *not* a refusal — the server's own bind guard
+/// reclaims it after the same probe says it is stale.
 async fn refuse_live_daemon(socket_path: &str) -> Result<()> {
     match eggsec_daemon::host::probe_daemon_liveness(
         socket_path,
@@ -232,8 +239,8 @@ async fn refuse_live_daemon(socket_path: &str) -> Result<()> {
     {
         eggsec_daemon::host::DaemonLiveness::Live { protocol_version } => {
             bail!(
-                "refusing to displace the live daemon already serving {socket_path} \
-                 (protocol version {protocol_version}); stop it first"
+                "{}",
+                eggsec_daemon::error::socket_path_held_message(socket_path, protocol_version)
             )
         }
         eggsec_daemon::host::DaemonLiveness::NotLive => Ok(()),
@@ -292,6 +299,28 @@ mod tests {
             std::process::id(),
             counter
         )
+    }
+
+    /// The daemon binary's `--socket-path` default resolves through the
+    /// canonical resolver.
+    ///
+    /// The test process does not set the environment: the environment-
+    /// dependent paths are covered by the subprocess test.
+    #[test]
+    fn the_socket_path_default_resolves_through_the_canonical_resolver() {
+        let args = DaemonArgs::parse_from(["eggsec-daemon"]);
+        assert_eq!(
+            args.socket_path,
+            eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH,
+            "the binary's default must be the canonical constant"
+        );
+    }
+
+    /// An explicit `--socket-path` wins over the default.
+    #[test]
+    fn an_explicit_socket_path_wins_over_the_default() {
+        let args = DaemonArgs::parse_from(["eggsec-daemon", "--socket-path", "/tmp/x.sock"]);
+        assert_eq!(args.socket_path, "/tmp/x.sock");
     }
 
     /// The daemon binary's start path refuses to displace a live daemon, and

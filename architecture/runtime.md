@@ -43,7 +43,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `runtime` | `src/runtime.rs` | `Runtime` orchestrator, `RuntimeTaskExecutor` trait (facade; config/sink re-exported) |
 | `runtime_config` | `src/runtime_config.rs` | `RuntimeConfig`, `SessionOptions` (submission/lifecycle tuning) |
 | `runtime_sink` | `src/runtime_sink.rs` | `RuntimeEventReceiver`, `RuntimeEventSink`, broadcast helpers (events/backpressure) |
-| `report` | `src/report.rs` | `RuntimeReportStore`, `MAX_RETAINED_REPORTS` — the bounded store of completed-task report documents |
+| `report` | `src/report.rs` | `RuntimeReportStore`, `MAX_RETAINED_REPORTS` — the bounded store of completed-task report documents; `ReportForm`, `ReportFormEntry` — the report-form coverage DTO the runtime carries and republishes |
 | `session` | `src/session.rs` | `RuntimeSession`, `RuntimeExecutionContext`, `SessionScope`, `SessionSnapshot`, `TaskSnapshot`, `SessionSummary` |
 | `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (11 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
@@ -62,8 +62,8 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `Runtime` | `runtime.rs` | Main orchestrator: `create_session()`, `submit()`, `cancel()`, `cancel_active()`, `snapshot()`, `subscribe()`, `close_session()`, `hydrate_session()`, plus the synchronous accessors `enabled_features()` and `report_for()` |
 | `RuntimeConfig` | `runtime_config.rs` | `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`, `capabilities` |
 | `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic (defined at `runtime.rs:41`) |
-| `RuntimeReportStore` | `report.rs:42` | Bounded, in-memory store of completed-task report documents (task id → report JSON) |
-| `MAX_RETAINED_REPORTS` | `report.rs:29` | The retention bound: the number of report documents a runtime keeps at once |
+| `RuntimeReportStore` | `report.rs:77` | Bounded, in-memory store of completed-task report documents (task id → report JSON) |
+| `MAX_RETAINED_REPORTS` | `report.rs:64` | The retention bound: the number of report documents a runtime keeps at once |
 | `RuntimeEventSink` | `runtime_sink.rs` | Progress/log/completion/failure reporting for executors |
 | `RuntimeEventReceiver` | `runtime_sink.rs` | Broadcast receiver with lag recovery |
 | `RuntimeExecutionContext` | `session.rs:35` | Per-execution context: session_id, surface, scope, approval gate |
@@ -283,6 +283,7 @@ Beside `execute`, the trait has three **defaulted** methods. A default is what k
 | `supported_task_kinds()` (`runtime.rs:68`) | `RuntimeCapabilities::canonical().task_kinds` | The task kinds this executor can run — the canonical list, so "says nothing" means "declares everything". An executor that rejects every task MUST declare the empty set instead — otherwise a host would advertise capabilities the executor cannot execute. |
 | `enabled_features()` (`runtime.rs:89`) | `None` | The engine features compiled into this executor's build — a **build** fact, not a runtime capability. `None` means **unknown**: the executor links no engine, or does not publish the fact. `Some(vec![])` means an engine is linked with **no** features enabled, which is a different, knowable fact. The two must never be collapsed: reading an empty vector as "unknown" would let a client report a wrong reason for an unavailable operation. |
 | `report_for(task_id)` (`runtime.rs:100`) | `None` | The report document for a completed task. `None` means **no report for this task** — either the executor produces no reports at all, or this particular result has no report form. The executor's own retention policy decides how long a report stays available; the runtime only reads it. |
+| `report_forms()` (`runtime.rs:112`) | `None` | The **report-form coverage** this executor's build publishes: which canonical operations produce a report document and which do not, with the reason for each exclusion. `None` means **unknown** — the executor links no engine, or does not publish the fact. `Some(vec![])` means the executor published an empty coverage, which is a different, knowable fact. The default is `None`, so every existing implementor keeps its current behaviour. |
 
 The engine crate provides `EggsecRuntimeExecutor` which:
 1. Converts `RuntimeSurface` → `ExecutionSurface`
@@ -290,27 +291,34 @@ The engine crate provides `EggsecRuntimeExecutor` which:
 3. Calls `approve_run_request_bundle()` for policy enforcement
 4. Calls `dispatch_approved_runtime_request()` for tool dispatch
 
-It also overrides both new methods: `enabled_features()` publishes the engine's own compile-time feature registry filtered by the policy bridge's enabled-feature set, and `report_for()` reads the engine's bounded report store (`crates/eggsec/src/runtime_bridge/executor.rs:147`, `:159`).
+It also overrides the three methods above: `enabled_features()` publishes the engine's own compile-time feature registry filtered by the policy bridge's enabled-feature set, `report_for()` reads the engine's bounded report store (`crates/eggsec/src/runtime_bridge/executor.rs:147`, `:159`), and `report_forms()` publishes the engine's **report coverage table** (`crates/eggsec/src/runtime_bridge/report_coverage.rs`) projected into the wire DTO. The daemon republishes that coverage verbatim; it derives nothing and restates nothing, so the engine's table is the only place the fact lives.
 
 Without the daemon's `service` profile (deprecated alias `full-executor`): `NoopExecutorStub` rejects all tasks, and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support. Its `enabled_features()` is the default `None`: with no engine linked, the answer is unknown rather than empty.
 
 ### `RuntimeReportStore` — bounded report retention
 
-`RuntimeReportStore` (`report.rs:42`) is the bounded store between the engine that *produces* a report document and the daemon that *serves* it. It maps a task id to the report document the engine derived from that task's result, and nothing else: the runtime owns task lifecycle, not report semantics.
+`RuntimeReportStore` (`report.rs:77`) is the bounded store between the engine that *produces* a report document and the daemon that *serves* it. It maps a task id to the report document the engine derived from that task's result, and nothing else: the runtime owns task lifecycle, not report semantics.
 
-Retention is **bounded on purpose**. A long-lived daemon would otherwise accumulate one report document per task for the life of the process, and report documents are among the largest payloads the runtime holds. The bound is `MAX_RETAINED_REPORTS = 64` (`report.rs:29`), and eviction is **oldest-first**: once the store is full, inserting a new document evicts the oldest retained one. The bound is therefore a hard ceiling on retained report documents, not a soft target, and a burst of tasks cannot grow the store without limit.
+### The coverage DTO — the runtime carries the verdict, not the report
+
+The same module carries the one typed thing the runtime knows about reports: `ReportForm` and `ReportFormEntry` (`report.rs:38`, `report.rs:51`). The entry names a canonical operation, the verdict — canonical or no clean mapping — and, for an excluded operation, the fact its result is missing.
+
+This does **not** make the runtime a report-modelling crate. The entry is a fact *about* report forms, not a report document: it carries no target, no banner, no finding text and no credential, and it holds no report-model type and no domain type. The **engine owns** the verdict (its coverage table is the single source of truth), the runtime **carries** it, the daemon **republishes** it, and the GUI **renders** it. The runtime crate's payload claim stays true: a report *document* crosses the wire as JSON, not as a typed model.
+
+Retention is **bounded on purpose**. A long-lived daemon would otherwise accumulate one report document per task for the life of the process, and report documents are among the largest payloads the runtime holds. The bound is `MAX_RETAINED_REPORTS = 64` (`report.rs:64`), and eviction is **oldest-first**: once the store is full, inserting a new document evicts the oldest retained one. The bound is therefore a hard ceiling on retained report documents, not a soft target, and a burst of tasks cannot grow the store without limit.
 
 Every method takes `&self`, and its critical section is a map operation under a `std::sync::Mutex` that is never held across an await point. That keeps the store usable from the synchronous parts of an executor without forcing an async signature on the read path; the engine's executor shares one store across its tasks through an `Arc` (`crates/eggsec/src/runtime_bridge/executor.rs:45`).
 
 ## Public API
 
-All session/task methods on `Runtime` are `async` (`runtime.rs:197–772`). Two runtime-level accessors are deliberately **synchronous** — a host reads them while building its published state, and the daemon answers a report read synchronously.
+All session/task methods on `Runtime` are `async` (`runtime.rs:197–772`). Three runtime-level accessors are deliberately **synchronous** — a host reads them while building its published state, and the daemon answers a report read synchronously. The coverage is captured at construction and never changes, so every concurrent reader observes the same rows.
 
 | Method | Signature | Purpose |
 |--------|-----------|---------|
 | `Runtime::new()` | `(config, executor) -> Self` | Create runtime |
 | `enabled_features()` | `() -> Option<&[String]>` | The enabled-feature set the executor published. `None` = unknown; `Some(vec![])` = an engine with nothing enabled |
 | `report_for()` | `(&TaskId) -> Option<serde_json::Value>` | The report document the executor recorded for a completed task. `None` = no report available |
+| `report_forms()` | `() -> Option<&[ReportFormEntry]>` | The report-form coverage the executor published. `None` = unknown; `Some(vec![])` = an executor that published an empty coverage |
 | `create_session()` | `(options, surface) -> Result<SessionId>` | New session |
 | `create_session_with_scope()` | `(options, surface, scope) -> Result<SessionId>` | New session with scope |
 | `submit()` | `(session_id, request) -> Result<TaskId>` | Submit task |

@@ -73,18 +73,24 @@ fn read_entry_safe<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> R
 /// Locate the first well-formed Payload/*.app/Info.plist entry name.
 fn locate_info_plist<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Option<String> {
     for i in 0..archive.len() {
-        if let Ok(entry) = archive.by_index(i) {
-            let name = entry.name();
-            if !is_safe_entry_name(name) {
-                continue;
-            }
-            // Expect exactly Payload/NAME.app/Info.plist (two slashes after Payload)
-            if name.starts_with("Payload/")
-                && name.ends_with("/Info.plist")
-                && name.matches('/').count() == 2
-            {
-                return Some(name.to_owned());
-            }
+        // zip 9.x decodes the entry name lazily and fallibly; take an owned copy
+        // so the borrow of the entry does not outlive this iteration.
+        let name = match archive.by_index(i) {
+            Ok(entry) => match entry.name() {
+                Ok(name) => name.into_owned(),
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        };
+        if !is_safe_entry_name(&name) {
+            continue;
+        }
+        // Expect exactly Payload/NAME.app/Info.plist (two slashes after Payload)
+        if name.starts_with("Payload/")
+            && name.ends_with("/Info.plist")
+            && name.matches('/').count() == 2
+        {
+            return Some(name);
         }
     }
     None
@@ -386,7 +392,10 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
 
     for i in 0..archive.len() {
         let name = match archive.by_index(i) {
-            Ok(e) => e.name().to_string(),
+            Ok(e) => match e.name() {
+                Ok(name) => name.into_owned(),
+                Err(_) => continue,
+            },
             Err(_) => continue,
         };
         if !is_safe_entry_name(&name) {
@@ -519,7 +528,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
 
             zw.start_file("Payload/TestApp.app/Info.plist", opts)
@@ -727,7 +736,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             // Malicious entry
             zw.start_file("Payload/../../evil.plist", opts)
@@ -746,7 +755,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             zw.start_file("Payload/Weird.app/Other.plist", opts)
                 .expect("start other");
@@ -767,7 +776,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             zw.start_file("Payload/TestApp.app/Info.plist", opts)
                 .expect("start oversized plist");

@@ -42,6 +42,16 @@ The build recipe that produces all of the above is
 [`docs/GUI_BUILD.md`](GUI_BUILD.md) §3. The full recorded run is
 [`docs/evidence/gui-qualification/macos-2026-10-23.md`](evidence/gui-qualification/macos-2026-10-23.md).
 
+**What the export procedure produces.** The GUI's export path
+(`crates/eggsec-gui/src/export.rs`) writes the **same artefacts the CLI
+writes**, through the same `eggsec-output` renderers, in the six formats
+`json`, `csv`, `html`, `md`, `sarif`, and `xml` (JUnit). A distribution
+packaging the GUI should expect those six files beside a report and no
+seventh: the PDF renderer lives in the engine, and the GUI links no engine
+crate. The procedure that exercises the path is `docs/GUI_BUILD.md` §5.7,
+and the recorded run — with each exported file's digest — is in
+[`docs/evidence/gui-qualification/macos-2026-10-24.md`](evidence/gui-qualification/macos-2026-10-24.md).
+
 > **The SHA-256 identifies an artefact, not a commit.** A second run of the
 > same command later the same day, against the then-current tree, produced
 > SHA-256 `513caadf4613b3dbb1e65d998d9e03f6c9aa4cfca7058a3470ea0dbb7c3c0fbb`
@@ -163,26 +173,27 @@ expects them will find them missing, and this section is why.
    does not implement it, and it deliberately does not add a Windows
    transport to make a matrix cell green.
 
-2. **The transport is a Unix-domain socket at a fixed default, with no
-   environment-variable override and no XDG lookup.** The default is
-   `/tmp/eggsec-daemon.sock`, and it is duplicated in **six** production
-   sites: the daemon binary's `--socket-path` default
-   (`crates/eggsec-daemon/src/main.rs:20`), the daemon's config default
-   (`crates/eggsec-daemon/src/config.rs:22`), the CLI's global `--socket`
-   default (`crates/eggsec/src/cli/mod.rs:249`), the GUI's
-   `DEFAULT_SOCKET_PATH` (`crates/eggsec-gui/src/config.rs:17`), and the
-   webview's own two defaults
-   (`crates/eggsec-gui/frontend/app.js:23`,
-   `crates/eggsec-gui/frontend/index.html:25`). There is no `EGGSEC_SOCKET`
-   environment variable and no `XDG_RUNTIME_DIR` lookup anywhere in the
-   workspace, so a per-user socket location is not currently expressible.
-   For a distribution, a fixed path in `/tmp` is a multi-user-host concern
-   that the distribution workstream should decide about explicitly.
+2. **The transport is a Unix-domain socket at a default that one crate owns,
+   with one environment-variable override and no XDG lookup.** The built-in
+   default is `/tmp/eggsec-daemon.sock`, and it is stated **once**, in
+   `crates/eggsec-runtime/src/daemon_endpoint.rs`. Milestone 012
+   (`ADR-0013`) collapsed the six production copies into that one owner and
+   added the override `EGGSEC_DAEMON_SOCKET`, with the precedence **explicit
+   flag → environment → built-in default** applied by the same resolver in
+   the daemon binary, the CLI, the TUI and the GUI. The GUI's webview holds
+   no copy of the default at all: it learns the path from Rust through the
+   `daemon_status` command. There is still no `EGGSEC_SOCKET` environment
+   variable and no `XDG_RUNTIME_DIR` lookup anywhere in the workspace, so a
+   per-user socket location is expressible only through the environment
+   variable. For a distribution, a default path in `/tmp` is a multi-user-host
+   concern that the distribution workstream should decide about explicitly.
 
 3. **The GUI does not manage the daemon's lifecycle.** It does not start,
    supervise, or stop the daemon; it connects to one that is already
-   running. That is milestone 006's work, and M6 has not closed. Until it
-   does, the operator starts the daemon by hand.
+   running. That is an architectural boundary, not an open milestone: the
+   GUI is a daemon-only frontend (`ADR-0007`), and there is no milestone
+   left to close here. The operator starts the daemon by hand, or points the
+   GUI at one the host's service manager already runs.
 
 4. **`ApprovePolicy` is now wired** (milestone 011, `ADR-0012`). The daemon
    resolves the runtime's pending decision instead of answering
