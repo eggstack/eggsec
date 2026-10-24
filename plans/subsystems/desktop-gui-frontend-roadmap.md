@@ -1,6 +1,6 @@
 # Desktop GUI Frontend Roadmap
 
-Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10 and M11 implemented 2026-10-24; M12–M15 planned 2026-10-24)
+Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10 and M11 implemented 2026-10-24; M12–M15 planned 2026-10-24, implementation plans authored 2026-10-24)
 
 Long-term references:
 
@@ -958,9 +958,29 @@ User or operator value: the default path is transcribed in six places, and
 the server unlinks the socket path before binding, so a second start can
 take the socket from a running daemon.
 
+**Corrected 2026-10-24.** The second sentence was true when this milestone was
+written; milestone 009 has since closed the ordinary case. Both start paths —
+the CLI's (`crates/eggsec-cli/src/daemon_cli.rs:141-157`) and the daemon
+binary's (`crates/eggsec-daemon/src/main.rs:226-233`) — now run a pre-flight
+liveness probe that **refuses** to displace a live daemon, and the probe
+connects rather than `stat`s the socket, so a stale path left by a crashed
+daemon does not block a start. What remains open is narrower and is what this
+milestone must close: `run_server` still unlinks the socket path before
+binding (`crates/eggsec-daemon/src/server.rs:141-147`), so the refusal is
+raced — two starts that both pass the probe can still have the second take the
+socket — and the default path is still transcribed six times with no
+environment override.
+
 Exit conditions: the default exists in exactly one place; the daemon refuses
 to displace a live daemon and says so; and the CLI's start path reports the
 refusal rather than silently taking the socket.
+
+**Amended 2026-10-24.** The third clause is **already met** by milestone 009
+and is a preservation obligation, not new work: the CLI's start path already
+reports the refusal (`crates/eggsec-cli/src/daemon_cli.rs:399-407`). The
+first and second clauses are open. The second is met by moving the guarantee
+from "the start path checks first" to "the bind itself refuses", which closes
+the race by construction rather than narrowing it.
 
 Deferred work: none.
 
@@ -982,6 +1002,16 @@ tasks and not for others, with no stated reason.
 Exit conditions: every variant with a clean mapping produces a document; the
 variants without one are named and justified; and the export path reports
 "no report available" rather than an empty artifact.
+
+**Amended 2026-10-24.** The third clause is **already met** and is a
+preservation obligation: the GUI reports "the daemon has no report for task
+`{task_id}`, so there is nothing to export" rather than writing an empty
+artifact (`crates/eggsec-gui/src/commands.rs:689-691`), and the same wording
+guards the report view (`crates/eggsec-gui/src/commands.rs:736-738`). The
+first two clauses are open, and they are the whole of the milestone's work:
+the bridge maps **9** of the engine's **35** `TaskResult` variants — five
+unconditionally and four behind cargo features — and the other 26 fall
+through to `None` (`crates/eggsec/src/runtime_bridge/report.rs:54-73`).
 
 Deferred work: none.
 
@@ -1026,6 +1056,19 @@ User or operator value: `make check` stops at the dependency-policy step, so
 the repository's mandatory contract cannot complete today. Most of the
 backlog is a stale lockfile rather than a genuine exception — the
 patch-level upgrades alone clear a majority of the entries.
+
+**Corrected 2026-10-24.** The backlog is measured at **23 entries across 20
+advisory IDs** (14 `vulnerability`, 7 `unmaintained`, 2 `unsound`), unchanged
+since milestone 010's closure. The patch-level lockfile refreshes clear
+**9 of the 23** — a plurality, not the majority this paragraph claimed. A
+further 7 have an upgrade that this repository's own policy blocks (the
+`rustls` 0.21 line and `rustls-webpki` 0.101.7 are reachable only through
+`tiberius`, whose upgrade pulls `tokio-rustls` with default features and so
+enables the `aws-lc-rs` provider that the ring-only TLS rule forbids;
+`glib` 0.18.5 is held by the exact `tauri` pin and the MSRV floor), and the
+remaining 7 have no safe upgrade at all. The claim's **direction** holds —
+the bulk of the backlog is not a genuine exception — but the arithmetic is a
+plurality, and milestone 015's plan records the corrected figure.
 
 Exit conditions: `make check-deps` is green; every retained exception is
 recorded with an owner and a review-by date; and `make check` completes.
@@ -1208,7 +1251,7 @@ This roadmap is closed when:
 | 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
 | 10 — The daemon's full manual capability policy | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md` | `plans/closure/desktop-gui-frontend/010-daemon-full-manual-capability-policy-closure.md` | `ADR-0011` (**met** — accepted 2026-10-24); M9 (met — closed 2026-10-23) |
 | 11 — Daemon-mediated policy approval | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/011-daemon-mediated-policy-approval.md` | `plans/closure/desktop-gui-frontend/011-daemon-mediated-policy-approval-closure.md` | M10 (met — implemented 2026-10-24); `ADR-0012` (implemented as written; acceptance is the maintainer's) |
-| 12 — The daemon's socket path and bind contract | **planned 2026-10-24** | — | — | — |
-| 13 — The report bridge's full coverage | **planned 2026-10-24** | — | — | M6 (met — implemented 2026-10-24) |
-| 14 — The GUI's qualification driver and runbook | **planned 2026-10-24** | — | — | M7 (met — conditionally closed 2026-10-23); M6 (met) |
-| 15 — The dependency advisory backlog | **planned 2026-10-24** | — | — | — |
+| 12 — The daemon's socket path and bind contract | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/012-daemon-socket-path-and-bind-contract.md` | — | M9 (met — closed 2026-10-23; the start-path refusal and the liveness probe already exist, so the open half is the server-side bind and the canonical default) |
+| 13 — The report bridge's full coverage | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/013-report-bridge-full-coverage.md` | — | M6 (met — implemented 2026-10-24) |
+| 14 — The GUI's qualification driver and runbook | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/014-gui-qualification-driver-and-runbook.md` | — | M7 (met — conditionally closed 2026-10-23); M6 (met) |
+| 15 — The dependency advisory backlog | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/015-dependency-advisory-backlog.md` | — | — |
