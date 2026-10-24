@@ -512,7 +512,66 @@ rule P4 needs, but rule P4 also needs the operator's attestation. Until an
 operator-attested run exists, the cell says what the harness measured and
 what is still missing.
 
-### 5.8 The repeatability contract
+### 5.8 The operator's attestation
+
+The seven steps above have two halves. The **scripted** half is what the
+machine measured: the harness drives the GUI's own client, form engine and
+export path against a live daemon, and the record carries the outcome. The
+**operator** half is what a person saw. The matrix's rules read both, and the
+behavioural columns (Connect, Submit, Cancel, Render, Export) are promoted on
+the pair — a cell is not promoted on the scripted half alone.
+
+The attestation is a file of its own, written by the operator once the
+behaviours have been observed, and it is merged into the record in the same
+write that produces the record:
+
+```
+docs/evidence/gui-qualification/<platform>-<YYYY-MM-DD>.attestation.json
+```
+
+```json
+{
+  "schema": "eggsec-gui-operator-attestation/v1",
+  "attested_by": "the operator's name",
+  "attested_at": "YYYY-MM-DD",
+  "platform": "macos",
+  "commit": "the commit the behaviours were observed against",
+  "columns": {
+    "connect": {
+      "outcome": "pass",
+      "observed": "what the operator saw"
+    }
+  }
+}
+```
+
+Then re-run the procedure with it:
+
+```
+bash scripts/gui_qualification.sh --platform macos --mode operator \
+  --attestation docs/evidence/gui-qualification/macos-2026-10-24-operator.attestation.json
+```
+
+**What the validator refuses.** An attestation is refused when it names no
+human (`attested_by` empty), when its date is malformed, when it names a
+platform the run was not made on, when it names a commit the run was not made
+at, or when it claims a column passed whose scripted outcome was not `pass` —
+an operator cannot attest to a behaviour the run did not observe. And a
+record that carries an operator outcome of `pass` with **no** attestation
+block, an empty attester, or no observation is rejected outright: a `pass`
+that nobody signed is not an attestation.
+
+**Why it is a file and not a hand edit.** The attestation is merged by the
+procedure that writes the record, so the record has one writer. A hand edit
+of the record's json block would be overwritten by the next run — a promotion
+that a later run silently erases is not a promotion.
+
+**A CI run cannot attest.** `--mode ci` accepts an attestation and merges it
+as given, but the attestation is still the human's record, not the job's: the
+`gui-platform` job has nobody to observe with, so every column it produces
+carries `operator: not-performed`.
+
+### 5.9 The repeatability contract
 
 The same steps, on the same platform, with the same daemon, produce the same
 observable outcomes.

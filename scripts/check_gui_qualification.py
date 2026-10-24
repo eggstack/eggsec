@@ -21,12 +21,20 @@ another is a record nobody can trust. The producer
 (`scripts/gui_qualification.sh`) hands this script the facts a run observed and
 asks for the record back.
 
+THE OPERATOR'S ATTESTATION LIVES HERE TOO. The scripted half of a run is what
+the machine measured; the operator's half is what a person saw. It arrives as
+a file of its own (`eggsec-gui-operator-attestation/v1`), written by the
+operator after the behaviours were observed, and this script merges it into
+the record — and refuses a record in which an operator's `pass` is not
+attributed to a named human.
+
 EXIT STATUS. 0 when every cell is consistent with its evidence; 1 otherwise.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -46,6 +54,34 @@ TEMPLATE_PATH = os.path.join(EVIDENCE_DIR, "TEMPLATE.md")
 #: declares another schema is rejected by name rather than half-read.
 RECORD_SCHEMA = "eggsec-gui-qualification-record/v1"
 
+#: The schema string that versions the operator-attestation format. An
+#: attestation is not a record: it is the human's input to one, written after
+#: the behaviours were observed, and it is merged into the record the run
+#: produces.
+ATTESTATION_SCHEMA = "eggsec-gui-operator-attestation/v1"
+
+#: A commit an attestation can name: a git object name, abbreviated or not.
+COMMIT_PATTERN = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def is_same_commit(named: Any, recorded: Any) -> bool:
+    """Whether an attestation's commit names the commit the run was made at.
+
+    An attestation may name the commit in full or in the abbreviated form git
+    prints by default, so an abbreviation of the recorded commit is the same
+    commit. Anything else is a different commit, and an attestation of one run
+    may not be read as an attestation of another.
+    """
+    if not isinstance(named, str) or not isinstance(recorded, str):
+        return False
+    named = named.strip().lower()
+    recorded = recorded.strip().lower()
+    if not named or not recorded:
+        return False
+    return recorded.startswith(named)
+
+
+
 #: The matrix's header row, in order. The header is the canonical list of
 #: behaviours; the harness's identifiers and the runbook's steps are the same
 #: seven.
@@ -62,6 +98,16 @@ MATRIX_HEADER = [
 
 #: The platforms the matrix has a row for.
 MATRIX_PLATFORMS = ["linux", "macos", "windows"]
+
+#: The column identifiers an attestation may name, in the matrix's order.
+RECORD_COLUMNS = [column.lower() for column in MATRIX_HEADER[1:]]
+
+#: The operator outcomes the harness declares (`OperatorOutcome`). An
+#: attestation may not carry an outcome the record cannot express.
+OPERATOR_OUTCOMES = ["pass", "fail", "not-performed", "not-applicable"]
+
+#: A date, as an attestation must carry.
+ATTESTATION_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 #: The kind of a cell's status token: `**status** — explanation`.
 CELL_PATTERN = re.compile(r"^\*\*(?P<status>[^*]+)\*\*\s+—\s*(?P<explanation>.*)$")
@@ -326,6 +372,122 @@ def is_ancestor(older: str, newer: str) -> Optional[bool]:
     return completed.returncode == 0
 
 
+# ── The attestation ──────────────────────────────────────────────────────────
+
+
+def is_date(value: str) -> bool:
+    """Whether a string is a real `YYYY-MM-DD` date."""
+    if not ATTESTATION_DATE_PATTERN.match(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def parse_attestation(text: str) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """The operator attestation in a file, and the problems found in it.
+
+    An attestation is the human's half of a qualification: who observed the
+    behaviours, when, on which platform, and what they saw. Every field fails
+    closed — a malformed attestation is an error, never a silent no-op — and
+    every problem names the field that is wrong.
+    """
+    try:
+        candidate = json.loads(text)
+    except json.JSONDecodeError as error:
+        return None, [f"the attestation file does not parse: {error}"]
+    if not isinstance(candidate, dict):
+        return None, ["the attestation file is not a json object"]
+
+    problems: List[str] = []
+
+    schema = candidate.get("schema")
+    if schema != ATTESTATION_SCHEMA:
+        problems.append(
+            f"the attestation declares the schema `{schema}`, but only "
+            f"`{ATTESTATION_SCHEMA}` is accepted"
+        )
+
+    attested_by = candidate.get("attested_by")
+    if not isinstance(attested_by, str) or not attested_by.strip():
+        problems.append(
+            "the attestation's `attested_by` is empty; an attestation must "
+            "name the human who observed the behaviour"
+        )
+
+    attested_at = candidate.get("attested_at")
+    if not isinstance(attested_at, str) or not is_date(attested_at):
+        problems.append(
+            f"the attestation's `attested_at` is `{attested_at}`, which is not "
+            "a `YYYY-MM-DD` date"
+        )
+
+    platform = candidate.get("platform")
+    if not isinstance(platform, str) or not platform.strip():
+        problems.append(
+            "the attestation's `platform` is empty; an attestation names the "
+            "platform the behaviours were observed on"
+        )
+
+    commit = candidate.get("commit")
+    if not isinstance(commit, str) or not COMMIT_PATTERN.match(commit.strip()):
+        problems.append(
+            f"the attestation's `commit` is `{commit}`; an attestation names the "
+            "commit it was made against, so that it cannot be read as an "
+            "attestation of a different run"
+        )
+
+    columns = candidate.get("columns")
+    if not isinstance(columns, dict):
+        problems.append(
+            "the attestation's `columns` is not an object; it maps a column "
+            "identifier to the outcome the operator attested"
+        )
+    else:
+        for column in sorted(columns):
+            if column not in RECORD_COLUMNS:
+                problems.append(
+                    f"the attestation names the unknown column `{column}`; the "
+                    f"columns are {', '.join(RECORD_COLUMNS)}"
+                )
+                continue
+            entry = columns[column]
+            if not isinstance(entry, dict):
+                problems.append(
+                    f"the attestation's `{column}` column entry is not an object"
+                )
+                continue
+            outcome = entry.get("outcome")
+            if outcome not in OPERATOR_OUTCOMES:
+                problems.append(
+                    f"the attestation's `{column}` column carries the outcome "
+                    f"`{outcome}`, which is not one of "
+                    f"{', '.join(OPERATOR_OUTCOMES)}"
+                )
+            observed = entry.get("observed")
+            if not isinstance(observed, str) or not observed.strip():
+                problems.append(
+                    f"the attestation's `{column}` column carries no `observed`; "
+                    "an attestation with no observation is not an attestation"
+                )
+
+    if problems:
+        return None, problems
+    return candidate, problems
+
+
+def read_attestation(path: str) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """The operator attestation in a file, and the problems found in it."""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as error:
+        return None, [f"the attestation file cannot be read: {error}"]
+    return parse_attestation(text)
+
+
 # ── The checks ──────────────────────────────────────────────────────────────
 
 
@@ -553,6 +715,8 @@ class Checker:
                 f"{rule.identifier} requires `{rule.attestation}`"
             )
 
+        self.check_attestation(where, name, record)
+
         artefact = entry.get("artifact") or ""
         if rule.artefact == "required" and not artefact:
             self.fail(
@@ -577,6 +741,91 @@ class Checker:
                 )
 
         self.check_commit(where, name, record)
+
+    def check_attestation(
+        self,
+        where: str,
+        name: str,
+        record: Dict[str, Any],
+    ) -> None:
+        """An operator outcome of `pass` must be attributed to a named human.
+
+        The matrix's rules require the operator's attestation, and an
+        unattributed `pass` is not one: the record must carry the top-level
+        `attestation` block that names the human who observed the behaviour,
+        that block must agree with the record about who, when and where, and
+        the column must carry what that human saw.
+
+        Every column of the record is looked at, not only the one the cell
+        cites: an evidence file that carries an unattributed `pass` for a
+        column its cell does not cite is still a record that says a person
+        said something, and nobody is there to say it.
+        """
+        attestation = record.get("attestation")
+        if attestation is not None and not isinstance(attestation, dict):
+            self.fail(
+                f"{where} says `qualified`, but `{name}`'s `attestation` is not "
+                "an object"
+            )
+            attestation = None
+
+        if isinstance(attestation, dict):
+            attested_by = attestation.get("attested_by")
+            if not isinstance(attested_by, str) or not attested_by.strip():
+                self.fail(
+                    f"{where} says `qualified`, but `{name}`'s `attestation` "
+                    "carries an empty `attested_by`; a `pass` must be attributed "
+                    "to a named human"
+                )
+
+            attested_at = attestation.get("attested_at")
+            if not isinstance(attested_at, str) or not is_date(attested_at):
+                self.fail(
+                    f"{where} says `qualified`, but `{name}`'s `attestation` "
+                    f"carries the malformed `attested_at` `{attested_at}`; it "
+                    "must be a `YYYY-MM-DD` date"
+                )
+
+            attested_platform = attestation.get("platform")
+            if attested_platform != record.get("platform"):
+                self.fail(
+                    f"{where} says `qualified`, but `{name}`'s `attestation` names "
+                    f"the platform `{attested_platform}`, which is not the "
+                    f"record's platform `{record.get('platform')}`"
+                )
+
+            attested_commit = attestation.get("commit")
+            if not is_same_commit(attested_commit, record.get("commit")):
+                self.fail(
+                    f"{where} says `qualified`, but `{name}`'s `attestation` names "
+                    f"the commit `{attested_commit}`, which is not the commit the "
+                    f"record was made at (`{record.get('commit')}`); an "
+                    "attestation of one run cannot be read as an attestation of "
+                    "another"
+                )
+
+        for candidate in record.get("columns") or []:
+            if not isinstance(candidate, dict):
+                continue
+            if candidate.get("operator") != "pass":
+                continue
+            candidate_column = candidate.get("column")
+            if attestation is None:
+                self.fail(
+                    f"{where} says `qualified`, but `{name}` records the "
+                    f"`{candidate_column}` column's operator outcome as `pass` "
+                    "and carries no `attestation` block; a `pass` must be "
+                    "attributed to a named human"
+                )
+                continue
+            observed = candidate.get("observed")
+            if not isinstance(observed, str) or not observed.strip():
+                self.fail(
+                    f"{where} says `qualified`, but `{name}` records the "
+                    f"`{candidate_column}` column's operator outcome as `pass` "
+                    "and carries no `observed` for it; an attestation with no "
+                    "observation is not an attestation"
+                )
 
     def check_commit(self, where: str, name: str, record: Dict[str, Any]) -> None:
         """A record's commit is the matrix's commit or a descendant of it."""
@@ -616,6 +865,107 @@ def validate(matrix_path: str, evidence_dir: str) -> List[str]:
 
 
 # ── Writing a record ───────────────────────────────────────────────────────
+
+
+def attestation_problems_for_record(
+    record: Dict[str, Any], attestation: Dict[str, Any]
+) -> List[str]:
+    """The problems an attestation has against the record it would join.
+
+    An attestation may not contradict the scripted half: the operator cannot
+    attest to a behaviour the run did not observe, and an attestation made on
+    one platform does not attest to another.
+    """
+    problems: List[str] = []
+
+    platform = attestation.get("platform")
+    if platform != record.get("platform"):
+        problems.append(
+            f"the attestation names the platform `{platform}`, but the run is "
+            f"for `{record.get('platform')}`; an attestation applies to the "
+            "platform it was made on"
+        )
+
+    by_column = {
+        entry.get("column"): entry for entry in record.get("columns", []) or []
+    }
+    for column, attested in (attestation.get("columns") or {}).items():
+        entry = by_column.get(column)
+        if entry is None:
+            problems.append(
+                f"the attestation names the `{column}` column, which the run "
+                "record does not carry"
+            )
+            continue
+        if attested.get("outcome") == "pass" and entry.get("scripted") != "pass":
+            problems.append(
+                f"the attestation claims the `{column}` column passed, but the "
+                f"run's scripted outcome for it is `{entry.get('scripted')}`; an "
+                "operator cannot attest to a behaviour the run did not observe"
+            )
+
+    attested_commit = attestation.get("commit")
+    if not is_same_commit(attested_commit, record.get("commit")):
+        problems.append(
+            f"the attestation names the commit `{attested_commit}`, but the run "
+            f"was made at `{record.get('commit')}`; an attestation of one run "
+            "cannot be read as an attestation of another"
+        )
+
+    return problems
+
+
+def merge_attestation(record: Dict[str, Any], attestation: Dict[str, Any]) -> None:
+    """Merge an operator attestation into a run record, in place.
+
+    The record gains a top-level `attestation` block naming the human, and
+    each attested column gains the operator's outcome and what they saw. The
+    column's `reason` is the scripted half's own account and is left alone.
+    """
+    record["attestation"] = {
+        "schema": attestation.get("schema", ATTESTATION_SCHEMA),
+        "attested_by": attestation.get("attested_by", ""),
+        "attested_at": attestation.get("attested_at", ""),
+        "platform": attestation.get("platform", ""),
+        "commit": attestation.get("commit", ""),
+    }
+    by_column = {
+        entry.get("column"): entry for entry in record.get("columns", []) or []
+    }
+    for column, attested in (attestation.get("columns") or {}).items():
+        entry = by_column.get(column)
+        if entry is None:
+            continue
+        entry["operator"] = attested.get("outcome", "not-performed")
+        entry["observed"] = attested.get("observed", "")
+
+
+def attest_record(
+    record: Dict[str, Any], attestation: Dict[str, Any]
+) -> List[str]:
+    """Merge an operator attestation into a run record, and the problems found.
+
+    The record is written once, with the attestation already in it: a record
+    whose human half is added afterwards is a record two writers had a hand in.
+    An attestation that contradicts the scripted half is refused, and the
+    record is left as the run made it.
+    """
+    problems = attestation_problems_for_record(record, attestation)
+    if problems:
+        return problems
+
+    merge_attestation(record, attestation)
+    # The attestation belongs with the run's identity, not at the tail.
+    ordered: Dict[str, Any] = {}
+    for key, value in record.items():
+        if key == "attestation":
+            continue
+        ordered[key] = value
+        if key == "tree_state":
+            ordered["attestation"] = record["attestation"]
+    record.clear()
+    record.update(ordered)
+    return []
 
 
 def build_record(facts: Dict[str, Any]) -> Dict[str, Any]:
@@ -683,6 +1033,7 @@ def build_record(facts: Dict[str, Any]) -> Dict[str, Any]:
         "platform": facts.get("platform", ""),
         "mode": facts.get("mode", ""),
         "date": facts.get("date", ""),
+        "run_label": facts.get("run_label", ""),
         "commit": facts.get("commit", ""),
         "tree_state": facts.get("tree_state", ""),
         "host": host,
@@ -772,6 +1123,9 @@ def write_record_markdown(record: Dict[str, Any], facts: Dict[str, Any], path: s
         + " |"
     )
     lines.append(f"| Date of the run (UTC) | {record['date']} |")
+    run_label = record.get("run_label", "")
+    if run_label:
+        lines.append(f"| Run label | `{run_label}` |")
     lines.append(f"| Operator or CI job | `{record.get('mode', 'operator')}` |")
     lines.append(f"| Commit SHA (`git rev-parse HEAD`) | `{record['commit']}` |")
     lines.append(f"| Tree state (`git status --porcelain` empty?) | `{record['tree_state']}` |")
@@ -849,6 +1203,30 @@ def write_record_markdown(record: Dict[str, Any], facts: Dict[str, Any], path: s
     for entry in record["columns"]:
         lines.append(f"- `{entry['column']}` — {entry['reason']}")
     lines.append("")
+    attestation = record.get("attestation")
+    if attestation:
+        lines.append("## Operator attestation")
+        lines.append("")
+        lines.append(
+            "The human half of this run. The scripted outcomes above are what "
+            "the machine measured; these are what a person saw."
+        )
+        lines.append("")
+        lines.append("| Field | Value |")
+        lines.append("|---|---|")
+        lines.append(f"| Attested by | `{attestation.get('attested_by', '')}` |")
+        lines.append(f"| Attested at | {attestation.get('attested_at', '')} |")
+        lines.append(f"| Platform | `{attestation.get('platform', '')}` |")
+        lines.append(f"| Commit attested | `{attestation.get('commit', '')}` |")
+        lines.append(f"| Schema | `{attestation.get('schema', '')}` |")
+        lines.append("")
+        lines.append("What the operator observed:")
+        lines.append("")
+        for entry in record["columns"]:
+            observed = entry.get("observed")
+            if observed:
+                lines.append(f"- `{entry['column']}` — {observed}")
+        lines.append("")
     lines.append("## Deviations and notes")
     lines.append("")
     deviations = record.get("deviations") or []
@@ -894,7 +1272,8 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
 
     failures: List[str] = []
 
-    def check_case(name: str, expectation: str, mutate) -> None:
+    def case_problems(mutate) -> List[str]:
+        """The problems the validator finds in a mutated copy of the tree."""
         import tempfile
 
         with tempfile.TemporaryDirectory() as workspace:
@@ -907,17 +1286,33 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
                 with open(os.path.join(evidence_copy, filename), "wb") as handle:
                     handle.write(content)
             mutate(matrix_copy, evidence_copy)
-            problems = validate(matrix_copy, evidence_copy)
-            if not problems:
-                failures.append(f"{name}: the validator accepted it")
-                return
-            if expectation and expectation not in " ".join(problems):
-                failures.append(
-                    f"{name}: the validator rejected it, but not with `{expectation}`: "
-                    f"{problems[0]}"
-                )
-                return
-            print(f"ok: {name} -> {problems[0]}")
+            return validate(matrix_copy, evidence_copy)
+
+    def check_case(name: str, expectation: str, mutate) -> None:
+        problems = case_problems(mutate)
+        if not problems:
+            failures.append(f"{name}: the validator accepted it")
+            return
+        if expectation and expectation not in " ".join(problems):
+            failures.append(
+                f"{name}: the validator rejected it, but not with `{expectation}`: "
+                f"{problems[0]}"
+            )
+            return
+        print(f"ok: {name} -> {problems[0]}")
+
+    def accept_case(name: str, mutate) -> None:
+        """The accepting path: a correct record must not be rejected.
+
+        The cases above are all rejections, and a validator that rejects
+        everything passes them. This one proves the other half: a record that
+        carries a complete, correctly attributed attestation is accepted.
+        """
+        problems = case_problems(mutate)
+        if problems:
+            failures.append(f"{name}: the validator rejected it: {problems[0]}")
+            return
+        print(f"ok: {name} -> the validator accepted it")
 
     def rewrite_matrix(matrix_copy: str, old: str, new: str) -> None:
         with open(matrix_copy, "r", encoding="utf-8") as handle:
@@ -1016,6 +1411,71 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
             "docs/evidence/gui-qualification/macos-9999-01-01.md",
         )
 
+    def mutate_record(evidence_copy: str, filename: str, mutator) -> None:
+        """Apply a mutation to one evidence file's record block."""
+        path = os.path.join(evidence_copy, filename)
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+        blocks = list(re.finditer(r"```json\s*\n(.*?)```", text, re.DOTALL))
+        if not blocks:
+            raise SystemExit(f"the self-test's target record is absent: {filename}")
+        record = json.loads(blocks[0].group(1))
+        mutator(record)
+        mutated = (
+            text[: blocks[0].start(1)]
+            + json.dumps(record, indent=2)
+            + "\n"
+            + text[blocks[0].end(1) :]
+        )
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(mutated)
+
+    def attestation_block(**overrides) -> Dict[str, Any]:
+        """A well-formed attestation block, with the named fields changed."""
+        block: Dict[str, Any] = {
+            "schema": ATTESTATION_SCHEMA,
+            "attested_by": "Test Operator",
+            "attested_at": "2026-10-24",
+            "platform": "macos",
+            "commit": "0f5dbb26e7ab215613e5b6e2295d9c124374bf9f",
+        }
+        block.update(overrides)
+        return block
+
+    def attest_connect(
+        attestation=None,
+        observed: Optional[str] = "the badge read CONNECTED",
+    ):
+        """Promote the macOS `connect` cell and attest it in the record.
+
+        The `connect` cell is the one the matrix leaves unpromoted for want of
+        an operator's attestation, so promoting it is the case the promotion
+        rules are about.
+        """
+
+        def mutate(matrix_copy: str, evidence_copy: str) -> None:
+            replace_cell(
+                matrix_copy,
+                "macos",
+                3,
+                " **qualified** — evidence: `docs/evidence/gui-qualification/"
+                "macos-2026-10-24.md` (run 2026-10-24) ",
+            )
+
+            def mutate_the_record(record: Dict[str, Any]) -> None:
+                if attestation is not None:
+                    record["attestation"] = attestation
+                for entry in record["columns"]:
+                    if entry.get("column") != "connect":
+                        continue
+                    entry["operator"] = "pass"
+                    if observed is not None:
+                        entry["observed"] = observed
+
+            mutate_record(evidence_copy, "macos-2026-10-24.md", mutate_the_record)
+
+        return mutate
+
     check_case("a blank cell is rejected", "carries no explanation", blank_a_cell)
     check_case("an unknown status token is rejected", "not one of", unknown_status)
     check_case("the retired milestone token is rejected", "pending M6", pending_token)
@@ -1027,12 +1487,49 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
     check_case("an unknown record schema is rejected", "schema", unknown_schema)
     check_case("a record without the column is rejected", "column", missing_column)
     check_case("a missing evidence file is rejected", "does not exist", missing_evidence_file)
+    check_case(
+        "an unattributed operator pass is rejected",
+        "carries no `attestation` block",
+        attest_connect(attestation=None),
+    )
+    check_case(
+        "an operator pass with an empty attester is rejected",
+        "empty `attested_by`",
+        attest_connect(attestation=attestation_block(attested_by="")),
+    )
+    check_case(
+        "an operator pass with a malformed date is rejected",
+        "malformed `attested_at`",
+        attest_connect(attestation=attestation_block(attested_at="2026-13-40")),
+    )
+    check_case(
+        "an operator pass with no observation is rejected",
+        "carries no `observed`",
+        attest_connect(attestation=attestation_block(), observed=None),
+    )
+    check_case(
+        "an attestation for another platform is rejected",
+        "names the platform",
+        attest_connect(attestation=attestation_block(platform="linux")),
+    )
+    check_case(
+        "an attestation of another commit is rejected",
+        "names the commit",
+        attest_connect(attestation=attestation_block(commit="1a2b3c4d5e6f7890abcdef1234567890abcdef12")),
+    )
+    accept_case(
+        "a fully attributed operator pass is accepted",
+        attest_connect(attestation=attestation_block()),
+    )
 
     if failures:
         for failure in failures:
             print(f"FAIL: {failure}")
         return 1
-    print("ok: every deliberate corruption was rejected")
+    print(
+        "ok: every deliberate corruption was rejected, and the attributed "
+        "record was accepted"
+    )
     return 0
 
 
@@ -1067,6 +1564,19 @@ def main(argv: Sequence[str]) -> int:
         help="write the evidence file to this path",
     )
     parser.add_argument(
+        "--attestation",
+        metavar="PATH",
+        help=(
+            "the operator's attestation file, as json: who observed the "
+            "behaviours, when, on which platform, and what they saw"
+        ),
+    )
+    parser.add_argument(
+        "--check-attestation",
+        action="store_true",
+        help="check the attestation file's own shape and exit",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="prove that the validator rejects what it must reject",
@@ -1076,19 +1586,55 @@ def main(argv: Sequence[str]) -> int:
     if arguments.self_test:
         return self_test(arguments.matrix, arguments.evidence_dir)
 
+    if arguments.check_attestation:
+        if not arguments.attestation:
+            print("--check-attestation needs --attestation", file=sys.stderr)
+            return 2
+        attestation, problems = read_attestation(arguments.attestation)
+        if problems:
+            for problem in problems:
+                print(f"FAIL: {problem}")
+            return 1
+        print(
+            f"ok: {arguments.attestation} is a valid `{ATTESTATION_SCHEMA}` "
+            "attestation"
+        )
+        return 0
+
     if arguments.write_record:
         if not arguments.run_inputs:
             print("--write-record needs --run-inputs", file=sys.stderr)
             return 2
         with open(arguments.run_inputs, "r", encoding="utf-8") as handle:
             facts = json.load(handle)
+        attestation = None
+        if arguments.attestation:
+            attestation, problems = read_attestation(arguments.attestation)
+            if problems:
+                for problem in problems:
+                    print(f"FAIL: {problem}")
+                return 1
         record = build_record(facts)
+        if attestation is not None:
+            problems = attest_record(record, attestation)
+            if problems:
+                for problem in problems:
+                    print(f"FAIL: {problem}")
+                return 1
         with open(arguments.write_record, "w", encoding="utf-8") as handle:
             json.dump(record, handle, indent=2)
             handle.write("\n")
         if arguments.record_markdown:
             write_record_markdown(record, facts, arguments.record_markdown)
         return 0
+
+    if arguments.attestation:
+        print(
+            "--attestation is used with --write-record (to merge it into the "
+            "record) or with --check-attestation (to check it on its own)",
+            file=sys.stderr,
+        )
+        return 2
 
     problems = validate(arguments.matrix, arguments.evidence_dir)
     if problems:

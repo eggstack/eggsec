@@ -157,7 +157,10 @@ docs/evidence/gui-qualification/
   macos-2026-10-24.export.json       #   the exported report
 ```
 
-One file per run, named `<platform>-<YYYY-MM-DD>.md`. The filename is part of
+One file per run, named `<platform>-<YYYY-MM-DD>.md`. A second run on the same
+day adds a label: `--run-label operator` names it
+`<platform>-<YYYY-MM-DD>-<label>.md`, so a day with two runs keeps two records
+rather than one overwriting the other. The filename is part of
 the evidence reference, so a cell that cites an evidence file cites it by
 name. The artefacts a run produced — the build sidecar, the exported report —
 are committed beside the record under the same prefix, because a cell's
@@ -295,6 +298,20 @@ means the column does not call for a human, so the record may carry
 effect. A promotion resting on the scripted half alone is not a promotion: the
 harness can prove that the export path writes six formats, and it cannot prove
 that a person saw the window.
+
+**How the operator half is recorded.** The operator writes an **attestation
+file** of their own — `docs/evidence/gui-qualification/<platform>-<YYYY-MM-DD>.attestation.json`,
+schema `eggsec-gui-operator-attestation/v1` — naming who observed the
+behaviours, when, on which platform, against which commit, and what they saw
+for each column. The procedure merges it into the record in the same write
+that produces the record (`bash scripts/gui_qualification.sh … --attestation
+<path>`), so the record has one writer and a later run cannot erase the
+attestation. The validator refuses an unattributed `pass`: a record whose
+operator outcome is `pass` with no attestation block, an empty attester, or
+no observation is rejected, and an attestation that names a platform or a
+commit the run was not made at is rejected. The runbook's procedure is
+[`docs/GUI_BUILD.md`](GUI_BUILD.md) §5.8, and the file's fields are in
+[`docs/evidence/gui-qualification/TEMPLATE.md`](evidence/gui-qualification/TEMPLATE.md).
 
 **What the validator cannot check.** It checks that the artefacts exist, that
 their digests match, and that the record is internally consistent. It cannot

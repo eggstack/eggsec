@@ -3,7 +3,9 @@
 Copy this file to `docs/evidence/gui-qualification/<platform>-<YYYY-MM-DD>.md`
 and fill in every field. `scripts/gui_qualification.sh` writes a file in this
 shape for you; this template is what it fills in, and what a hand-written run
-must match.
+must match. A second run on the same day adds a label — `--run-label operator`
+names it `<platform>-<YYYY-MM-DD>-operator.md` — so a day with two runs keeps
+two records rather than one overwriting the other.
 
 The qualification matrix
 (`docs/GUI_PLATFORM_QUALIFICATION.md`) cites these files as the evidence for
@@ -85,6 +87,74 @@ For a `partial` outcome, name the qualified subset and the missing part
 separately — a partial that does not say what is missing is indistinguishable
 from a pass.
 
+## The operator's attestation
+
+The scripted half of a run is what the machine measured. The operator's
+attestation is the other half: what a person saw. It is a file of its own,
+the operator writes it once the behaviours have been observed, and the
+procedure merges it into the record.
+
+Put it beside the evidence it belongs to, named
+`<platform>-<YYYY-MM-DD>[-<run label>].attestation.json`:
+
+```
+docs/evidence/gui-qualification/macos-2026-10-24-operator.attestation.json
+```
+
+The schema string is `eggsec-gui-operator-attestation/v1`. An attestation that
+declares another schema is rejected by name rather than half-read.
+
+```json
+{
+  "schema": "eggsec-gui-operator-attestation/v1",
+  "attested_by": "David Bowman",
+  "attested_at": "2026-10-24",
+  "platform": "macos",
+  "commit": "0f5dbb26e7ab215613e5b6e2295d9c124374bf9f",
+  "columns": {
+    "connect": {
+      "outcome": "pass",
+      "observed": "the badge read CONNECTED and the sidebar listed the daemon's published operations"
+    },
+    "submit": {
+      "outcome": "pass",
+      "observed": "a task card appeared with a task id and a non-terminal status"
+    }
+  }
+}
+```
+
+- `attested_by` names the human who observed the behaviour. It is not
+  optional: an attestation nobody signed is not an attestation.
+- `attested_at` is the date the behaviours were observed, as `YYYY-MM-DD`.
+- `platform` is the platform they were observed on. It must be the platform of
+  the run the attestation is merged into.
+- `commit` is the commit the behaviours were observed against — the tree the
+  operator actually ran. It must be the commit the run was made at, so that an
+  attestation of one run cannot be read as an attestation of another. The
+  abbreviated form git prints by default is accepted.
+- `columns` maps a column identifier to the operator's outcome and to what
+  they saw. `outcome` is one of `pass`, `fail`, `not-performed` or
+  `not-applicable`; `observed` is what the operator saw, and it is never
+  empty. A column the attestation does not name keeps the outcome the run
+  gave it.
+
+An attestation may not contradict the run: a `pass` for a column whose
+scripted outcome is not `pass` is refused, because an operator cannot attest
+to a behaviour the run did not observe.
+
+Pass it to the procedure, and the record it writes carries both halves in one
+write:
+
+```
+bash scripts/gui_qualification.sh --platform macos --mode operator \
+  --attestation docs/evidence/gui-qualification/macos-2026-10-24-operator.attestation.json
+```
+
+A CI run cannot attest: it has nobody to observe with. `--mode ci` accepts an
+attestation and merges it as given, but the attestation is still the human's
+record, not the job's.
+
 ## The run record
 
 The block below is the machine-readable record. It is what
@@ -95,6 +165,10 @@ sufficient evidence.
 The schema string is `eggsec-gui-qualification-record/v1`. A record that
 declares another schema is rejected by name rather than half-read.
 
+`attestation` and `observed` are optional. A run with no operator attestation
+carries no `attestation` block and no `observed` field, and every column's
+`operator` is what the run itself produced.
+
 ```json
 {
   "schema": "eggsec-gui-qualification-record/v1",
@@ -102,6 +176,13 @@ declares another schema is rejected by name rather than half-read.
   "date": "<YYYY-MM-DD>",
   "commit": "<the commit the run was made at>",
   "tree_state": "<clean|dirty>",
+  "attestation": {
+    "schema": "eggsec-gui-operator-attestation/v1",
+    "attested_by": "<the human who observed the behaviours>",
+    "attested_at": "<YYYY-MM-DD>",
+    "platform": "<the platform the behaviours were observed on>",
+    "commit": "<the commit the behaviours were observed against>"
+  },
   "host": {
     "os": "<linux|macos>",
     "os_version": "<uname -r>",
@@ -142,6 +223,7 @@ declares another schema is rejected by name rather than half-read.
       "column": "<build|launch|connect|submit|cancel|render|export>",
       "scripted": "<pass|fail|skipped|not-performed|not-applicable>",
       "operator": "<pass|fail|not-performed|not-applicable>",
+      "observed": "<what the operator saw, when there is an attestation>",
       "artifact": "<the artefact's file name under this directory, or empty>",
       "sha256": "<the artefact's SHA-256, or empty>",
       "reason": "<why the column landed where it did>"
@@ -150,6 +232,11 @@ declares another schema is rejected by name rather than half-read.
   "deviations": []
 }
 ```
+
+The `reason` is the scripted half's own account of the column; the `observed`
+is the operator's. They are separate fields, and a column that carries a
+`pass` must carry an `observed` to go with it: the validator refuses an
+operator outcome of `pass` that no named human stands behind.
 
 ## Deviations and notes
 

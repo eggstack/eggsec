@@ -10,8 +10,10 @@
 #
 # WHAT THIS IS NOT. It is not a window-automation driver. It does not click,
 # type, or move a mouse, and it does not judge what a human saw: the window
-# half of the qualification is an operator observation, recorded by hand in the
-# run record. The script measures what a machine can measure and leaves the
+# half of the qualification is an operator observation. The operator writes it
+# down in an attestation file (`--attestation`), and the procedure merges that
+# file into the run record so that the human's half is in the record from the
+# first write. The script measures what a machine can measure and leaves the
 # rest named.
 #
 # THE RULES. The promotion rules live in the matrix's own rules table
@@ -43,6 +45,8 @@ DAEMON_BIN=""
 OUT_DIR="$REPO_ROOT/docs/evidence/gui-qualification"
 RUN_DATE=""
 SKIP_WINDOW=0
+ATTESTATION_PATH=""
+RUN_LABEL=""
 
 # The schema of the run record this procedure produces. The validator owns the
 # record's shape and writes it; the procedure names the schema it expects and
@@ -72,6 +76,16 @@ Usage: bash scripts/gui_qualification.sh [options]
   --out <dir>               Where the record and the artefacts are written.
                             Defaults to `docs/evidence/gui-qualification`.
   --date <YYYY-MM-DD>       The record's date. Defaults to today (UTC).
+  --run-label <label>       A label for a second run on the same day. The
+                            record and its artefacts are named
+                            `<platform>-<date>-<label>` instead of
+                            `<platform>-<date>`, so a day with two runs keeps
+                            two records. Lowercase letters, digits and dashes.
+  --attestation <path>      An operator attestation file (json): who
+                            observed the behaviours, when, on which platform,
+                            and what they saw. It is merged into the run
+                            record. Without it the record carries no
+                            attestation at all.
   --skip-window             Do not attempt the window probe.
   -h, --help                This message.
 USAGE
@@ -103,9 +117,17 @@ while [[ $# -gt 0 ]]; do
       RUN_DATE="${2:-}"
       shift 2
       ;;
+    --run-label)
+      RUN_LABEL="${2:-}"
+      shift 2
+      ;;
     --skip-window)
       SKIP_WINDOW=1
       shift
+      ;;
+    --attestation)
+      ATTESTATION_PATH="${2:-}"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -150,15 +172,51 @@ if [[ ! "$RUN_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
   die "\`--date\` must be \`YYYY-MM-DD\`, not \`$RUN_DATE\`"
 fi
 
+# A run label distinguishes a second run on the same day. It becomes part of
+# the record's file name, so it is restricted to the characters a file name
+# may carry without quoting.
+if [[ -n "$RUN_LABEL" && ! "$RUN_LABEL" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  die "\`--run-label\` must be lowercase letters, digits and dashes, not \`$RUN_LABEL\`"
+fi
+
 for tool in git python3; do
   command -v "$tool" >/dev/null 2>&1 || die "\`$tool\` is required and was not found on PATH"
 done
+
+# ── The operator's attestation ──────────────────────────────────────────────
+#
+# The attestation is the human's half of a qualification: who observed the
+# behaviours, when, on which platform, and what they saw. It is checked here,
+# before the run does anything, so that a malformed attestation fails the
+# procedure rather than the record. Whether it *agrees* with the run is a
+# question the run has to answer first, so that check happens when the record
+# is written.
+#
+# The validator owns the attestation's shape; this procedure does not carry a
+# second copy of the schema.
+if [[ -n "$ATTESTATION_PATH" ]]; then
+  if [[ ! -f "$ATTESTATION_PATH" ]]; then
+    die "\`--attestation\` names \`$ATTESTATION_PATH\`, which is not a file"
+  fi
+  if ! ATTESTATION_PROBLEMS="$(python3 scripts/check_gui_qualification.py \
+    --attestation "$ATTESTATION_PATH" --check-attestation 2>&1)"; then
+    printf '%s\n' "$ATTESTATION_PROBLEMS" >&2
+    die "the attestation file \`$ATTESTATION_PATH\` is not a valid operator attestation"
+  fi
+  log "$SCRIPT_NAME: the attestation at $ATTESTATION_PATH is well-formed"
+  if [[ "$MODE" == "ci" ]]; then
+    log "$SCRIPT_NAME: note: a CI run cannot itself attest; the attestation is the human's record, and it is merged as given"
+  fi
+fi
 
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 WORK_DIR="${TMPDIR:-/tmp}/eggsec-gui-qualification-$$"
 mkdir -p "$WORK_DIR"
 RECORD_NAME="$PLATFORM-$RUN_DATE"
+if [[ -n "$RUN_LABEL" ]]; then
+  RECORD_NAME="$RECORD_NAME-$RUN_LABEL"
+fi
 RECORD_PATH="$OUT_DIR/$RECORD_NAME.md"
 
 # The daemon this run started, if any. The cleanup trap stops it and removes
@@ -558,6 +616,7 @@ RECORD_JSON="$WORK_DIR/record.json"
 RUN_INPUTS="$WORK_DIR/run-inputs.json"
 
 export PLATFORM MODE RUN_DATE RECORD_NAME RECORD_PATH OUT_DIR WORK_DIR
+export RUN_LABEL
 export COMMIT TREE_STATE HOST_OS HOST_OS_VERSION HOST_ARCH TARGET_TRIPLE
 export RUSTC_VERSION CARGO_VERSION PROBE_COMMAND PROBE_EXIT PROBE_VERDICT
 export TARGET_ARCH
@@ -584,6 +643,7 @@ facts = {
     "platform": os.environ["PLATFORM"],
     "mode": os.environ["MODE"],
     "date": os.environ["RUN_DATE"],
+    "run_label": os.environ.get("RUN_LABEL", ""),
     "commit": os.environ["COMMIT"],
     "tree_state": os.environ["TREE_STATE"],
     "host": {
@@ -646,10 +706,19 @@ with open(sys.argv[1], "w") as handle:
     json.dump(facts, handle, indent=2)
 PY
 
-python3 scripts/check_gui_qualification.py \
-  --write-record "$RECORD_JSON" \
-  --run-inputs "$RUN_INPUTS" \
+RECORD_WRITER_ARGS=(
+  --write-record "$RECORD_JSON"
+  --run-inputs "$RUN_INPUTS"
   --record-markdown "$RECORD_PATH"
+)
+if [[ -n "$ATTESTATION_PATH" ]]; then
+  # The attestation is passed to the writer, so the record is written once
+  # with the human's half already in it.
+  RECORD_WRITER_ARGS+=(--attestation "$ATTESTATION_PATH")
+fi
+if ! python3 scripts/check_gui_qualification.py "${RECORD_WRITER_ARGS[@]}"; then
+  die "the run record was not written; see the failures above"
+fi
 
 RECORDED_SCHEMA="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["schema"])' "$RECORD_JSON")"
 if [[ "$RECORDED_SCHEMA" != "$RECORD_SCHEMA" ]]; then

@@ -6900,6 +6900,144 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 191. An operator attestation is attributed, and never defaulted.
+# Milestone 014 (the qualification driver's promotion path).
+#
+# Rule P1 of the qualification matrix requires a cell's operator outcome to be
+# `pass`. Until now nothing could write that value: the harness emitted
+# `not-performed` at every one of its sites, and the only documented route to a
+# promotion was a hand edit of the record's json block. That is a promotion
+# with no tooling behind it, and a hand edit is exactly the kind of thing a
+# later run silently overwrites.
+#
+# The machinery now exists: an operator-authored attestation file is validated,
+# merged into the record in one write, and the validator refuses a `pass` that
+# nobody signed. This guard pins the three facts that make that machinery real
+# and the two facts that keep it honest — the procedure accepts an attestation,
+# the validator knows the schema, and no code path *defaults* an operator
+# outcome to `pass`; the only way to obtain one is a named human's
+# attestation, and the matrix still demands one.
+echo ""
+echo "--- Check 191: an operator attestation is attributed, and never defaulted ---"
+SECTION_FAIL=0
+QUAL_PY="scripts/check_gui_qualification.py"
+QUAL_SH="scripts/gui_qualification.sh"
+QUAL_HARNESS="crates/eggsec-gui/tests/qualification.rs"
+ATTESTATION_SCHEMA="eggsec-gui-operator-attestation/v1"
+
+if ! rg -q '^\s+--attestation\)' "$QUAL_SH" 2>/dev/null; then
+  echo "FAIL: the qualification procedure does not accept an operator attestation."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The flag must reach the record writer, or the attestation is read and
+# dropped: a procedure that validates an attestation and never merges it would
+# leave every record exactly as unattributed as it was. The pinned form is the
+# writer's own argument line — the same flag also appears in the help text and
+# in the validator's own call, and neither of those merges anything.
+if ! rg -q --fixed-strings 'RECORD_WRITER_ARGS+=(--attestation "$ATTESTATION_PATH")' "$QUAL_SH" 2>/dev/null; then
+  echo "FAIL: the qualification procedure does not pass the operator attestation to the record writer."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if ! rg -q --fixed-strings "ATTESTATION_SCHEMA = \"$ATTESTATION_SCHEMA\"" "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not declare the operator attestation schema."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The reader half must refuse a `pass` that nobody signed, and must refuse one
+# that carries no observation. The messages are the contract: a rule that says
+# what it refuses is a rule a reader can check.
+if ! rg -q --fixed-strings 'a `pass` must be attributed' "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not refuse an operator pass that nobody signed."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if ! rg -q --fixed-strings 'carries no `observed`' "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not require an observation for an operator pass."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# No code path may DEFAULT an operator outcome to `pass`. The only writer of a
+# `pass` is the merge of a signed attestation.
+while IFS= read -r OPERATOR_DEFAULT; do
+  [[ -z "$OPERATOR_DEFAULT" ]] && continue
+  OPERATOR_VALUE="$(printf '%s\n' "$OPERATOR_DEFAULT" \
+    | rg -o 'setdefault\("operator", *"[^"]*"\)|"operator": *"[^"]*"' \
+    | rg -o '"[^"]*"' | tail -1 | tr -d '"')"
+  if [[ "$OPERATOR_VALUE" == "pass" ]]; then
+    echo "FAIL: a code path defaults an operator outcome to pass; only a named human's attestation may set it."
+    printf '%s\n' "$OPERATOR_DEFAULT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done <<< "$(rg -n --no-heading 'setdefault\("operator", *"[^"]*"\)|"operator": *"[^"]*"' "$QUAL_PY" 2>/dev/null || true)"
+
+# The machine cannot attest for a human.
+if rg -q --fixed-strings 'OperatorOutcome::Pass' "$QUAL_HARNESS" 2>/dev/null; then
+  echo "FAIL: the qualification harness emits an operator pass; the machine cannot attest for a human."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The matrix must still demand the operator's attestation for the behavioural
+# columns. A rule weakened to `not-applicable` would make every promotion free.
+if ! python3 - <<'PY'
+import re
+import sys
+
+with open("docs/GUI_PLATFORM_QUALIFICATION.md", encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+header = [
+    "Rule",
+    "Kind",
+    "Platforms",
+    "Columns",
+    "Requires",
+    "Required outcome",
+    "Required attestation",
+    "Artefact",
+]
+p1 = None
+for line in lines:
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        continue
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    if len(cells) != len(header):
+        continue
+    if cells[0].strip("`") == "P1":
+        p1 = cells
+        break
+
+if p1 is None:
+    print("FAIL: the matrix's rules table has no P1 row.")
+    sys.exit(1)
+
+columns = [part.strip().strip("`") for part in p1[3].split(",")]
+required = p1[6].strip("`")
+behavioural = ["Connect", "Submit", "Cancel", "Render"]
+missing = sorted(column for column in behavioural if column not in columns)
+if missing:
+    print("FAIL: rule P1 no longer covers " + ", ".join(missing) + ".")
+    sys.exit(1)
+if required != "pass":
+    print(
+        f"FAIL: rule P1 requires the operator outcome `{required}`; a "
+        "promotion must still carry a human's attestation."
+    )
+    sys.exit(1)
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: an operator attestation is attributed, and never defaulted."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then
