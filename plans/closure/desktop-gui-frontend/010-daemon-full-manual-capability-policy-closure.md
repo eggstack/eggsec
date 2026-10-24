@@ -536,3 +536,61 @@ that dependency.
   acceptance", becomes **met**.
 - `plans/adrs/ADR-0011-daemon-manual-capability-policy.md` — the status
   line moves from `proposed` to `accepted`.
+
+## Addendum 2026-10-24 — two stale engine assertions found and corrected
+
+Discovered while the **mandatory contract** (`make check`) was re-run after
+milestones 012–015 were implemented. `make check` had never completed on this
+branch — it stopped at the inherited `check-deps` advisory backlog — so the
+engine's integration tests had not run since milestone 010's implementation
+commit `1877d8e4`. Two of them were left behind by that commit.
+
+**F1 — `crates/eggsec/tests/canonical_dispatch_ownership.rs` asserted the
+pre-split packet operation id.** Milestone 010 gave the capture half of the
+packet family its own operation (`packet-capture`, because a capture binds to
+a **local interface** while `packet` serves `traceroute` and `packet-send`,
+which address a remote host). It updated
+`crates/eggsec-runtime/src/request.rs` and the catalog's own self-test, but not
+this integration test, which still asserted that all three wire kinds map to
+`packet`. The test now asserts the deliberate split and is renamed
+`packet_family_splits_capture_and_keeps_explicit_wire_kinds`; the original name
+stated a falsehood the milestone had already retired.
+
+**F2 — `crates/eggsec/tests/enforcement_matrix.rs` asserted the pre-split
+scope refusal.** The same milestone changed the `InterfaceBound` target policy
+so that an interface-bound operation **accepts** a target-less run and carries
+the requirement as `requires_explicit_scope` on the descriptor, rather than
+failing descriptor construction. The catalog's own self-test
+(`interface_bound_operations_still_fail_closed`) carries the updated
+semantics; this integration test still asserted that descriptor construction
+fails. It now asserts the same posture as the catalog's test, and — the
+property the test's own name and doc comment are about — that a strict
+automated surface still refuses the operation with `ScopeMissing` once a local
+identifier is supplied and no explicit scope manifest is loaded.
+
+**F3 — `crates/eggsec-tui/src/parity.rs` had not classified the new
+`packet-capture` operation.** The TUI's parity check requires every canonical
+operation to have a TUI tab or an intentional CLI-only classification, and it
+names the exceptions in a set. Milestone 010 added `packet-capture` and
+classified `wireless-deauth` in the same commit, but not `packet-capture`. The
+TUI's Packet tab *does* drive it — the tab's capture path runs a capture, which
+binds to a local interface and is therefore its own operation — so the correct
+classification is not "CLI-only". The parity check now carries a third
+coverage set, `covered_via_tab`, naming the operations a TUI tab drives
+without declaring them as the tab's own operation, with `packet-capture` in
+it and the reason stated in a comment. The invariant is unchanged in strength:
+a canonical operation that no tab drives and that is not classified still fails
+the check.
+
+None of the three changes alters product behaviour: all three were stale with
+respect to decisions milestone 010 had already made and self-tested in
+`crates/eggsec-policy/src/catalog.rs` and in the TUI's own tab specs. No
+production behaviour changed. The corrections are recorded here rather than by
+rewriting this record's findings, and they are carried by commit `dcfcd4e2`
+("fix(tui,engine): correct the assertions milestone 010 left stale").
+
+**Why this surfaced now.** `make check` had never completed on this branch: it
+stopped at the inherited `check-deps` advisory backlog, which milestone 015
+cleared. With that gate green, the contract reached the engine's and the TUI's
+integration tests for the first time, and these three stale assertions were
+waiting there.
