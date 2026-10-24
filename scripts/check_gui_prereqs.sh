@@ -79,6 +79,14 @@ case "$OS" in
     require_pkgconfig gtk+-3.0 "gtk+-3.0"
     if pkg-config --exists libayatana-appindicator3-0.1 2>/dev/null; then
       echo "  ok       libayatana-appindicator3-0.1"
+    elif pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null; then
+      # The Debian and Ubuntu spelling. The library is
+      # `libayatana-appindicator3.so` on every distribution, but the
+      # pkg-config module drops the `lib` prefix on Debian and Ubuntu, so a
+      # probe that only knows the other spelling reports a distribution that
+      # has the library as one that does not.
+      echo "  ok       ayatana-appindicator3-0.1 (the Debian and Ubuntu pkg-config name for the same library)"
+      note "the pkg-config module is named ayatana-appindicator3-0.1 on Debian and Ubuntu and libayatana-appindicator3-0.1 elsewhere; both name the same library."
     elif pkg-config --exists appindicator3-0.1 2>/dev/null; then
       echo "  ok       appindicator3-0.1 (the pre-ayatana name)"
       note "appindicator3-0.1 is present but libayatana-appindicator3-0.1 is the name Tauri v2 documents; install libayatana-appindicator3-dev."
