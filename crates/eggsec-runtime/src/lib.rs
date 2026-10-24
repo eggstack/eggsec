@@ -1,3 +1,4 @@
+pub mod approval;
 pub mod cancel;
 pub mod capabilities;
 pub mod dispatcher;
@@ -13,6 +14,7 @@ pub mod runtime_sink;
 pub mod schema;
 pub mod session;
 
+pub use approval::{ApprovalAnswer, ApprovalGate, ApprovalRegistry};
 pub use cancel::race_with_cancel;
 pub use capabilities::{RuntimeCapabilities, TaskCapability};
 pub use error::RuntimeError;

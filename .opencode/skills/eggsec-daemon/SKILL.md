@@ -95,10 +95,10 @@ risk-policy refusal naming the risk tier. Neither is `UnsupportedTaskKind`.
 2. Send `DeclareClient { kind: ClientKind::Tui|Cli|Gui|..., label }` - must succeed before session-scoped commands
 3. Authorization uses the `CommandPermission` enum (per-command RBAC)
 4. Observers cannot submit/cancel tasks (`ErrorCode::PermissionDenied`)
-5. On strict-surface sessions only the Owner can approve policies; `ApprovePolicy` returns `ErrorCode::Unsupported` until wired
+5. On strict-surface sessions only the Owner can approve policies; `ApprovePolicy` resolves the runtime's pending decision, and an answer for a task with nothing pending is `ErrorCode::InvalidState`. A strict surface never holds a decision, so there is nothing to answer
 6. Durable retrieval (protocol v2, Phase E): `GetTaskResult { session_id, task_id }` → `TaskResult { status, outcome }` reads live state first, persisted snapshot second — reconnecting clients fetch completed results without event replay. Reconnect = re-declare + re-subscribe; missed events recover as state. See `docs/DAEMON_PARITY.md`.
 7. `DescribeOperations` publishes the canonical operation catalog plus a JSON Schema derived from the request DTOs. Read-only and additive: no session, no session role, but a **declared client** is required (same rule as the other daemon-wide reads). `DaemonCapabilities.operation_schema` advertises availability and is `#[serde(default)]`, so a client built against an older protocol still decodes a newer daemon's capabilities. A daemon too old to know the command answers `ErrorCode::UnsupportedCommand` — degrade to a static form set, never fail.
-8. Session-scoped audit events record the **session's runtime surface** label (`desktop-gui-manual`, `tui-manual`, `cli-manual`, ...), so each frontend is attributable in the persisted trail. Events with no session (`declare-client`, startup recovery, `approve-policy`) keep the literal `"daemon"`.
+8. Session-scoped audit events record the **session's runtime surface** label (`desktop-gui-manual`, `tui-manual`, `cli-manual`, ...), so each frontend is attributable in the persisted trail. Events with no session (`declare-client`, startup recovery) keep the literal `"daemon"`. An approval is audited under the action `approve-policy` with the answering client, the session, that session's surface, and the outcome (`allow`, `deny`, `rejected`)
 
 ## Client kinds
 

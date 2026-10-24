@@ -151,6 +151,14 @@ pub struct Runtime {
     /// synchronous read paths (`report_for`) never have to take a lock that
     /// an async caller might be holding.
     executor: Arc<dyn RuntimeTaskExecutor>,
+    /// The runtime's pending-approval registry.
+    ///
+    /// A manual operation whose policy demands a confirmation is held here
+    /// until an operator answers. It lives outside the state mutex so that
+    /// answering a pending decision never waits behind a task-lifecycle
+    /// lock, and so the handle can be cloned into an execution context
+    /// cheaply.
+    approvals: crate::approval::ApprovalGate,
 }
 
 impl Runtime {
@@ -172,6 +180,7 @@ impl Runtime {
             enabled_features,
             enforced_task_kinds,
             executor,
+            approvals: crate::approval::ApprovalGate::new(),
         }
     }
 
@@ -191,6 +200,42 @@ impl Runtime {
     /// report form".
     pub fn report_for(&self, task_id: &TaskId) -> Option<serde_json::Value> {
         self.executor.report_for(task_id)
+    }
+
+    /// Answers a policy decision the runtime is holding for a task.
+    ///
+    /// A host calls this when a client answers a pending decision. The
+    /// answer names *yes* or *no*; it never names the authorisation — the
+    /// classes that are permitted are computed by the policy kernel on the
+    /// executor's side, which re-runs its own authorisation path with an
+    /// override bounded by what it demanded.
+    ///
+    /// Returns `Err(RuntimeError::NoPendingApproval)` when nothing is
+    /// pending: the task never asked, the decision was already answered, the
+    /// holder was cancelled, or the surface never held a decision at all.
+    pub fn resolve_approval(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> Result<(), RuntimeError> {
+        self.approvals.resolve(
+            session_id,
+            task_id,
+            crate::approval::ApprovalAnswer::from_parts(approved, reason),
+        )
+    }
+
+    /// The policy decision the runtime is holding for a task, if any.
+    ///
+    /// A host uses this to tell a client what it is being asked to answer.
+    pub fn pending_approval(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+    ) -> Option<crate::event::PolicyPrompt> {
+        self.approvals.pending(session_id, task_id)
     }
 
     /// The task kinds the executor behind this runtime declares it can run.
@@ -418,6 +463,7 @@ impl Runtime {
                     session_id,
                     surface: session.execution_surface(),
                     scope: session.scope().cloned(),
+                    approval: self.approvals.clone(),
                 }
             };
 

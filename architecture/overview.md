@@ -232,7 +232,7 @@ Frontend entry points for human interaction.
 |--------|--------|---------|------------------|
 | CLI | `crates/eggsec/src/cli/` + `crates/eggsec/src/commands/handlers/` + `crates/eggsec-cli/` | **52 clap subcommands** (27 base + 25 feature-gated; `cli/mod.rs:270-470`). Argument types only in `cli/`; handlers (32 modules) in `commands/handlers/`; `crates/eggsec-cli/` is the thin binary shell (surface resolution, logging, optional TUI/daemon client) | [cli_commands.md](cli_commands.md) |
 | TUI | `crates/eggsec-tui/src/` | Real-time terminal UI: ratatui/crossterm, **33 tabs (21 base + 12 feature-gated)** (`tabs/mod.rs:142`), tab-spec table, event loop with daemon attach mode, **50 LZMA-packaged themes**, search, overlays, `TestBackend` visual regression suite | [tui.md](tui.md) |
-| Desktop GUI | `crates/eggsec-gui/` | Tauri v2 desktop window: buildless HTML/CSS/vanilla-JS frontend, twelve narrow IPC commands, forms generated from the published request schema, bounded task dashboard, a derived coverage table over every published task kind, report export in six formats, and an opt-in daemon spawn-and-supervise lifecycle. Attaches to an already-running `eggsec-daemon --full-executor` by default | [desktop_gui.md](desktop_gui.md) |
+| Desktop GUI | `crates/eggsec-gui/` | Tauri v2 desktop window: buildless HTML/CSS/vanilla-JS frontend, thirteen narrow IPC commands, forms generated from the published request schema, bounded task dashboard, a derived coverage table over every published task kind, report export in six formats, and an opt-in daemon spawn-and-supervise lifecycle. Attaches to an already-running `eggsec-daemon --full-executor` by default | [desktop_gui.md](desktop_gui.md) |
 
 ### Compliance & Risk
 

@@ -171,8 +171,8 @@ The HTTP/SSE transport is unchanged here as well: no axum route was added for th
 | 7 | `PermissionDenied` | RBAC check failed |
 | 8 | `InvalidSurface` | Surface mismatch |
 | 9 | `ClientNotDeclared` | Client must call DeclareClient first |
-| 10 | `Unsupported` | Operation not wired yet (e.g. ApprovePolicy) |
-| 11 | `InvalidState` | Operation cannot proceed in current state |
+| 10 | `Unsupported` | Operation not wired yet |
+| 11 | `InvalidState` | Operation cannot proceed in current state (e.g. an approval for a task with nothing pending) |
 
 #### Unknown commands — `UnsupportedCommand` vs `InvalidRequest`
 
@@ -312,7 +312,7 @@ Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSe
 | `/sessions/{id}/tasks/{tid}/cancel` | POST | `CancelTask` |
 | `/sessions/{id}/cancel-active` | POST | `CancelActive` |
 | `/sessions/{id}/events` | GET | Subscribe (SSE) |
-| `/sessions/{id}/policy/approve` | POST | `ApprovePolicy` |
+| `/sessions/{id}/tasks/{tid}/policy/approve` | POST | `ApprovePolicy` |
 | `/sessions/{id}` | DELETE | `CloseSession` |
 | `/sessions/persisted` | GET | `ListPersistedSessions` |
 | `/sessions/persisted/{id}` | GET | `GetPersistedSnapshot` |
@@ -342,11 +342,21 @@ surface is manual by classification in `eggsec-policy`, so the RBAC matrix and
 the policy crate must agree about which surfaces are manual; leaving the GUI
 out of the arm would make them disagree.
 
-`ApprovePolicy` remains **unwired** in practice: the daemon answers it with
-`ErrorCode::Unsupported` (`host.rs:901-933`), so no approval is granted either
-way. The manual arm is the permission the command *would* need, not a grant.
-The desktop GUI handles `PolicyDecisionRequired` defensively and offers no
-approval affordance — see [desktop_gui.md](desktop_gui.md).
+`ApprovePolicy` is **wired** (milestone 011, `ADR-0012`). The daemon resolves the
+runtime's pending decision: the runtime holds an operation at its confirmation
+point and exposes it as `RuntimeEvent::PolicyDecisionRequired`, and the
+answer releases the hold. The answer names *yes* or *no* — it never names the
+authorisation. What the answer permits is computed by the policy kernel on the
+executor side, which re-runs its own authorisation path with an override
+bounded by exactly the confirmation classes the kernel demanded.
+
+A strict surface never holds a decision, so an answer for a strict session
+finds nothing pending and is refused with `ErrorCode::InvalidState`. The
+answer is recorded in the audit trail under the action `approve-policy`, with
+the answering client's identity, the session, the session's real surface, and
+the outcome (`allow`, `deny`, or `rejected`).
+
+See [desktop_gui.md](desktop_gui.md) for the GUI's side of the same path.
 
 ### Session Access Control
 
@@ -468,7 +478,7 @@ A desktop GUI session is therefore auditable as `desktop-gui-manual` and a TUI s
 1. **No TUI deps in daemon**: architecture guard enforces zero `ratatui`/`crossterm` imports
 2. **Transport/engine deps stay feature-gated**: `http-api` and the `service` profile (deprecated alias `full-executor`) are opt-in
 3. **Persistence timeout**: all fire-and-forget persistence tasks bounded by `PERSISTENCE_TASK_TIMEOUT` (30s)
-4. **ApprovePolicy is unsupported**: returns `ErrorCode::Unsupported` with audit trail
+4. **ApprovePolicy resolves the runtime's pending decision**: an answer for a task with nothing pending is `ErrorCode::InvalidState`, and every answer is recorded in the audit trail under the action `approve-policy`
 5. **Socket file cleanup**: `run_server` removes socket on exit; `main.rs` removes on startup
 6. **CancellationToken leak in HTTP**: `Box::leak` for axum `&'static` requirement — one per process
 7. **Subscribe handled at transport level**: `handle_command` returns error for Subscribe; actual streaming is in `server.rs` and `http.rs`

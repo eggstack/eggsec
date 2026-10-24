@@ -560,6 +560,12 @@ pub struct TaskRow {
     pub result: Option<ResultView>,
     /// The failure message, once the task failed.
     pub error: Option<String>,
+    /// The policy prompt the task is waiting on, when it is blocked on a
+    /// decision.
+    ///
+    /// The webview renders this as the operator-facing question, so the
+    /// operator answers the policy's own words rather than the GUI's.
+    pub policy_prompt: Option<PolicyPrompt>,
 }
 
 impl TaskState {
@@ -582,6 +588,7 @@ impl TaskState {
             dropped_log_lines: self.logs.dropped(),
             result: self.outcome.as_ref().and_then(result_view),
             error: self.error.clone(),
+            policy_prompt: self.policy_prompt.clone(),
         }
     }
 }
@@ -750,6 +757,40 @@ mod tests {
         let task = registry.tasks().next().expect("a task");
         assert_eq!(task.status, GuiTaskStatus::AwaitingPolicy);
         assert!(task.policy_prompt.is_some());
+    }
+
+    /// The webview must be able to show the operator *what* the policy is
+    /// asking. The prompt's own words are what reach the operator — the GUI
+    /// does not paraphrase the policy's question into its own.
+    #[test]
+    fn a_task_row_carries_the_policy_prompt() {
+        let mut registry = TaskRegistry::new();
+        let task_id = TaskId::new();
+        registry.apply(&RuntimeEvent::TaskQueued {
+            session_id: session(),
+            task_id,
+            request: request(),
+        });
+        registry.apply(&RuntimeEvent::PolicyDecisionRequired {
+            session_id: session(),
+            task_id: Some(task_id),
+            prompt: PolicyPrompt {
+                message: "port-scan needs an operator's confirmation: target not in scope"
+                    .to_owned(),
+                confirmation_class: Some("out-of-scope".to_owned()),
+                requires_explicit_approval: true,
+            },
+        });
+
+        let row = registry.tasks().next().expect("a task").to_row();
+        let prompt = row.policy_prompt.expect("the row must carry the prompt");
+        assert_eq!(
+            prompt.message,
+            "port-scan needs an operator's confirmation: target not in scope"
+        );
+        assert_eq!(prompt.confirmation_class.as_deref(), Some("out-of-scope"));
+        assert!(prompt.requires_explicit_approval);
+        assert_eq!(row.status, GuiTaskStatus::AwaitingPolicy);
     }
 
     /// A log flood retains at most the cap and reports what it dropped.

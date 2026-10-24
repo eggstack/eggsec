@@ -598,6 +598,36 @@ pub async fn cancel_active(state: tauri::State<'_, GuiState>) -> Result<(), Stri
         .map_err(|error| error.to_string())
 }
 
+/// Answer a policy decision the daemon is holding for a task.
+///
+/// The answer names *yes* or *no*. It never names the authorisation: what
+/// the answer permits is computed by the policy kernel on the daemon's
+/// executor side, which re-runs its own authorisation path with an override
+/// bounded by the classes the kernel demanded.
+///
+/// A task with nothing pending is an error the operator sees, not a silent
+/// no-op: the daemon refuses the answer because there is no decision to
+/// resolve.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn approve_task(
+    state: tauri::State<'_, GuiState>,
+    task_id: String,
+    approved: bool,
+    reason: Option<String>,
+) -> Result<(), String> {
+    let parts = state.parts().await?;
+
+    let parsed = task_id
+        .parse::<TaskId>()
+        .map_err(|error| format!("`{task_id}` is not a task identifier: {error}"))?;
+
+    parts
+        .client
+        .approve_task(parts.session_id, parsed, approved, reason)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 /// The current task dashboard.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn task_snapshot(state: tauri::State<'_, GuiState>) -> Result<TaskDashboardView, String> {
@@ -1003,6 +1033,7 @@ mod tests {
             "submit_task",
             "cancel_task",
             "cancel_active",
+            "approve_task",
             "task_snapshot",
             "coverage",
             "export_report",
@@ -1035,7 +1066,7 @@ mod tests {
         let explicit = production
             .matches("#[tauri::command(rename_all = \"snake_case\")]")
             .count();
-        assert_eq!(commands, 12, "the GUI's IPC surface is twelve commands");
+        assert_eq!(commands, 13, "the GUI's IPC surface is thirteen commands");
         assert_eq!(
             commands, explicit,
             "every command must declare rename_all = \"snake_case\""

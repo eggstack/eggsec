@@ -427,6 +427,58 @@ impl ManualOverride {
             ConfirmationClass::NonBaselineCapability => self.allow_nonbaseline_capability,
         }
     }
+
+    /// Builds the override that permits the given confirmation classes.
+    ///
+    /// This is the single place a confirmation class is mapped onto the
+    /// override field that permits it. It is the inverse of
+    /// [`ManualOverride::permits`]: for every class in `classes`, the returned
+    /// override permits it. Callers that need to grant exactly what the
+    /// enforcement kernel demanded use this rather than restating the table.
+    ///
+    /// Three properties are deliberate:
+    ///
+    /// - `assume_yes` is never set. An approval is not prompt suppression: it
+    ///   grants the classes that were demanded, not "yes" to everything.
+    /// - `allow_db_pentest` is never set. `allow_high_risk` is the precise
+    ///   field for [`ConfirmationClass::HighRisk`]; the database-pentest flag
+    ///   is an alternative grant for the same class, not a wider one.
+    /// - `OutOfScope` and `TargetExpansion` share `allow_out_of_scope`, so
+    ///   permitting either permits both. The two cannot be separated without
+    ///   changing the override's shape, which the CLI's flag set already
+    ///   fixes.
+    ///
+    /// `reason` is left unset; a caller that records why the override was
+    /// granted sets it.
+    pub fn permitting_classes(classes: &[ConfirmationClass]) -> Self {
+        let mut granted = Self::default();
+        for class in classes {
+            match class {
+                ConfirmationClass::OutOfScope | ConfirmationClass::TargetExpansion => {
+                    granted.allow_out_of_scope = true;
+                }
+                ConfirmationClass::ExplicitExclusion => {
+                    granted.allow_explicit_exclusion = true;
+                }
+                ConfirmationClass::HighRisk => {
+                    granted.allow_high_risk = true;
+                }
+                ConfirmationClass::NonBaselineCapability => {
+                    granted.allow_nonbaseline_capability = true;
+                }
+                ConfirmationClass::PrivateResolution => {
+                    granted.allow_private_resolution = true;
+                }
+                ConfirmationClass::CrossHostRedirect => {
+                    granted.allow_cross_host_redirect = true;
+                }
+                ConfirmationClass::TrafficInterception => {
+                    granted.allow_web_proxy = true;
+                }
+            }
+        }
+        granted
+    }
 }
 
 /// Reusable enforcement context that bundles execution profile, policy, scope,
@@ -1730,5 +1782,91 @@ mod pure_evaluation_tests {
         let facts = TargetScope::for_ip("10.0.0.1".parse().unwrap());
         let outcome = ctx.evaluate(&descriptor, Some(&facts));
         assert!(matches!(outcome, EnforcementOutcome::Warn(_)));
+    }
+}
+
+#[cfg(test)]
+mod manual_override_mapping_tests {
+    use super::*;
+
+    /// Every confirmation class the kernel can demand.
+    ///
+    /// Kept as an explicit list so that adding a class to
+    /// [`ConfirmationClass`] fails this test until the mapping accounts for
+    /// it.
+    const ALL_CLASSES: [ConfirmationClass; 8] = [
+        ConfirmationClass::OutOfScope,
+        ConfirmationClass::ExplicitExclusion,
+        ConfirmationClass::HighRisk,
+        ConfirmationClass::NonBaselineCapability,
+        ConfirmationClass::PrivateResolution,
+        ConfirmationClass::CrossHostRedirect,
+        ConfirmationClass::TargetExpansion,
+        ConfirmationClass::TrafficInterception,
+    ];
+
+    #[test]
+    fn every_class_is_permitted_by_its_own_mapping() {
+        for class in ALL_CLASSES {
+            let granted = ManualOverride::permitting_classes(&[class]);
+            assert!(
+                granted.permits(class),
+                "permitting_classes must permit {class:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mapping_permits_every_class_it_names() {
+        for class in ALL_CLASSES {
+            let granted = ManualOverride::permitting_classes(&[class]);
+            for other in ALL_CLASSES {
+                let permitted = granted.permits(other);
+                let expected = other == class
+                    // `OutOfScope` and `TargetExpansion` share one override
+                    // field, so permitting either permits both. The two
+                    // cannot be separated without changing the override's
+                    // shape, which the CLI's flag set already fixes.
+                    || matches!(
+                        (class, other),
+                        (
+                            ConfirmationClass::OutOfScope | ConfirmationClass::TargetExpansion,
+                            ConfirmationClass::OutOfScope | ConfirmationClass::TargetExpansion
+                        )
+                    );
+                assert_eq!(
+                    permitted, expected,
+                    "permitting {class:?} must permit {other:?} == {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_mapping_grants_nothing() {
+        let granted = ManualOverride::permitting_classes(&[]);
+        for class in ALL_CLASSES {
+            assert!(
+                !granted.permits(class),
+                "an empty mapping must not permit {class:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mapping_never_sets_broad_prompt_suppression() {
+        // An approval is not prompt suppression. `assume_yes` would let the
+        // grant silently cover classes the kernel never demanded.
+        let granted = ManualOverride::permitting_classes(&ALL_CLASSES);
+        assert!(!granted.assume_yes);
+        // The database-pentest flag is an alternative grant for the same
+        // high-risk class, not a wider one.
+        assert!(!granted.allow_db_pentest);
+    }
+
+    #[test]
+    fn a_mapping_leaves_the_reason_to_the_caller() {
+        let granted = ManualOverride::permitting_classes(&ALL_CLASSES);
+        assert_eq!(granted.reason, None);
     }
 }

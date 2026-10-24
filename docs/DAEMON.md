@@ -55,6 +55,23 @@ feature* is off is denied at dispatch with `FeatureMissing`, not
 [Obtaining the daemon](#obtaining-the-daemon) says which build compiles which
 features.
 
+## Answering a policy decision
+
+A manual operation whose policy demands a confirmation is **held** at that
+point: the daemon exposes the decision as `RuntimeEvent::PolicyDecisionRequired`,
+and the client's answer releases the hold.
+
+The answer names *yes* or *no*. It never names the authorisation: what the
+answer permits is computed by the policy kernel on the executor's side, which
+re-runs its own authorisation path with an override bounded by exactly the
+confirmation classes the kernel demanded. A strict surface never holds a
+decision, so there is nothing for a client to answer.
+
+`ApprovePolicy` is audited under the action `approve-policy`, with the
+answering client's identity, the session, that session's real surface, and the
+outcome. An answer for a task with nothing pending is refused with
+`ErrorCode::InvalidState`.
+
 ## Obtaining the daemon
 
 The daemon is a separate cargo package with its own binary, so it installs on

@@ -962,19 +962,53 @@ impl DaemonHost {
 
             ClientCommand::ApprovePolicy {
                 request_id,
-                session_id: _,
-                task_id: _,
-                approved: _,
-                reason: _,
+                session_id,
+                task_id,
+                approved,
+                reason,
             } => {
-                // Record audit event even though this is not yet wired
+                // The answer names *yes* or *no*. It never names the
+                // authorisation: what the answer permits is computed by the
+                // policy kernel on the executor's side, which re-runs its own
+                // authorisation path with an override bounded by the classes
+                // it demanded.
+                let resolve = self
+                    .runtime()
+                    .resolve_approval(session_id, task_id, approved, reason);
+                let (outcome, response) = match resolve {
+                    Ok(()) => {
+                        let outcome = if approved { "allow" } else { "deny" };
+                        (outcome, ServerMessage::Ok { request_id })
+                    }
+                    Err(error) => {
+                        // Nothing is pending: the task never asked, the
+                        // decision was already answered, the holder was
+                        // cancelled, or the surface never held a decision at
+                        // all. A strict client lands here, because a strict
+                        // surface has no operator to ask.
+                        (
+                            "rejected",
+                            ServerMessage::Error {
+                                request_id,
+                                code: ErrorCode::InvalidState,
+                                message: error.to_string(),
+                            },
+                        )
+                    }
+                };
+
+                // Record the answer: who answered, for which session, on
+                // which surface, and with what outcome. The session holds at
+                // most one active task, so the session identifies the
+                // decision the answer resolved.
+                let audit_surface = self.session_surface_label(&session_id);
                 if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: "approve-policy".into(),
-                        surface: "daemon".into(),
-                        outcome: "unsupported".into(),
+                        surface: audit_surface,
+                        outcome: outcome.into(),
                         client_id: client_id.map(|c| c.to_string()),
-                        session_id: None,
+                        session_id: Some(session_id.to_string()),
                         timestamp_secs: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_else(|error| {
@@ -987,11 +1021,7 @@ impl DaemonHost {
                 {
                     tracing::warn!(?error, "failed to record policy approval audit event");
                 }
-                ServerMessage::Error {
-                    request_id,
-                    code: ErrorCode::Unsupported,
-                    message: "daemon policy approval is not wired yet".into(),
-                }
+                response
             }
 
             ClientCommand::ListPersistedSessions { request_id } => {
@@ -2547,13 +2577,16 @@ mod tests {
             .await;
         match resp {
             ServerMessage::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::InvalidState,
                 message,
                 ..
             } => {
-                assert!(message.contains("not wired yet"));
+                // The owner reached the handler: the RBAC let the answer
+                // through, and the handler found no decision pending for the
+                // task. Milestone 011 (ADR-0012).
+                assert!(message.contains("no pending policy decision"));
             }
-            other => panic!("expected Unsupported error, got {:?}", other),
+            other => panic!("expected InvalidState error, got {:?}", other),
         }
     }
 
@@ -3012,7 +3045,9 @@ mod tests {
             _ => panic!("expected SessionCreated"),
         };
 
-        // Even owner on strict session should not get approval success (not wired)
+        // Even an owner on a strict session must not get approval success.
+        // A strict surface has no operator to ask, so it never holds a
+        // decision and there is nothing to answer. Milestone 011 (ADR-0012).
         let resp = host
             .handle_command(
                 ClientCommand::ApprovePolicy {
@@ -3027,10 +3062,10 @@ mod tests {
             .await;
         match resp {
             ServerMessage::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::InvalidState,
                 ..
             } => {}
-            other => panic!("expected Unsupported, got {:?}", other),
+            other => panic!("expected InvalidState, got {:?}", other),
         }
     }
 

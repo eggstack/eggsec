@@ -47,7 +47,7 @@ crates/eggsec-frontend-client/src/
 `RuntimeClient` is the contract every frontend implements against:
 
 - `capabilities`, `create_session`, `list_sessions`, `snapshot`, `submit`,
-  `cancel`, `cancel_active`, `subscribe`.
+  `cancel`, `cancel_active`, `approve_task`, `subscribe`.
 - Supertraits: `Send + Sync + 'static`, so `Arc<dyn RuntimeClient + Send + Sync>`
   is the holder type.
 - Every method returns `RuntimeClientFuture<T>` — a boxed `Send + 'static`
@@ -120,7 +120,9 @@ the trait method returns the *runtime* half of the advertisement, while this
 one returns the daemon's own flags — notably `operation_schema`, which says
 whether the connected daemon can publish the operation catalog at all.
 
-The `RuntimeClient` trait's eight methods are unchanged.
+The `RuntimeClient` trait's method set gained `approve_task` in milestone 011
+(`ADR-0012`): it answers a policy decision the runtime is holding for a task.
+The answer names *yes* or *no*; it never names the authorisation.
 
 ## Critical implementation detail: shared connection state
 

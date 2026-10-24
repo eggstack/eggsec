@@ -5761,6 +5761,133 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 173. The daemon's policy approval is wired to the runtime's hold.
+# Milestone 011 (ADR-0012).
+#
+# The daemon used to answer every approval with "not wired yet". A refusal
+# that is always the same refusal tells the operator nothing: it does not
+# distinguish "there is no decision pending" from "this daemon cannot answer".
+# The handler must resolve the runtime's pending approval, and it must report
+# the two states truthfully -- answered, or nothing pending.
+echo ""
+echo "--- Check 173: the daemon answers a pending policy decision ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -q 'resolve_approval' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not resolve the runtime's pending approval."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'not wired yet' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon still refuses policy approval as unwired."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?ErrorCode::InvalidState' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon does not report an answer for a task with nothing pending as invalid state."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon answers a pending policy decision."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 174. The runtime stays policy-neutral.
+# Milestone 011 (ADR-0012).
+#
+# The runtime's approval registry holds a prompt and returns an answer. It
+# must not learn the policy crate's vocabulary: a `ConfirmationClass` in the
+# runtime would make the runtime's answer mean something the policy kernel
+# defines, and the runtime would then have to know the kernel to be useful.
+# The kernel owns authorisation semantics; the runtime owns task lifecycle.
+echo ""
+echo "--- Check 174: the runtime stays policy-neutral ---"
+SECTION_FAIL=0
+RT_MANIFEST="crates/eggsec-runtime/Cargo.toml"
+if rg -q '^eggsec-policy' "$RT_MANIFEST" 2>/dev/null; then
+  echo "FAIL: the runtime depends on the policy crate."
+  rg -n '^eggsec-policy' "$RT_MANIFEST" 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if code_search crates/eggsec-runtime/src 'ConfirmationClass|EnforcementContext|EnforcementError|EnforcementOutcome|ManualOverride' | grep -q .; then
+  echo "FAIL: the runtime names the policy crate's vocabulary."
+  code_search crates/eggsec-runtime/src 'ConfirmationClass|EnforcementContext|EnforcementError|EnforcementOutcome|ManualOverride' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the runtime stays policy-neutral."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 175. The confirmation-class -> override mapping exists in exactly one
+# place. Milestone 011 (ADR-0012).
+#
+# `ManualOverride::permitting_classes` is the inverse of `permits`. A second
+# copy of the table -- in the TUI or in the engine's runtime bridge -- would
+# let the two drift, and the drift would surface as an operator whose answer
+# grants a class the kernel never demanded. Both callers must use the shared
+# helper, and neither may name a confirmation class variant itself.
+echo ""
+echo "--- Check 175: the confirmation-class mapping exists once ---"
+SECTION_FAIL=0
+POLICY_RS="crates/eggsec-policy/src/decision.rs"
+if ! rg -q 'pub fn permitting_classes' "$POLICY_RS" 2>/dev/null; then
+  echo "FAIL: the policy kernel does not own the confirmation-class mapping."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for MAPPER in "crates/eggsec-tui/src/app/enforcement_facade.rs" "crates/eggsec/src/runtime_bridge/executor.rs"; do
+  if [[ ! -f "$MAPPER" ]]; then
+    echo "FAIL: $MAPPER is missing; the mapping's callers cannot be checked."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  # The eight fields that let a `ManualOverride` permit a class. A caller
+  # that ASSIGNS one of them is restating the mapping. A caller that only
+  # READS one (a test asserting what the shared helper produced) is not.
+  #
+  # The names are disjoint from `ExecutionPolicy`'s own `allow_*` fields,
+  # which is what makes this pattern safe.
+  if rg -q 'allow_(out_of_scope|explicit_exclusion|high_risk|nonbaseline_capability|private_resolution|cross_host_redirect|web_proxy|db_pentest) = true' "$MAPPER" 2>/dev/null; then
+    echo "FAIL: $MAPPER maps a confirmation class onto an override field itself."
+    rg -n 'allow_(out_of_scope|explicit_exclusion|high_risk|nonbaseline_capability|private_resolution|cross_host_redirect|web_proxy|db_pentest) = true' "$MAPPER" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'permitting_classes' "$MAPPER" 2>/dev/null; then
+    echo "FAIL: $MAPPER does not use the shared confirmation-class mapping."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the confirmation-class mapping exists once."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 176. The daemon records the answer it accepts.
+# Milestone 011 (ADR-0012).
+#
+# An approval is an authorisation an operator gave. Who gave it, for which
+# session, on which surface, and with what outcome must survive the process:
+# an approval that leaves no trace is indistinguishable from one that was
+# never asked for.
+echo ""
+echo "--- Check 176: the daemon audits the answer it accepts ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?record_audit_event' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not record an audit event."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?action: "approve-policy"' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not record the approval under its own action."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon audits the answer it accepts."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

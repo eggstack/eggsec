@@ -38,6 +38,7 @@ pub fn run(options: GuiOptions) -> Result<(), GuiError> {
             commands::submit_task,
             commands::cancel_task,
             commands::cancel_active,
+            commands::approve_task,
             commands::task_snapshot,
             commands::coverage,
             commands::export_report,

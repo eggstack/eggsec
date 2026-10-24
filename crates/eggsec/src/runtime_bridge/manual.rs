@@ -59,20 +59,16 @@ pub fn approve_run_request(
     if exec_surface.honors_manual_override() {
         enforcement
             .approve_manual(exec_surface, descriptor, manual_override)
-            .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: denial_reason(&e),
-            })
+            .map_err(bridge_enforcement_error)
     } else {
         if manual_override.is_some() {
             return Err(RuntimeBridgeError::ManualOverrideRejected {
                 surface: exec_surface.to_string(),
             });
         }
-        enforcement.approve(exec_surface, descriptor).map_err(|e| {
-            RuntimeBridgeError::EnforcementDenied {
-                reason: denial_reason(&e),
-            }
-        })
+        enforcement
+            .approve(exec_surface, descriptor)
+            .map_err(bridge_enforcement_error)
     }
 }
 
@@ -98,9 +94,7 @@ pub fn approve_run_request_execution(
     if exec_surface.honors_manual_override() {
         enforcement
             .approve_manual_execution(exec_surface, descriptor, manual_override)
-            .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: denial_reason(&e),
-            })
+            .map_err(bridge_enforcement_error)
     } else {
         if manual_override.is_some() {
             return Err(RuntimeBridgeError::ManualOverrideRejected {
@@ -109,9 +103,7 @@ pub fn approve_run_request_execution(
         }
         enforcement
             .approve_execution(exec_surface, descriptor)
-            .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: denial_reason(&e),
-            })
+            .map_err(bridge_enforcement_error)
     }
 }
 
@@ -126,6 +118,26 @@ pub fn approve_run_request_execution(
 /// must not report.
 fn denial_reason(error: &crate::config::EnforcementError) -> String {
     error.reasons().join("; ")
+}
+
+/// Map an enforcement refusal onto the bridge's error type.
+///
+/// A refusal that demands a confirmation keeps the classes the kernel
+/// demanded. Those classes are the bound on what an operator's answer can
+/// grant, so they must survive the crossing from the policy kernel to the
+/// runtime bridge — flattening them into a message would leave the answer
+/// unbounded.
+fn bridge_enforcement_error(error: crate::config::EnforcementError) -> RuntimeBridgeError {
+    let reason = denial_reason(&error);
+    match error {
+        crate::config::EnforcementError::ConfirmationRequired {
+            required_classes, ..
+        } => RuntimeBridgeError::ConfirmationRequired {
+            reason,
+            required_classes,
+        },
+        _ => RuntimeBridgeError::EnforcementDenied { reason },
+    }
 }
 
 /// Error type for runtime bridge conversions.

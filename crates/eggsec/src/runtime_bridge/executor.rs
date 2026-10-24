@@ -2,15 +2,15 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use eggsec_runtime::event::{LogLevel, TaskOutcome};
+use eggsec_runtime::event::{LogLevel, PolicyPrompt, TaskOutcome};
 use eggsec_runtime::request::RunRequest;
 use eggsec_runtime::{
-    RuntimeError, RuntimeEventSink, RuntimeReportStore, RuntimeTaskExecutor, TaskId,
+    ApprovalAnswer, RuntimeError, RuntimeEventSink, RuntimeReportStore, RuntimeTaskExecutor, TaskId,
 };
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{ExecutionPolicy, LoadedScope};
+use crate::config::{ExecutionPolicy, LoadedScope, ManualOverride};
 use crate::dispatch::TaskResult;
 
 use super::bundle::approve_run_request_bundle;
@@ -207,16 +207,116 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
                 })?;
 
             // Run enforcement — get ApprovedRunRequest or fail.
-            let bundle = approve_run_request_bundle(surface, policy, loaded_scope, request, None)
-                .map_err(|e| match e {
-                super::surface::RuntimeBridgeError::UnsupportedTaskKind { .. } => {
-                    RuntimeError::UnsupportedTaskKind
-                }
-                super::surface::RuntimeBridgeError::ManualOverrideRejected { .. } => {
-                    RuntimeError::DispatchFailed(format!("manual override rejected: {e}"))
-                }
-                _ => RuntimeError::DispatchFailed(format!("enforcement denied: {e}")),
-            })?;
+            //
+            // A refusal that demands a confirmation is *held* on a manual
+            // surface: the operation waits for an operator's answer, and the
+            // answer is retried through this same authorisation path with an
+            // override bounded by exactly the classes the kernel demanded. A
+            // strict surface has no operator to ask, so it is refused here
+            // exactly as it always was — there is nothing for a client to
+            // approve.
+            let request_for_retry = request.clone();
+            let scope_for_retry = loaded_scope.clone();
+            let surface_for_retry = surface.clone();
+            let policy_for_retry = policy.clone();
+            let operation_id = request.task_kind.operation_id().to_string();
+            let approval_gate = context.approval.clone();
+            let can_hold = super::surface::runtime_surface_to_execution_surface(surface.clone())
+                .map(|exec_surface| exec_surface.honors_manual_override())
+                .unwrap_or(false);
+
+            let bundle =
+                match approve_run_request_bundle(surface, policy, loaded_scope, request, None) {
+                    Ok(bundle) => bundle,
+                    Err(super::surface::RuntimeBridgeError::ConfirmationRequired {
+                        reason,
+                        required_classes,
+                    }) => {
+                        if !can_hold {
+                            return Err(RuntimeError::DispatchFailed(format!(
+                                "enforcement denied: {reason}"
+                            )));
+                        }
+
+                        let prompt = PolicyPrompt {
+                            message: format!(
+                                "{operation_id} needs an operator's confirmation: {reason}"
+                            ),
+                            confirmation_class: Some(
+                                required_classes
+                                    .iter()
+                                    .map(|class| class.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                            ),
+                            requires_explicit_approval: true,
+                        };
+
+                        let answer = approval_gate
+                            .request(&sink, task_id, prompt, cancel.clone())
+                            .await?;
+
+                        match answer {
+                            ApprovalAnswer::Approved { reason } => {
+                                // The answer grants exactly what the kernel
+                                // demanded: the override is built from the
+                                // required classes, never from the client's
+                                // wishes. The authorisation path is re-run, not
+                                // skipped.
+                                let mut granted =
+                                    ManualOverride::permitting_classes(&required_classes);
+                                granted.reason = reason;
+                                sink.log(
+                                    LogLevel::Info,
+                                    format!(
+                                        "{operation_id} was confirmed by the operator; resuming"
+                                    ),
+                                );
+                                approve_run_request_bundle(
+                                    surface_for_retry,
+                                    policy_for_retry,
+                                    scope_for_retry,
+                                    request_for_retry,
+                                    Some(&granted),
+                                )
+                                .map_err(|e| {
+                                    match e {
+                                super::surface::RuntimeBridgeError::UnsupportedTaskKind {
+                                    ..
+                                } => RuntimeError::UnsupportedTaskKind,
+                                super::surface::RuntimeBridgeError::ManualOverrideRejected {
+                                    ..
+                                } => RuntimeError::DispatchFailed(format!(
+                                    "manual override rejected: {e}"
+                                )),
+                                _ => {
+                                    RuntimeError::DispatchFailed(format!("enforcement denied: {e}"))
+                                }
+                            }
+                                })?
+                            }
+                            ApprovalAnswer::Denied { reason } => {
+                                return Err(RuntimeError::DispatchFailed(format!(
+                                    "the operator declined the policy confirmation: {}",
+                                    reason.unwrap_or_else(|| "no reason given".into())
+                                )));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        return Err(match e {
+                            super::surface::RuntimeBridgeError::UnsupportedTaskKind { .. } => {
+                                RuntimeError::UnsupportedTaskKind
+                            }
+                            super::surface::RuntimeBridgeError::ManualOverrideRejected {
+                                ..
+                            } => RuntimeError::DispatchFailed(format!(
+                                "manual override rejected: {e}"
+                            )),
+                            _ => RuntimeError::DispatchFailed(format!("enforcement denied: {e}")),
+                        });
+                    }
+                };
 
             // Log the approved operation for audit.
             sink.log(
@@ -290,8 +390,56 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eggsec_runtime::request::{StressTestParams, TaskKind};
-    use eggsec_runtime::RunRequest;
+    use eggsec_runtime::request::{FuzzParams, StressTestParams, TaskKind};
+    use eggsec_runtime::{RunRequest, RuntimeEvent};
+
+    /// A policy that permits the intrusive operation and its capability.
+    ///
+    /// The decision is then base-allowed, so what a manual surface reaches is
+    /// the *confirmation* — the operator's discretion — rather than a hard
+    /// denial by the risk policy.
+    fn intrusive_policy() -> ExecutionPolicy {
+        ExecutionPolicy {
+            allow_intrusive_fuzzing: true,
+            allowed_capabilities: vec![crate::config::Capability::HttpFuzzLowImpact],
+            ..ExecutionPolicy::default()
+        }
+    }
+
+    /// An intrusive request: the operation a permissive policy allows but a
+    /// manual surface still confirms.
+    fn fuzz_request(surface: eggsec_runtime::RuntimeSurface) -> RunRequest {
+        RunRequest {
+            task_kind: TaskKind::Fuzz(FuzzParams {
+                target: "https://example.com".into(),
+                ..Default::default()
+            }),
+            requested_by: None,
+            surface,
+            labels: vec![],
+        }
+    }
+
+    /// The confirmation a manual surface demands for [`fuzz_request`].
+    fn demanded_classes(
+        surface: eggsec_runtime::RuntimeSurface,
+    ) -> Vec<crate::config::ConfirmationClass> {
+        let error = crate::runtime_bridge::bundle::approve_run_request_bundle(
+            surface.clone(),
+            intrusive_policy(),
+            crate::config::LoadedScope::default_empty(),
+            fuzz_request(surface.clone()),
+            None,
+        )
+        .expect_err("an intrusive operation demands a confirmation on a manual surface");
+        match error {
+            super::super::surface::RuntimeBridgeError::ConfirmationRequired {
+                required_classes,
+                ..
+            } => required_classes,
+            other => panic!("expected a confirmation requirement, got {other:?}"),
+        }
+    }
 
     /// The engine executor declares the canonical capability list, so a
     /// daemon that hosts it publishes every canonical kind -- and nothing
@@ -309,6 +457,182 @@ mod tests {
                 "the executor does not declare {name}"
             );
         }
+    }
+
+    /// The refusal that demands a confirmation carries the classes the kernel
+    /// demanded. They are what bound an operator's answer, so they must
+    /// survive the crossing from the policy kernel to the runtime bridge.
+    #[test]
+    fn the_refusal_carries_the_classes_the_kernel_demanded() {
+        let classes = demanded_classes(eggsec_runtime::RuntimeSurface::CliManual);
+        assert!(
+            !classes.is_empty(),
+            "the kernel must name the classes it demands"
+        );
+        assert!(
+            classes
+                .iter()
+                .any(|class| matches!(class, crate::config::ConfirmationClass::HighRisk)),
+            "an intrusive operation demands the high-risk class: {classes:?}"
+        );
+    }
+
+    /// An answer is bounded by the classes the kernel demanded.
+    ///
+    /// The override the answer produces permits exactly those classes, and
+    /// the kernel accepts it — the authorisation path is re-run, not skipped.
+    #[test]
+    fn an_answer_is_bounded_by_the_classes_the_kernel_demanded() {
+        let surface = eggsec_runtime::RuntimeSurface::CliManual;
+        let classes = demanded_classes(surface.clone());
+        let granted = ManualOverride::permitting_classes(&classes);
+        for class in &classes {
+            assert!(granted.permits(*class), "the grant must permit {class:?}");
+        }
+
+        let approved = crate::runtime_bridge::bundle::approve_run_request_bundle(
+            surface.clone(),
+            intrusive_policy(),
+            crate::config::LoadedScope::default_empty(),
+            fuzz_request(surface),
+            Some(&granted),
+        );
+        assert!(
+            approved.is_ok(),
+            "the bounded override must satisfy the kernel: {:?}",
+            approved.err()
+        );
+    }
+
+    /// A manual surface holds the operation at its confirmation point until
+    /// the operator answers, and the answer is honoured.
+    ///
+    /// The operator refuses here, so the operation never dispatches: the test
+    /// proves the hold and the answer without running a scan.
+    #[tokio::test]
+    async fn a_manual_surface_holds_the_operation_until_the_operator_answers() {
+        let runtime = eggsec_runtime::Runtime::new(
+            eggsec_runtime::RuntimeConfig::default(),
+            EggsecRuntimeExecutor::with_policy(intrusive_policy()),
+        );
+        let surface = eggsec_runtime::RuntimeSurface::DesktopGuiManual;
+        let session_id = runtime
+            .create_session(eggsec_runtime::SessionOptions::default(), surface.clone())
+            .await
+            .expect("a manual session");
+        let mut events = runtime.subscribe().await;
+
+        let task_id = runtime
+            .submit(session_id, fuzz_request(surface))
+            .await
+            .expect("the task is admitted");
+
+        // The prompt is announced, and it names the operation.
+        let announced = loop {
+            match events.recv().await.expect("the prompt must be announced") {
+                RuntimeEvent::PolicyDecisionRequired { prompt, .. } => break prompt,
+                _ => continue,
+            }
+        };
+        assert!(
+            announced.message.contains("fuzz"),
+            "the prompt must name the operation: {}",
+            announced.message
+        );
+        assert!(
+            announced.requires_explicit_approval,
+            "the prompt must ask for an explicit approval"
+        );
+
+        // The decision is pending and observable.
+        assert!(
+            runtime.pending_approval(session_id, task_id).is_some(),
+            "the runtime must expose the pending decision"
+        );
+
+        // The operator refuses. The operation never runs.
+        runtime
+            .resolve_approval(
+                session_id,
+                task_id,
+                false,
+                Some("the operator declined".into()),
+            )
+            .expect("the pending decision must resolve");
+
+        let failure = loop {
+            match events.recv().await.expect("the task must report a failure") {
+                RuntimeEvent::TaskFailed { error, .. } => break error,
+                _ => continue,
+            }
+        };
+        assert!(
+            failure.message.contains("the operator declined"),
+            "the failure must carry the operator's reason: {}",
+            failure.message
+        );
+        assert!(
+            runtime.pending_approval(session_id, task_id).is_none(),
+            "an answered decision must not stay pending"
+        );
+    }
+
+    /// A strict surface never holds: there is no operator to ask, so the
+    /// operation is refused exactly as it always was.
+    ///
+    /// The session carries an explicit scope so that the refusal comes from
+    /// the *enforcement* layer — the confirmation point itself — and not from
+    /// the missing-scope refusal that precedes it.
+    #[tokio::test]
+    async fn a_strict_surface_never_holds_the_operation() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let scope_path = dir.path().join("scope.toml");
+        std::fs::write(&scope_path, "[[allowed_targets]]\npattern = \"10.0.0.1\"\n")
+            .expect("the scope file is written");
+
+        let runtime = eggsec_runtime::Runtime::new(
+            eggsec_runtime::RuntimeConfig::default(),
+            EggsecRuntimeExecutor::with_policy(intrusive_policy()),
+        );
+        let surface = eggsec_runtime::RuntimeSurface::RestApi;
+        let session_id = runtime
+            .create_session_with_scope(
+                eggsec_runtime::SessionOptions::default(),
+                surface.clone(),
+                Some(eggsec_runtime::SessionScope {
+                    is_explicit: true,
+                    source: "config-file".into(),
+                    path: Some(scope_path.to_string_lossy().into_owned()),
+                }),
+            )
+            .await
+            .expect("a strict session");
+        let mut events = runtime.subscribe().await;
+
+        let task_id = runtime
+            .submit(session_id, fuzz_request(surface))
+            .await
+            .expect("the task is admitted");
+
+        // The task is refused, and no prompt is ever announced.
+        let failure = loop {
+            match events.recv().await.expect("the task must report a failure") {
+                RuntimeEvent::TaskFailed { error, .. } => break error,
+                RuntimeEvent::PolicyDecisionRequired { .. } => {
+                    panic!("a strict surface must never announce a prompt")
+                }
+                _ => continue,
+            }
+        };
+        assert!(
+            failure.message.contains("enforcement denied"),
+            "the refusal must be an enforcement refusal: {}",
+            failure.message
+        );
+        assert!(
+            runtime.pending_approval(session_id, task_id).is_none(),
+            "a strict surface must not register a pending decision"
+        );
     }
 
     /// A hazard family the operator's policy refuses is refused by the

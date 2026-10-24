@@ -1239,6 +1239,50 @@
       );
     }
 
+    // A task waiting on a policy decision shows the policy's own question,
+    // and offers the operator the two answers. The prompt's wording is the
+    // policy's, not the GUI's.
+    const prompt = task.policy_prompt;
+    if (status === "awaiting_policy" && prompt) {
+      const box = el("div", { class: "task__prompt", role: "group", "aria-label": "Policy decision" });
+      box.appendChild(
+        el("p", {
+          class: "task__prompt-message",
+          role: "status",
+          text: String(prompt.message || "This operation needs an explicit approval."),
+        })
+      );
+      const confirmationClass = prompt.confirmation_class
+        ? String(prompt.confirmation_class)
+        : "";
+      if (confirmationClass) {
+        box.appendChild(
+          el("p", { class: "task__prompt-class", text: confirmationClass })
+        );
+      }
+      const decision = el("div", { class: "task__prompt-actions" });
+      const approve = el("button", {
+        type: "button",
+        class: "button button--primary button--small",
+        text: "Approve",
+      });
+      approve.addEventListener("click", function () {
+        answerPolicyDecision(taskId, true);
+      });
+      const reject = el("button", {
+        type: "button",
+        class: "button button--danger button--small",
+        text: "Reject",
+      });
+      reject.addEventListener("click", function () {
+        answerPolicyDecision(taskId, false);
+      });
+      decision.appendChild(approve);
+      decision.appendChild(reject);
+      box.appendChild(decision);
+      card.appendChild(box);
+    }
+
     const actions = el("div", { class: "task__actions" });
     const cancel = el("button", {
       type: "button",
@@ -1496,6 +1540,34 @@
       setBanner("cancel", {
         level: "error",
         title: "Cancellation failed",
+        message: errorMessage(error),
+      });
+    }
+  }
+
+  // Answer a pending policy decision.
+  //
+  // The answer names yes or no; it never names the authorisation. What the
+  // answer permits is computed by the policy kernel on the daemon's side.
+  async function answerPolicyDecision(taskId, approved) {
+    if (!invoke) return;
+    try {
+      await invoke(
+        "approve_task",
+        commandArgs([
+          ["task_id", String(taskId || "")],
+          ["approved", Boolean(approved)],
+          [
+            "reason",
+            approved ? "approved in the desktop GUI" : "declined in the desktop GUI",
+          ],
+        ])
+      );
+      await refreshSnapshot();
+    } catch (error) {
+      setBanner("policy", {
+        level: "error",
+        title: approved ? "Approval failed" : "Refusal failed",
         message: errorMessage(error),
       });
     }

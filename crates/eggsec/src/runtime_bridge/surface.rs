@@ -34,6 +34,18 @@ pub enum RuntimeBridgeError {
     /// Enforcement layer denied the operation.
     #[error("enforcement denied: {reason}")]
     EnforcementDenied { reason: String },
+
+    /// The operation needs an operator's confirmation before it can run.
+    ///
+    /// The required classes are the exact set the policy kernel demanded.
+    /// They are what bound an approval: the operator's answer permits these
+    /// classes and nothing else, so a client cannot widen its own
+    /// authorisation by answering "yes".
+    #[error("enforcement requires confirmation: {reason}")]
+    ConfirmationRequired {
+        reason: String,
+        required_classes: Vec<crate::config::ConfirmationClass>,
+    },
 }
 
 /// Convert a [`RuntimeSurface`] to an [`ExecutionSurface`].

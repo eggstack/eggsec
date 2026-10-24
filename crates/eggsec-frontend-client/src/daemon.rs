@@ -526,6 +526,31 @@ impl RuntimeClient for DaemonRuntimeClient {
         })
     }
 
+    fn approve_task(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> RuntimeClientFuture<()> {
+        let client = self.clone();
+        Box::pin(async move {
+            let cmd = ClientCommand::ApprovePolicy {
+                request_id: client.next_request_id(),
+                session_id,
+                task_id,
+                approved,
+                reason,
+            };
+            match client.send_command(cmd).await {
+                Ok(ServerMessage::Ok { .. }) => Ok(()),
+                Ok(ServerMessage::Error { message, .. }) => Err(message),
+                Ok(msg) => Err(format!("unexpected response: {:?}", msg)),
+                Err(e) => Err(e.to_string()),
+            }
+        })
+    }
+
     fn subscribe(&self, session_id: SessionId) -> RuntimeClientFuture<RuntimeEventReceiverHandle> {
         let client = self.clone();
         Box::pin(async move {

@@ -35,7 +35,7 @@ The `schema` feature (off by default) exposes `src/schema.rs`: `task_kind_schema
 
 Architecture guard: zero TUI, transport, persistence, or engine dependencies. Enforced by `scripts/check-architecture-guards.sh`.
 
-## Architecture (13 source files, Phase D)
+## Architecture (14 source files, Phase D)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -48,8 +48,9 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (11 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
 | `capabilities` | `src/capabilities.rs` | `RuntimeCapabilities`, `TaskCapability` |
+| `approval` | `src/approval.rs` | `ApprovalGate`, `ApprovalRegistry`, `ApprovalAnswer` — the runtime's pending-approval registry (milestone 011, `ADR-0012`) |
 | `ids` | `src/ids.rs` | `SessionId`, `TaskId`, `ClientId` — UUID newtypes with serde/display |
-| `error` | `src/error.rs` | `RuntimeError` (13 variants) |
+| `error` | `src/error.rs` | `RuntimeError` (14 variants) |
 | `dispatcher` | `src/dispatcher.rs` | `TaskDispatcher` trait (unused by runtime; legacy interface) |
 | `cancel` | `src/cancel.rs` | `race_with_cancel` helper + `CancellationToken` re-export (cancellation boundary) |
 | `schema` | `src/schema.rs` | **Feature-gated (`schema`)**: `TaskKindSchema`, `task_kind_schemas()`, `task_kind_schema()` — the derived JSON Schema over the canonical request DTOs |
@@ -65,7 +66,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `MAX_RETAINED_REPORTS` | `report.rs:29` | The retention bound: the number of report documents a runtime keeps at once |
 | `RuntimeEventSink` | `runtime_sink.rs` | Progress/log/completion/failure reporting for executors |
 | `RuntimeEventReceiver` | `runtime_sink.rs` | Broadcast receiver with lag recovery |
-| `RuntimeExecutionContext` | `session.rs:35` | Per-execution context: session_id, surface, scope |
+| `RuntimeExecutionContext` | `session.rs:35` | Per-execution context: session_id, surface, scope, approval gate |
 | `RuntimeSession` | `session.rs:91` | Mutable session state (tasks, surface, scope, generation, capabilities) |
 | `SessionSnapshot` | `session.rs:350` | Immutable snapshot for persistence/transport |
 | `TaskSnapshot` | `session.rs:332` | Per-task snapshot within a session |
@@ -233,6 +234,35 @@ the loaded scope, and the enabled features. Publishing a hazard family here
 therefore does not permit it — it only stops the runtime from refusing the
 submission as an unknown kind.
 
+### The pending-approval registry (`approval.rs`)
+
+A manual operation whose policy demands a confirmation is **held** at that
+point. The runtime owns the hold, because the runtime owns task lifecycle; the
+daemon owns the process and `eggsec-policy` owns authorisation semantics.
+
+| Piece | Purpose |
+|-------|---------|
+| `ApprovalGate` | A cheap clonable handle, carried in `RuntimeExecutionContext`, so an executor can hold an operation and await its answer without knowing anything about the daemon, the protocol, or the policy crate |
+| `ApprovalRegistry` | The in-memory map of pending decisions, keyed by `(session_id, task_id)` |
+| `ApprovalAnswer` | `Approved { reason }` or `Denied { reason }` — the operator's yes or no |
+
+The ordering matters: a decision is registered **before** the prompt is
+announced, so a client that answers the instant it sees
+`RuntimeEvent::PolicyDecisionRequired` never races the registration. A pending
+entry is removed when it is answered, when the holding task is cancelled, or
+when the task's timeout fires — the registry entry cannot outlive the task.
+
+`Runtime` exposes the two ends of the conversation: `resolve_approval()`
+(answer a pending decision) and `pending_approval()` (what is being asked).
+
+**The runtime stays policy-neutral.** The registry stores a `PolicyPrompt` — a
+message, a confirmation-class *label*, and a flag — not a `ConfirmationClass`.
+The gate returns an answer; it does not interpret what an approval permits.
+Only `eggsec-policy` decides that, and it does so on the caller's side of the
+gate, by re-running the authorisation path with an override bounded by the
+classes the kernel itself demanded. Architecture guard 174 enforces the
+neutrality.
+
 ### RuntimeTaskExecutor Trait (`runtime.rs:41`)
 
 ```rust
@@ -250,7 +280,7 @@ Beside `execute`, the trait has three **defaulted** methods. A default is what k
 
 | Method | Default | Exact semantics |
 |--------|---------|-----------------|
-| `supported_task_kinds()` (`runtime.rs:68`) | `RuntimeCapabilities::daemon_conservative().task_kinds` | The task kinds this executor can run. An executor that rejects every task MUST declare the empty set instead — otherwise a host would advertise capabilities the executor cannot execute. |
+| `supported_task_kinds()` (`runtime.rs:68`) | `RuntimeCapabilities::canonical().task_kinds` | The task kinds this executor can run — the canonical list, so "says nothing" means "declares everything". An executor that rejects every task MUST declare the empty set instead — otherwise a host would advertise capabilities the executor cannot execute. |
 | `enabled_features()` (`runtime.rs:89`) | `None` | The engine features compiled into this executor's build — a **build** fact, not a runtime capability. `None` means **unknown**: the executor links no engine, or does not publish the fact. `Some(vec![])` means an engine is linked with **no** features enabled, which is a different, knowable fact. The two must never be collapsed: reading an empty vector as "unknown" would let a client report a wrong reason for an unavailable operation. |
 | `report_for(task_id)` (`runtime.rs:100`) | `None` | The report document for a completed task. `None` means **no report for this task** — either the executor produces no reports at all, or this particular result has no report form. The executor's own retention policy decides how long a report stays available; the runtime only reads it. |
 

@@ -120,8 +120,8 @@ MSRV to 1.90 is a separate, explicit trade.
 
 ## The IPC surface
 
-Exactly twelve narrow commands, registered in
-`crates/eggsec-gui/src/shell.rs:33-46`:
+Exactly thirteen narrow commands, registered in
+`crates/eggsec-gui/src/shell.rs:33-47`:
 
 | Command | Source |
 |---|---|
@@ -132,6 +132,7 @@ Exactly twelve narrow commands, registered in
 | `submit_task(variant, values)` | `crates/eggsec-gui/src/commands.rs` |
 | `cancel_task(task_id)` | `crates/eggsec-gui/src/commands.rs` |
 | `cancel_active()` | `crates/eggsec-gui/src/commands.rs` |
+| `approve_task(task_id, approved, reason)` | `crates/eggsec-gui/src/commands.rs` |
 | `task_snapshot()` | `crates/eggsec-gui/src/commands.rs` |
 | `coverage()` | `crates/eggsec-gui/src/commands.rs` |
 | `export_report(task_id, format, path)` | `crates/eggsec-gui/src/commands.rs` |
@@ -271,6 +272,26 @@ request so the request DTO applies its own default
   sees "42 earlier lines dropped" knows the view is partial.
 - The GUI subscribes **once per session** and never spawns a task per event
   (`crates/eggsec-gui/src/commands.rs:827`).
+
+## Policy decisions: the GUI answers, it never decides
+
+A task waiting on a policy decision shows **the policy's own prompt** — the
+wording comes from the daemon, not from the GUI — with **Approve** and
+**Reject** buttons (`crates/eggsec-gui/frontend/app.js`).
+
+- The answer goes to the daemon as *yes* or *no*. **It never names the
+  authorisation.**
+- What the answer permits is computed by the policy kernel on the daemon's
+  executor side, bounded by exactly the confirmation classes the kernel
+  demanded. The GUI cannot widen it.
+- **The GUI never auto-approves.** An auto-approval would be the GUI settling
+  an authorisation question that only the daemon's enforcement layer may
+  settle.
+- A task with nothing pending is an error the operator sees, not a silent
+  no-op: the daemon refuses the answer because there is no decision to
+  resolve.
+
+See `plans/adrs/ADR-0012-daemon-mediated-policy-approval.md`.
 
 ## Result rendering
 
@@ -456,11 +477,6 @@ extension is `.xml` and Markdown's is `.md`, while the wire name stays
 
 ## Known gaps
 
-- **`ApprovePolicy` is unwired.** The daemon answers it with
-  `ErrorCode::Unsupported`, so no approval is granted. The GUI handles
-  `PolicyDecisionRequired` defensively
-  (`crates/eggsec-gui/src/tasks.rs:282`) and offers **no approval
-  affordance**.
 - **The GUI manages the daemon's lifecycle only when asked.** By default it
   never spawns or supervises a daemon. With `--daemon-bin <PATH>` it starts
   that executable and stops it on exit.

@@ -91,6 +91,21 @@ impl RuntimeClient for EmbeddedRuntimeClient {
         })
     }
 
+    fn approve_task(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> RuntimeClientFuture<()> {
+        let runtime = self.runtime.clone();
+        Box::pin(async move {
+            runtime
+                .resolve_approval(session_id, task_id, approved, reason)
+                .map_err(|e| e.to_string())
+        })
+    }
+
     fn subscribe(&self, _session_id: SessionId) -> RuntimeClientFuture<RuntimeEventReceiverHandle> {
         let runtime = self.runtime.clone();
         Box::pin(async move {

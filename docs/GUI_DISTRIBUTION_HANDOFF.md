@@ -184,13 +184,15 @@ expects them will find them missing, and this section is why.
    running. That is milestone 006's work, and M6 has not closed. Until it
    does, the operator starts the daemon by hand.
 
-4. **`ApprovePolicy` is unwired.** The daemon answers the command with
-   `ErrorCode::Unsupported` and the message "daemon policy approval is not
-   wired yet" (`crates/eggsec-daemon/src/host.rs:883-887`). The GUI can
-   therefore mark a task `awaiting_policy`, but it can offer **no** approval
-   affordance, and it **must not auto-approve** — an auto-approval would be
-   the GUI deciding an authorisation question that only the daemon's
-   enforcement layer may decide.
+4. **`ApprovePolicy` is now wired** (milestone 011, `ADR-0012`). The daemon
+   resolves the runtime's pending decision instead of answering
+   `ErrorCode::Unsupported`. The GUI marks a task `awaiting_policy`, shows the
+   policy's own prompt, and offers **Approve** and **Reject** — and it still
+   **must not auto-approve**, because an auto-approval would be the GUI
+   deciding an authorisation question that only the daemon's enforcement layer
+   may decide. The answer bounds itself: it permits exactly the confirmation
+   classes the policy kernel demanded, and a strict surface never holds a
+   decision at all.
 
 5. **The GUI's resident footprint was not previously measured; it is now
    measured on one platform only.** The measurement (macOS 25.6.0,

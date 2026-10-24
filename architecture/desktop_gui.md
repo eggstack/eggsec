@@ -84,7 +84,7 @@ features are the other two additions to the GUI's dependency set
 wired up, and the module doc says so in as many words: the framework "appears
 only in this module and in `commands.rs`" (`crates/eggsec-gui/src/shell.rs:3-4`).
 
-The builder registers the managed state and the twelve IPC commands, then runs
+The builder registers the managed state and the thirteen IPC commands, then runs
 the generated context (`crates/eggsec-gui/src/shell.rs:27-46`).
 
 ### Window and configuration
@@ -211,11 +211,27 @@ supplies its own identity rather than inheriting the TUI's.
 5. **Catalog fetch** — `describe_operations()` yields the published task kinds
    and their schemas (`crates/eggsec-gui/src/connection.rs:160`).
 
-`ApprovePolicy` remains unwired: the daemon answers it with
-`ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs:901-934`). No
-approval is granted either way. The GUI handles `PolicyDecisionRequired`
-defensively and offers **no approval affordance** — there is no button that
-could do anything.
+`ApprovePolicy` is wired (milestone 011, `ADR-0012`). A manual operation
+whose policy demands a confirmation is held at that point: the daemon exposes
+the decision as `RuntimeEvent::PolicyDecisionRequired`, and the GUI shows the
+policy's own prompt with **Approve** and **Reject** buttons.
+
+The GUI's part in this is small and strictly bounded:
+
+- The answer goes to the daemon as *yes* or *no*. **It never names the
+  authorisation.**
+- What the answer permits is computed by the policy kernel on the daemon's
+  executor side, which re-runs its own authorisation path with an override
+  bounded by exactly the confirmation classes the kernel demanded. The GUI
+  cannot widen it.
+- **The GUI never auto-approves.** An auto-approval would be the GUI settling
+  an authorisation question that only the daemon's enforcement layer may
+  settle.
+- A task with nothing pending is an error the operator sees, not a silent
+  no-op.
+
+A strict surface never holds a decision, so there is nothing for a GUI to
+answer.
 
 ### The no-op executor condition
 
@@ -687,10 +703,6 @@ idle window rather than a running assessment.
 
 These are deliberate and documented, not oversights.
 
-- **`ApprovePolicy` is unwired.** The daemon answers it with
-  `ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs:901-934`), so no
-  approval is granted either way. The GUI handles `PolicyDecisionRequired`
-  defensively and offers no approval affordance.
 - **The GUI manages the daemon's lifecycle only when asked.** By default it
   requires an already-running `eggsec-daemon --full-executor` and never
   spawns, supervises, or stops one. With `--daemon-bin <PATH>` it starts
@@ -729,7 +741,9 @@ These are deliberate and documented, not oversights.
     validation decides whether a task may run.
 12. A blank field is "not provided", never a zero value. The fail-safe
     defaults must survive an untouched form.
-13. The GUI offers no approval affordance while `ApprovePolicy` is unwired.
+13. The GUI's approval affordance answers a decision; it never decides one. An
+    auto-approval would be the GUI settling an authorisation question that
+    only the daemon's enforcement layer may settle.
 14. A learned denial wins over every static verdict.
 
 ## See Also

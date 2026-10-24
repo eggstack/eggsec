@@ -83,6 +83,24 @@ pub trait RuntimeClient: Send + Sync + 'static {
     fn cancel(&self, session_id: SessionId, task_id: TaskId) -> RuntimeClientFuture<()>;
     /// Cancel the active task in a session.
     fn cancel_active(&self, session_id: SessionId) -> RuntimeClientFuture<()>;
+    /// Answer a policy decision the runtime is holding for a task.
+    ///
+    /// The answer names *yes* or *no*. It never names the authorisation:
+    /// what the answer permits is computed by the policy kernel on the
+    /// executor's side, which re-runs its own authorisation path with an
+    /// override bounded by the classes the kernel demanded.
+    ///
+    /// The answer reaches a task that is waiting at its confirmation point.
+    /// A task with nothing pending — one that never asked, one that was
+    /// already answered, or one on a surface that has no operator to ask — is
+    /// an error, not a silent no-op.
+    fn approve_task(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> RuntimeClientFuture<()>;
     /// Subscribe to runtime events for a session.
     fn subscribe(&self, session_id: SessionId) -> RuntimeClientFuture<RuntimeEventReceiverHandle>;
 }
@@ -163,8 +181,72 @@ mod tests {
         }
     }
 
+    /// An executor that holds every task at its confirmation point.
+    ///
+    /// It stands in for the engine's executor: it registers a pending
+    /// decision through the runtime's approval gate, announces it, and waits
+    /// for an answer.
+    struct HoldingExecutor;
+
+    impl RuntimeTaskExecutor for HoldingExecutor {
+        fn supported_task_kinds(&self) -> Vec<eggsec_runtime::TaskCapability> {
+            vec![eggsec_runtime::TaskCapability::new(
+                "port-scan",
+                "Port scanning",
+            )]
+        }
+
+        fn execute(
+            &self,
+            task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            context: RuntimeExecutionContext,
+            sink: RuntimeEventSink,
+            cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async move {
+                let prompt = eggsec_runtime::PolicyPrompt {
+                    message: "the operation needs an operator's confirmation".into(),
+                    confirmation_class: Some("out-of-scope".into()),
+                    requires_explicit_approval: true,
+                };
+                let answer = context
+                    .approval
+                    .request(&sink, task_id, prompt, cancel)
+                    .await?;
+                match answer {
+                    eggsec_runtime::ApprovalAnswer::Approved { .. } => {
+                        Ok(TaskOutcome::Text("the held operation ran".into()))
+                    }
+                    eggsec_runtime::ApprovalAnswer::Denied { reason } => {
+                        Err(RuntimeError::DispatchFailed(format!(
+                            "the operator declined: {}",
+                            reason.unwrap_or_else(|| "no reason given".into())
+                        )))
+                    }
+                }
+            })
+        }
+    }
+
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::new(RuntimeConfig::default(), NoopExecutor))
+    }
+
+    /// A port-scan request.
+    fn port_scan_request() -> eggsec_runtime::RunRequest {
+        eggsec_runtime::RunRequest {
+            task_kind: eggsec_runtime::TaskKind::PortScan(
+                eggsec_runtime::request::PortScanParams {
+                    target: "127.0.0.1".into(),
+                    ..Default::default()
+                },
+            ),
+            requested_by: None,
+            surface: eggsec_runtime::request::RuntimeSurface::CliManual,
+            labels: vec![],
+        }
     }
 
     /// The contract must stay object-safe: every frontend holds the client as
@@ -299,5 +381,78 @@ mod tests {
                 "the daemon client must not hardcode {forbidden}"
             );
         }
+    }
+
+    /// The embedded client answers a pending policy decision, and the held
+    /// operation then runs.
+    ///
+    /// The whole flow runs on **one** runtime: the `block_on` helper builds a
+    /// fresh current-thread runtime per call, and a runtime that is dropped
+    /// between two calls takes the held task with it.
+    #[test]
+    fn embedded_client_answers_a_pending_policy_decision() {
+        let executor = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a current-thread runtime");
+        executor.block_on(async {
+            let runtime = Arc::new(Runtime::new(RuntimeConfig::default(), HoldingExecutor));
+            let client = EmbeddedRuntimeClient::new(runtime.clone());
+            let session_id = client
+                .create_session(eggsec_runtime::request::RuntimeSurface::CliManual, None, vec![])
+                .await
+                .expect("a session must be created");
+
+            // Subscribe before submitting, so the prompt cannot be missed.
+            let mut events = runtime.subscribe().await;
+            let task_id = client
+                .submit(session_id, port_scan_request())
+                .await
+                .expect("the task must be admitted");
+
+            let prompt = loop {
+                match events.recv().await {
+                    Some(RuntimeEvent::PolicyDecisionRequired { prompt, .. }) => break prompt,
+                    Some(_) => continue,
+                    None => panic!("the event stream closed before the prompt arrived"),
+                }
+            };
+            assert!(prompt.requires_explicit_approval);
+
+            client
+                .approve_task(
+                    session_id,
+                    task_id,
+                    true,
+                    Some("confirmed by the operator".into()),
+                )
+                .await
+                .expect("the answer must be accepted");
+
+            loop {
+                match events.recv().await {
+                    Some(RuntimeEvent::TaskCompleted { outcome, .. }) => {
+                        assert!(
+                            matches!(&outcome, TaskOutcome::Text(text) if text == "the held operation ran"),
+                            "the held operation must have run: {outcome:?}"
+                        );
+                        break;
+                    }
+                    Some(RuntimeEvent::TaskFailed { error, .. }) => {
+                        panic!("the held operation must not fail: {}", error.message)
+                    }
+                    Some(_) => continue,
+                    None => panic!("the event stream closed before the operation finished"),
+                }
+            }
+        });
+    }
+
+    /// Answering a task with nothing pending is an error, not a silent no-op.
+    #[test]
+    fn embedded_client_reports_an_answer_for_nothing_pending_as_an_error() {
+        let client = EmbeddedRuntimeClient::new(test_runtime());
+        let result = block_on(client.approve_task(SessionId::new(), TaskId::new(), true, None));
+        assert!(result.is_err());
     }
 }

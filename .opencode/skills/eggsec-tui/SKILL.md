@@ -119,7 +119,8 @@ Key differences in daemon mode:
 - Observers cannot submit/cancel tasks (permission check returns `ErrorCode::PermissionDenied`)
 - On strict-surface sessions (McpServer, RestApi, etc.), only the session Owner can approve policies
 - Daemon uses `CommandPermission` enum for per-command RBAC (not stringly-typed names)
-- `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding
+- `ApprovePolicy` resolves the daemon's pending decision; an answer for a task with nothing pending returns `ErrorCode::InvalidState` instead of silently succeeding
+- The TUI's own local approval flow is unchanged: `confirm_override` now calls the policy kernel's shared `ManualOverride::permitting_classes`, so the confirmation-class mapping exists in exactly one place
 
 ### Tab System
 - `Tab` has 33 variants (discriminants 0..=32, `tabs/mod.rs:154`), including

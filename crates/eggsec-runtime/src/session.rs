@@ -39,6 +39,14 @@ pub struct RuntimeExecutionContext {
     pub surface: RuntimeSurface,
     /// Scope metadata bound at session creation, if any.
     pub scope: Option<SessionScope>,
+    /// The runtime's approval registry.
+    ///
+    /// An executor that reaches a point where the policy demands an
+    /// operator's confirmation holds the operation here and waits for an
+    /// answer. The gate is policy-neutral: it carries a prompt and returns
+    /// "approved" or "denied", and it knows nothing about what an approval
+    /// permits.
+    pub approval: crate::approval::ApprovalGate,
 }
 
 /// Lightweight scope metadata bound to a session.
