@@ -19,7 +19,7 @@ through the daemon's Unix socket and nothing else.
 | Shell framework | Tauri v2, confined to this crate (`crates/eggsec-gui/src/shell.rs:3`) |
 | Frontend | Buildless: hand-written HTML, CSS, and vanilla JavaScript, **zero npm dependencies** |
 | Features | `default = ["shell"]`; the crate compiles with `--no-default-features` (`crates/eggsec-gui/Cargo.toml:24`) |
-| Enforced by | architecture guards 155–162 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display) |
+| Enforced by | architecture guards 155–172 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, and the daemon's derived capability list) |
 
 Headline crate and surface counts live in `architecture/overview.md` — point at
 it rather than restating the numbers.

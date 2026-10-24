@@ -58,15 +58,18 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
 
     /// The task kinds this executor can execute.
     ///
-    /// The default keeps the pre-declaration behaviour: an executor that says
-    /// nothing is treated as able to run the daemon's conservative set, so
-    /// every existing implementor keeps publishing what it published. An
-    /// executor that rejects every task MUST declare the empty set instead
-    /// -- otherwise a host would advertise capabilities the executor cannot
-    /// execute, which is the one state this declaration exists to make
+    /// The default is the **canonical** list: every capability name the
+    /// task-kind set defines, derived rather than transcribed. An executor
+    /// that says nothing is therefore treated as able to run every canonical
+    /// kind, which is the same statement the derived list makes everywhere
+    /// else in the workspace.
+    ///
+    /// An executor that rejects every task MUST declare the empty set
+    /// instead -- otherwise a host would advertise capabilities the executor
+    /// cannot execute, which is the one state this declaration exists to make
     /// unrepresentable.
     fn supported_task_kinds(&self) -> Vec<TaskCapability> {
-        RuntimeCapabilities::daemon_conservative().task_kinds
+        RuntimeCapabilities::canonical().task_kinds
     }
 
     /// The engine features compiled into this executor's build.
@@ -134,6 +137,14 @@ pub struct Runtime {
     /// same reason `supported_task_kinds` does: a host reads it synchronously
     /// while building its own published capability list.
     enabled_features: Option<Vec<String>>,
+    /// The runtime's enforced capability set, captured at construction.
+    ///
+    /// This is the configured set every session carries, and therefore the
+    /// set a submission is admitted against. It lives outside the state mutex
+    /// for the same reason `supported_task_kinds` does: a host reads it
+    /// synchronously while building its published capability list, so that the
+    /// published set and the enforced set can be made the same object.
+    enforced_task_kinds: Vec<TaskCapability>,
     /// The executor behind this runtime.
     ///
     /// It is held outside the state mutex as well as inside it, so the
@@ -148,6 +159,7 @@ impl Runtime {
         let (event_tx, _) = broadcast::channel(config.event_channel_capacity);
         let supported_task_kinds = executor.supported_task_kinds();
         let enabled_features = executor.enabled_features();
+        let enforced_task_kinds = config.capabilities.task_kinds.clone();
         let executor: Arc<dyn RuntimeTaskExecutor> = Arc::new(executor);
         Self {
             state: Arc::new(Mutex::new(RuntimeState {
@@ -158,6 +170,7 @@ impl Runtime {
             })),
             supported_task_kinds,
             enabled_features,
+            enforced_task_kinds,
             executor,
         }
     }
@@ -186,6 +199,23 @@ impl Runtime {
     /// published list can never claim more than the executor can execute.
     pub fn supported_task_kinds(&self) -> Vec<TaskCapability> {
         self.supported_task_kinds.clone()
+    }
+
+    /// The task kinds this runtime **enforces** at admission.
+    ///
+    /// This is the runtime's configured capability set — the same set every
+    /// session carries, and therefore the set a submission is admitted
+    /// against. It is distinct from [`Self::supported_task_kinds`], which is
+    /// the executor's *declaration*: a host publishes the declaration and
+    /// enforces the configured set, and the two are made the same object at
+    /// construction so that a published capability is never refused as an
+    /// unsupported kind.
+    ///
+    /// The set is captured at construction, because the runtime's
+    /// configuration never changes after it. A host therefore reads it
+    /// synchronously, with no lock and no await point.
+    pub fn enforced_task_kinds(&self) -> Vec<TaskCapability> {
+        self.enforced_task_kinds.clone()
     }
 
     /// Create a new session bound to the given execution surface.
@@ -756,8 +786,12 @@ impl Runtime {
         snapshot: SessionSnapshot,
     ) -> Result<SessionId, RuntimeError> {
         let session_id = snapshot.session_id;
-        let session = RuntimeSession::hydrate_from_snapshot(snapshot);
         let mut state = self.state.lock().await;
+        // A recovered session enforces the runtime's *configured* capability
+        // set, so it admits exactly what a fresh session admits. The
+        // snapshot's persisted `capabilities` field is not authoritative.
+        let capabilities = state.config.capabilities.clone();
+        let session = RuntimeSession::hydrate_from_snapshot(snapshot, capabilities);
         state.sessions.insert(session_id, session);
         emit_event(&state.event_tx, RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
@@ -807,11 +841,12 @@ mod tests {
         }
     }
 
-    /// The default declaration preserves the conservative set, so an executor
-    /// that says nothing keeps publishing what it published before the
-    /// declaration seam existed.
+    /// The default declaration is the canonical list, so an executor that
+    /// says nothing declares the same capability set the runtime enforces.
+    /// An executor that rejects everything must declare the empty set
+    /// explicitly instead.
     #[test]
-    fn the_default_declaration_is_the_conservative_set() {
+    fn the_default_declaration_is_the_canonical_set() {
         struct DefaultExecutor;
         impl RuntimeTaskExecutor for DefaultExecutor {
             fn execute(
@@ -835,7 +870,7 @@ mod tests {
         let declared = DefaultExecutor.supported_task_kinds();
         assert_eq!(
             declared.len(),
-            RuntimeCapabilities::daemon_conservative().task_kinds.len()
+            RuntimeCapabilities::canonical().task_kinds.len()
         );
         assert!(!declared.is_empty());
     }
@@ -1636,13 +1671,22 @@ mod tests {
         );
     }
 
+    /// A runtime whose configured capability set does not cover a kind
+    /// refuses that kind at admission. The canonical set covers everything,
+    /// so the rejection is exercised with an explicit narrow set.
     #[tokio::test]
     async fn submit_rejects_unsupported_task_kind() {
-        use crate::capabilities::RuntimeCapabilities;
+        use crate::capabilities::{RuntimeCapabilities, TaskCapability};
         use crate::request::StressTestParams;
 
         let config = RuntimeConfig {
-            capabilities: RuntimeCapabilities::daemon_conservative(),
+            capabilities: RuntimeCapabilities {
+                task_kinds: vec![TaskCapability::new("port-scan", "Port scanning")],
+                transports: vec!["in-process".into()],
+                supports_cancellation: true,
+                supports_multiple_sessions: true,
+                supports_multiple_active_tasks: false,
+            },
             ..Default::default()
         };
         let runtime = Runtime::new(config, ImmediateExecutor);
@@ -1800,12 +1844,26 @@ mod tests {
         assert_eq!(task.last_error.as_deref(), Some("session closed"));
     }
 
+    /// A runtime configured with a capability set narrower than the canonical
+    /// one still refuses the kinds outside it. The canonical list is the
+    /// *default*, not the only option — the admission check reads the
+    /// configured set.
     #[tokio::test]
-    async fn conservative_capabilities_reject_hazardous_task_kinds() {
-        use crate::capabilities::RuntimeCapabilities;
+    async fn a_narrow_capability_set_rejects_the_kinds_outside_it() {
+        use crate::capabilities::{RuntimeCapabilities, TaskCapability};
 
+        let narrow = RuntimeCapabilities {
+            task_kinds: vec![
+                TaskCapability::new("port-scan", "Port scanning"),
+                TaskCapability::new("load-test", "HTTP load testing"),
+            ],
+            transports: vec!["in-process".into()],
+            supports_cancellation: true,
+            supports_multiple_sessions: true,
+            supports_multiple_active_tasks: false,
+        };
         let config = RuntimeConfig {
-            capabilities: RuntimeCapabilities::daemon_conservative(),
+            capabilities: narrow,
             ..Default::default()
         };
         let runtime = Runtime::new(config, ImmediateExecutor);
@@ -1862,6 +1920,72 @@ mod tests {
             assert!(
                 matches!(result, Err(RuntimeError::UnsupportedTaskKind)),
                 "Expected UnsupportedTaskKind for hazardous task, got: {:?}",
+                result
+            );
+        }
+    }
+
+    /// The canonical capability set admits the hazard families. Admitting is
+    /// not permitting: the runtime's admission check reads capability *names*,
+    /// while the enforcement layer — which runs later, inside the executor —
+    /// reads the operation's risk, the operator's execution policy, the
+    /// loaded scope, and the enabled features. A hazard family that reaches
+    /// the executor is refused there with the risk-policy denial, not here
+    /// with `UnsupportedTaskKind`.
+    #[tokio::test]
+    async fn the_canonical_capability_set_admits_the_hazard_families() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        let kinds = vec![
+            TaskKind::Resume(crate::request::ResumeParams {
+                session_path: "/tmp/does-not-exist.eggsec".into(),
+            }),
+            TaskKind::StressTest(crate::request::StressTestParams {
+                target: "10.0.0.1".into(),
+                flood_type: "syn".into(),
+                duration_secs: None,
+                threads: None,
+                rate_pps: None,
+            }),
+            TaskKind::WirelessActive(crate::request::WirelessActiveParams {
+                interface: None,
+                target_bssid: None,
+                ..Default::default()
+            }),
+            TaskKind::DbPentest(crate::request::DbPentestParams {
+                db_type: "postgres".into(),
+                target: "10.0.0.1".into(),
+                port: None,
+                ..Default::default()
+            }),
+            TaskKind::Intercept(crate::request::InterceptParams {
+                listen_port: None,
+                target: None,
+                ..Default::default()
+            }),
+            TaskKind::C2(crate::request::C2Params {
+                profile: None,
+                target: None,
+                ..Default::default()
+            }),
+        ];
+
+        for kind in kinds {
+            let name = kind.capability_name();
+            let req = RunRequest {
+                task_kind: kind,
+                requested_by: None,
+                surface: RuntimeSurface::TuiManual,
+                labels: vec![],
+            };
+            let result = runtime.submit(session_id, req).await;
+            assert!(
+                !matches!(result, Err(RuntimeError::UnsupportedTaskKind)),
+                "{name} must be admitted by the canonical capability set, got: {:?}",
                 result
             );
         }

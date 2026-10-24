@@ -26,6 +26,18 @@ pub enum Denial {
         /// The feature the engine named.
         feature: String,
     },
+    /// The engine denied the operation because the operator's execution policy
+    /// does not allow its risk tier.
+    ///
+    /// This is the fact a widened capability list makes visible: the daemon
+    /// advertises the capability and has the features, but the operator's
+    /// risk policy is the operator's own consent gate, and it says no. The
+    /// GUI reports that as such instead of reporting the operation as
+    /// available.
+    RiskPolicyDenied {
+        /// The risk tier the engine named.
+        risk: String,
+    },
     /// The engine denied the operation for another reason.
     Other {
         /// The denial message, verbatim.
@@ -38,11 +50,18 @@ impl Denial {
     ///
     /// A feature denial names the feature, because "the engine said no" is
     /// not an actionable answer and "the engine's feature is not enabled" is.
+    /// A risk-policy denial names the risk tier, because the actionable
+    /// answer is "the execution policy does not allow this risk tier", not
+    /// "the engine said no".
     pub fn reason(&self) -> String {
         match self {
             Denial::FeatureMissing { feature } => {
                 format!("the engine denied it because the `{feature}` feature is not enabled")
             }
+            Denial::RiskPolicyDenied { risk } => format!(
+                "the engine denied it because the `{risk}` risk tier is not allowed by the current \
+                 execution policy"
+            ),
             Denial::Other { message } => format!("the engine denied it: {message}"),
         }
     }
@@ -59,10 +78,18 @@ impl Denial {
 const POLICY_FEATURE_MARKER: &str = "required feature '";
 const DISPATCH_FEATURE_MARKER: &str = "requires feature '";
 
+/// The marker the policy layer uses when the operator's risk policy refuses.
+///
+/// The engine's denial message is `operation risk '<X>' is not allowed by
+/// current execution policy`
+/// (`crates/eggsec-policy/src/decision.rs`).
+const POLICY_RISK_MARKER: &str = "is not allowed by current execution policy";
+
 /// Read a denial out of a daemon error message.
 ///
-/// A message that names a missing feature yields
-/// [`Denial::FeatureMissing`]; every other message yields
+/// A message that names a missing feature yields [`Denial::FeatureMissing`];
+/// a message that names a refused risk tier yields
+/// [`Denial::RiskPolicyDenied`]; every other message yields
 /// [`Denial::Other`]. A denial is never guessed: the GUI records what the
 /// engine said, it does not infer a reason the engine did not give.
 pub fn denial_from_message(message: &str) -> Denial {
@@ -70,8 +97,11 @@ pub fn denial_from_message(message: &str) -> Denial {
         .or_else(|| quoted_after(message, DISPATCH_FEATURE_MARKER));
     match feature {
         Some(feature) => Denial::FeatureMissing { feature },
-        None => Denial::Other {
-            message: message.to_owned(),
+        None => match risk_before(message, POLICY_RISK_MARKER) {
+            Some(risk) => Denial::RiskPolicyDenied { risk },
+            None => Denial::Other {
+                message: message.to_owned(),
+            },
         },
     }
 }
@@ -85,6 +115,24 @@ fn quoted_after(message: &str, marker: &str) -> Option<String> {
         None
     } else {
         Some(feature.to_owned())
+    }
+}
+
+/// The quoted word immediately before `marker`, if there is one.
+///
+/// The policy layer phrases the risk denial as `operation risk '<X>' is not
+/// allowed by current execution policy`, so the risk tier is the last
+/// quoted word before the marker.
+fn risk_before(message: &str, marker: &str) -> Option<String> {
+    let (before, _) = message.split_once(marker)?;
+    let close = before.rfind('\'')?;
+    let head = &before[..close];
+    let open = head.rfind('\'')?;
+    let risk = head[open + 1..].trim();
+    if risk.is_empty() {
+        None
+    } else {
+        Some(risk.to_owned())
     }
 }
 
@@ -156,6 +204,36 @@ mod tests {
                 feature: "browser".to_owned()
             }
         );
+    }
+
+    /// A risk-policy denial is recognised as such, and it names the risk
+    /// tier the operator has to allow.
+    ///
+    /// This is the fact a widened capability list makes visible: the daemon
+    /// advertises the capability and has the features, but the operator's
+    /// risk policy says no. The GUI reports that as a policy refusal, not as
+    /// an available operation and not as an opaque failure.
+    #[test]
+    fn a_risk_policy_denial_is_recognised() {
+        let message = "enforcement denied: operation risk 'StressTest' is not allowed by \
+                       current execution policy";
+        let denial = denial_from_message(message);
+        assert_eq!(
+            denial,
+            Denial::RiskPolicyDenied {
+                risk: "StressTest".to_owned()
+            }
+        );
+        assert!(denial.reason().contains("StressTest"));
+        assert!(denial.reason().contains("execution policy"));
+    }
+
+    /// A denial that names no risk tier and no feature stays opaque: the GUI
+    /// reports what the engine said and guesses nothing.
+    #[test]
+    fn an_unnamed_denial_stays_opaque() {
+        let denial = denial_from_message("enforcement denied: operation denied by policy");
+        assert!(matches!(denial, Denial::Other { .. }));
     }
 
     #[test]

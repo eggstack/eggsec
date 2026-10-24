@@ -139,6 +139,18 @@ impl EggsecRuntimeExecutor {
 }
 
 impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
+    /// The task kinds this executor can execute.
+    ///
+    /// The engine implements every canonical task kind, so the executor
+    /// declares the **canonical** list — the same derived list the runtime
+    /// enforces and the daemon publishes. Declaring it explicitly matters:
+    /// the host intersects the declaration with the canonical list, so an
+    /// executor that said nothing would leave the intersection at whatever
+    /// the trait default happened to be.
+    fn supported_task_kinds(&self) -> Vec<eggsec_runtime::TaskCapability> {
+        eggsec_runtime::RuntimeCapabilities::canonical().task_kinds
+    }
+
     /// The engine features compiled into this build.
     ///
     /// `Some` is correct here: this executor links the engine, so its feature
@@ -278,6 +290,69 @@ impl RuntimeTaskExecutor for EggsecRuntimeExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eggsec_runtime::request::{StressTestParams, TaskKind};
+    use eggsec_runtime::RunRequest;
+
+    /// The engine executor declares the canonical capability list, so a
+    /// daemon that hosts it publishes every canonical kind -- and nothing
+    /// else.
+    #[test]
+    fn the_engine_executor_declares_the_canonical_capability_list() {
+        let executor = EggsecRuntimeExecutor::new();
+        let declared = executor.supported_task_kinds();
+        let canonical = eggsec_runtime::RuntimeCapabilities::canonical();
+        assert_eq!(declared.len(), canonical.task_kinds.len());
+        for kind in TaskKind::all_variants() {
+            let name = kind.capability_name();
+            assert!(
+                declared.iter().any(|d| d.name == name),
+                "the executor does not declare {name}"
+            );
+        }
+    }
+
+    /// A hazard family the operator's policy refuses is refused by the
+    /// **policy**, not by the runtime's admission.
+    ///
+    /// The distinction is the point of widening the capability set: the
+    /// daemon must not answer "unsupported task kind" for an operation it
+    /// advertises. The refusal comes from the execution policy, and it
+    /// names the risk tier the operator has to allow.
+    #[test]
+    fn a_policy_refused_operation_is_refused_by_the_policy_not_by_admission() {
+        let request = RunRequest {
+            task_kind: TaskKind::StressTest(StressTestParams {
+                target: "10.0.0.1".into(),
+                flood_type: "syn".into(),
+                duration_secs: None,
+                threads: None,
+                rate_pps: None,
+            }),
+            requested_by: None,
+            surface: eggsec_runtime::RuntimeSurface::CliManual,
+            labels: vec![],
+        };
+        let result = crate::runtime_bridge::bundle::approve_run_request_bundle(
+            eggsec_runtime::RuntimeSurface::CliManual,
+            crate::config::ExecutionPolicy::default(),
+            crate::config::LoadedScope::default_empty(),
+            request,
+            None,
+        );
+        let error = result.expect_err("the default execution policy refuses a stress test");
+        assert!(
+            !matches!(
+                error,
+                crate::runtime_bridge::surface::RuntimeBridgeError::UnsupportedTaskKind { .. }
+            ),
+            "the refusal must not be an admission failure: {error}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("is not allowed by current execution policy"),
+            "the refusal must name the risk policy: {message}"
+        );
+    }
 
     /// The desktop GUI is a manual surface (ADR-0007): it must resolve the
     /// permissive default scope exactly as the CLI and the TUI do. Before the

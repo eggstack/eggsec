@@ -4787,8 +4787,15 @@ GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
 TASK_KIND_SOURCE="crates/eggsec-runtime/src/request.rs"
 TASK_KIND_VARIANTS=""
 if [[ -f "$TASK_KIND_SOURCE" ]]; then
-  TASK_KIND_VARIANTS="$(sed -n '/pub enum TaskKind/,/^}/p' "$TASK_KIND_SOURCE" \
-    | rg -o '^[[:space:]]+([A-Z][A-Za-z0-9]*)\(' -r '$1' | sort -u)"
+  # The task-kind variants live in the canonical table (the `define_task_kinds!`
+  # invocation) when the enum is macro-generated, and in the enum body when it
+  # is written out. Read both shapes so the guard survives either.
+  TASK_KIND_VARIANTS="$(
+    {
+      sed -n '/^define_task_kinds! {/,/^}/p' "$TASK_KIND_SOURCE"
+      sed -n '/pub enum TaskKind/,/^}/p' "$TASK_KIND_SOURCE"
+    } | rg -o '^[[:space:]]+([A-Z][A-Za-z0-9]*)\(' -r '$1' | sort -u
+  )"
 fi
 if [[ -z "$TASK_KIND_VARIANTS" ]]; then
   echo "FAIL: could not read the task-kind variants from $TASK_KIND_SOURCE; the guard cannot run."
@@ -5587,6 +5594,169 @@ PYEOF
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: the desktop GUI's platform qualification is machine-checked."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 169. The daemon's published capability list is derived, never transcribed.
+# Milestone 010 (ADR-0011).
+#
+# A hand-written capability list is the defect this milestone exists to
+# remove. The list must come from the canonical task-kind set, there must be
+# exactly one capability-name table, and the retired constructors must stay
+# retired. The task-kind table and the operation-identity match must cover
+# the same set of kinds, so a new kind that reaches one but not the other
+# fails the check.
+echo ""
+echo "--- Check 169: the capability list is derived from the task-kind set ---"
+SECTION_FAIL=0
+if rg -q '\bdaemon_conservative\b|\bfull_lab\b' crates 2>/dev/null; then
+  echo "FAIL: a retired capability constructor (daemon_conservative/full_lab) is back."
+  rg -n '\bdaemon_conservative\b|\bfull_lab\b' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'fn task_kind_name' crates 2>/dev/null; then
+  echo "FAIL: the private duplicate capability-name table (task_kind_name) is back."
+  rg -n 'fn task_kind_name' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+NAME_TABLE_COUNT=$(rg --no-filename -o 'pub fn capability_name' crates 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$NAME_TABLE_COUNT" -ne 1 ]]; then
+  echo "FAIL: expected exactly one capability-name table (pub fn capability_name), found $NAME_TABLE_COUNT."
+  rg -n 'pub fn capability_name' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+CAPS_RS="crates/eggsec-runtime/src/capabilities.rs"
+if ! rg -q 'TaskKind::all_variants\(\)' "$CAPS_RS" 2>/dev/null; then
+  echo "FAIL: $CAPS_RS does not derive the capability list from TaskKind::all_variants()."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if sed '/^#\[cfg(test)\]/,$d' "$CAPS_RS" | rg -q 'TaskCapability::new\("'; then
+  echo "FAIL: $CAPS_RS carries a hand-written capability list in its non-test body."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+REQUEST_RS="crates/eggsec-runtime/src/request.rs"
+if ! rg -q 'macro_rules! define_task_kinds' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: $REQUEST_RS does not declare the canonical task-kind table."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TABLE_COUNT=$(rg -o '^\s*[A-Za-z0-9_]+\([A-Za-z0-9_]+\) => "' "$REQUEST_RS" 2>/dev/null | wc -l | tr -d ' ')
+KIND_COUNT=$(rg -o 'TaskKind::[A-Za-z0-9_]+\(' "$REQUEST_RS" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+if [[ "$TABLE_COUNT" -ne "$KIND_COUNT" ]]; then
+  echo "FAIL: the task-kind table declares $TABLE_COUNT kinds but the enum exposes $KIND_COUNT."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the capability list is derived from the task-kind set."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 170. Publication and admission are the same object.
+# Milestone 010 (ADR-0011).
+#
+# The daemon publishes a capability list and admits submissions against a
+# capability list. If they are two lists, the daemon can advertise a
+# capability it will refuse, or refuse one it advertised. The host therefore
+# hands the published list to the runtime as its enforced set, and every
+# rejecting executor declares the empty set explicitly rather than relying
+# on the trait default.
+echo ""
+echo "--- Check 170: the published and admitted capability sets are one object ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -q 'with_task_kinds\(published\.clone\(\)\)' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: $HOST_RS does not hand the published list to the runtime as its enforced set."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The runtime's *enforced* set must come from the published list, not from a
+# constant: a runtime configured with a different set would refuse a
+# capability the host advertises.
+if rg -Uq 'RuntimeConfig \{[\s\S]{0,200}?capabilities: (eggsec_runtime::)?RuntimeCapabilities::(default|canonical)\(\)' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: $HOST_RS builds the runtime's enforced set from a constant instead of the published list."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for REJECTOR in "crates/eggsec-daemon/src/host.rs" "crates/eggsec-frontend-client/src/lib.rs"; do
+  if ! rg -Uq 'fn supported_task_kinds\([^)]*\) -> Vec<[^>]*> \{\s*Vec::new\(\)' "$REJECTOR" 2>/dev/null; then
+    echo "FAIL: $REJECTOR has a rejecting executor that does not declare the empty set explicitly."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the published and admitted capability sets are one object."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 171. The wireless-active wire kind resolves to the wireless-deauth operation.
+# Milestone 010 (ADR-0011).
+#
+# A deauth is an intrusive operation. While the wire kind resolved to the
+# passive `wireless` operation, a daemon-submitted deauth was authorised
+# under the passive operation's risk level. The wire-side table, the engine's
+# canonical table, and the executor routing table must all agree.
+echo ""
+echo "--- Check 171: wireless-active resolves to the wireless-deauth operation ---"
+SECTION_FAIL=0
+REQUEST_RS="crates/eggsec-runtime/src/request.rs"
+CANON_RS="crates/eggsec/src/dispatch/canonical_execution.rs"
+if ! rg -q 'TaskKind::WirelessActive\(_\) => "wireless-deauth"' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: the wire-side table does not map WirelessActive to wireless-deauth."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'TaskKind::WirelessActive\(_\) => "wireless"' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: the wire-side table still maps WirelessActive to the passive wireless operation."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'Self::WirelessActive\(_\) => "wireless-deauth"' "$CANON_RS" 2>/dev/null; then
+  echo "FAIL: the engine's canonical table does not map WirelessActive to wireless-deauth."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'fn executor_route_for[\s\S]{0,1200}?"wireless-deauth"' "$CANON_RS" 2>/dev/null; then
+  echo "FAIL: the executor routing table has no wireless-deauth arm."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: wireless-active resolves to the wireless-deauth operation."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 172. The interface-bound target policy is coherent, and no shared operation
+# was relaxed to accommodate it.
+# Milestone 010 (ADR-0011).
+#
+# The interface-bound value exists so that a local binding does not have to
+# pretend to be a network target. It must not become a licence to relax a
+# shared operation: `packet` still serves `packet-send`, which writes raw
+# frames to a destination, and `pipeline` still serves `resume`, which
+# addresses a real host.
+echo ""
+echo "--- Check 172: the interface-bound target policy is coherent ---"
+SECTION_FAIL=0
+CATALOG_RS="crates/eggsec-policy/src/catalog.rs"
+for BOUND_OP in packet-capture wireless wireless-deauth; do
+  if ! rg -Uq "id: \"$BOUND_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::InterfaceBound" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $BOUND_OP operation is not interface-bound."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for SHARED_OP in packet pipeline; do
+  if ! rg -Uq "id: \"$SHARED_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::ExplicitScopeRequired" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $SHARED_OP operation lost its explicit-scope target policy."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -Uq "id: \"$SHARED_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::OptionalTarget" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $SHARED_OP operation was relaxed to OptionalTarget."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'InterfaceBound|is_interface_bound' crates/eggsec-policy/src/decision.rs 2>/dev/null; then
+  echo "FAIL: the enforcement kernel does not handle the interface-bound target policy."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the interface-bound target policy is coherent."
 else
   FAIL=$((FAIL + 1))
 fi

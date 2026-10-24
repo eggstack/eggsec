@@ -939,7 +939,11 @@ async fn learn_from_denial(
         return;
     };
     let denial = denial_from_message(&error.message);
-    if !matches!(denial, Denial::FeatureMissing { .. }) {
+    // A feature denial and a risk-policy denial are both facts about the
+    // operation's availability, so both are learned. An opaque failure is
+    // not: it says nothing about whether the operation could run, so it is
+    // left in the task's own error log instead of the coverage table.
+    if matches!(denial, Denial::Other { .. }) {
         return;
     }
 

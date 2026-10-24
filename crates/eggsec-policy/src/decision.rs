@@ -339,6 +339,23 @@ impl EnforcementError {
             Self::SurfaceProfileMismatch { .. } => None,
         }
     }
+
+    /// The concrete reasons the decision refused the operation.
+    ///
+    /// The `Display` form is deliberately terse ("operation denied by
+    /// policy"), because a denial summary is read in a log line. A caller
+    /// that has to report *why* -- a CLI, a GUI, an audit record -- needs
+    /// the decision's own reasons, which name the risk tier, the missing
+    /// feature, or the out-of-scope target. This renders them, and falls
+    /// back to the summary when the decision carries none.
+    pub fn reasons(&self) -> Vec<String> {
+        match self.decision() {
+            Some(decision) if !decision.denied_reasons.is_empty() => {
+                decision.denied_reasons.clone()
+            }
+            _ => vec![self.to_string()],
+        }
+    }
 }
 
 /// Categories of conditions that trigger `RequireConfirmation` under `ManualPermissive`.
@@ -933,7 +950,34 @@ pub fn evaluate_operation_policy(
     // the caller-resolved addresses; when absent for a target-bearing
     // descriptor, hostname-pattern matching over an empty fact record decides
     // (equivalent to the historical unresolvable-host path).
-    if let Some(ref target) = descriptor.target {
+    //
+    // An **interface-bound** operation is the exception: its target is a
+    // *local identifier* (an interface name, a BSSID), not a remote host.
+    // The identifier stays in the decision record for audit, but it is never
+    // matched against the scope's remote target rules -- the scope model has
+    // no local-host subject to match it against, and matching a local name
+    // as a hostname would deny every interface-bound operation. The
+    // operator's explicit-scope requirement is NOT relaxed: a missing scope
+    // still denies.
+    if descriptor.target_policy.is_interface_bound() {
+        if scope.is_none() {
+            if descriptor.requires_explicit_scope {
+                decision.push_denial_class(
+                    DenialClass::ScopeMissing,
+                    "scope file required but not provided",
+                );
+                decision.allowed = false;
+            }
+        } else {
+            // The scope is configured. It does not name the local binding,
+            // but it is present, which is what the explicit-scope
+            // requirement asks for. Recording a matched rule keeps the
+            // strict profiles' "ambiguous scope" check satisfied.
+            decision
+                .matched_scope_rules
+                .push("interface-bound local target".to_string());
+        }
+    } else if let Some(ref target) = descriptor.target {
         if let Some(scope) = scope {
             // Populate resolved addresses in the decision record
             if let Some(ts) = target_facts {

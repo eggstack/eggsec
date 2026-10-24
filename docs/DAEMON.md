@@ -21,18 +21,33 @@ See [docs/DAEMON_PARITY.md](DAEMON_PARITY.md) for the full local-vs-daemon parit
 
 ## Capabilities
 
-The daemon publishes a **conservative** task-kind list — a safe subset that
-excludes the hazardous families (stress, packet, wireless-deauth, postex, c2,
-evasion). The published list is **derived**, never declared beside the
-executor:
+The daemon publishes the **canonical** task-kind list — every capability the
+task-kind set defines, the hazard families included. The published list is
+**derived**, never declared beside the executor:
 
-> published task kinds = the executor's declared support ∩ the daemon's conservative policy
+> published task kinds = the canonical capability list ∩ the executor's declared support
+
+The canonical list is itself derived from the task-kind set
+(`TaskKind::all_variants()`), so it can never omit a kind the engine can
+execute, and there is exactly one capability-name table in the workspace.
 
 A daemon that cannot execute anything therefore publishes **nothing**: the
-"advertises twenty, executes none" state is unreachable by construction. The
+"advertises thirty, executes none" state is unreachable by construction. The
 declared support comes from the executor itself
 (`RuntimeTaskExecutor::supported_task_kinds()`), so a rejecting executor
-publishes an empty list and a real one publishes the conservative set.
+publishes an empty list — and an executor that rejects everything **must**
+declare the empty set explicitly, because the trait's default is the
+canonical list.
+
+The published list is also the runtime's **enforced** list: the host computes
+the published set first and hands it to the runtime as its capability set, so
+publication and admission are the same object. The daemon never advertises a
+capability it will refuse.
+
+Advertising a capability is not permitting it. The operator's execution
+policy — the `[execution_policy]` risk flags — is the gate, and it says no
+by default for the hazard families. Such a refusal names the risk tier it
+refused; it is never reported as an unsupported capability.
 
 Published is not the same as executable. A published kind whose *engine
 feature* is off is denied at dispatch with `FeatureMissing`, not
@@ -96,10 +111,14 @@ An advertised capability is not a promise that this build can execute it.
   daemon service profile, so the capabilities that profile names are compiled
   in.
 - The **CLI-hosted** daemon (`eggsec daemon start`) links the engine with the
-  `cli` feature only. In that build 8 of the 20 advertised capabilities are
+  `cli` feature only. In that build 17 of the 30 advertised capabilities are
   feature-gated off and are denied at dispatch with `FeatureMissing` — not
   `UnsupportedTaskKind`. Milestone 008 owns the daemon's engine profile and
   milestone 006 owns the client-side resolution of that gap.
+- An operation the operator's **execution policy** refuses is denied with the
+  risk-policy refusal, naming the risk tier. That is a different fact from a
+  missing feature: the capability is advertised and the build has the
+  feature, but the operator has not allowed that risk tier.
 - A daemon **built without** the cargo feature is a third thing again: it
   publishes an **empty** task-kind list and rejects every task.
 
@@ -112,7 +131,7 @@ An advertised capability is not a promise that this build can execute it.
 | **Update channels** or a version-pinned release feed | Same | M007 → distribution workstream |
 | **Windows** | `ADR-0010`: the daemon's transport is a Unix domain socket, so the daemon and the GUI do not compile for Windows | A daemon-subsystem transport milestone, with its own ADR |
 | A **`PATH` guarantee** | `cargo install` writes to `$CARGO_HOME/bin` (default `~/.cargo/bin`), which the project does **not** promise. **No component looks for the daemon there** — not the GUI, not the CLI | Standing rule |
-| A **feature-complete** daemon | The CLI-hosted daemon links the engine with the `cli` feature only, so 8 of the 20 advertised capabilities are feature-gated off in that build | **M008** (profile) and **M006** (publication) |
+| A **feature-complete** daemon | The CLI-hosted daemon links the engine with the `cli` feature only, so 17 of the 30 advertised capabilities are feature-gated off in that build | **M008** (profile) and **M006** (publication) |
 | **Session persistence** for the CLI-hosted daemon | The CLI's start path uses `noop_store()` | The daemon binary |
 
 `cargo install` is a build recipe, not a distribution channel: there is no

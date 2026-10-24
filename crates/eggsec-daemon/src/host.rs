@@ -81,11 +81,12 @@ pub struct DaemonHost {
     session_access: std::sync::Mutex<FxHashMap<eggsec_runtime::SessionId, SessionAccess>>,
     store: Arc<dyn DaemonStore>,
     /// The task kinds this host publishes, derived at construction from the
-    /// executor's declaration intersected with the daemon's conservative
-    /// policy.
+    /// executor's declaration intersected with the canonical capability list.
     ///
     /// The list is derived rather than declared so a host cannot advertise a
-    /// capability its executor rejects outright.
+    /// capability its executor rejects outright. It is also the runtime's
+    /// **enforced** set: publication and admission are the same object, so
+    /// the daemon never advertises a capability it will refuse.
     published_task_kinds: Vec<TaskCapability>,
     /// The engine feature set the executor behind this runtime published.
     ///
@@ -98,16 +99,57 @@ pub struct DaemonHost {
 /// Intersect an executor's declared support with the daemon's conservative
 /// policy.
 ///
-/// The policy owns the published set: an executor may declare less than the
-/// policy allows (the daemon then publishes the smaller set), but the daemon
-/// never widens its own policy because an executor asked for it.
+/// The canonical list owns the *names*: it is derived from the task-kind set,
+/// so it can never omit a kind the engine can execute. The executor's
+/// declaration owns the *reachability*: an executor may declare less than the
+/// canonical list (the daemon then publishes the smaller set), but the daemon
+/// never widens the canonical list because an executor asked for it.
 fn published_task_kinds(declared: &[TaskCapability]) -> Vec<TaskCapability> {
-    RuntimeCapabilities::daemon_conservative()
+    RuntimeCapabilities::canonical()
         .task_kinds
         .into_iter()
         .filter(|cap| declared.iter().any(|d| d.name == cap.name))
         .collect()
 }
+
+/// The names of a capability list, for comparison and error reporting.
+fn capability_names(capabilities: &[TaskCapability]) -> Vec<String> {
+    capabilities.iter().map(|c| c.name.clone()).collect()
+}
+
+/// Why a host could not be constructed from a pre-built runtime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DaemonHostError {
+    /// The runtime's enforced capability set is not the set the host would
+    /// publish, so the host would advertise a capability the runtime refuses
+    /// at admission (or refuse one it advertised).
+    ///
+    /// The host refuses to construct rather than narrowing silently: a
+    /// published list and an admitted list that disagree are exactly the
+    /// inconsistency this host exists to make unrepresentable.
+    CapabilitySetsDisagree {
+        published: Vec<String>,
+        enforced: Vec<String>,
+    },
+}
+
+impl std::fmt::Display for DaemonHostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CapabilitySetsDisagree {
+                published,
+                enforced,
+            } => write!(
+                f,
+                "the runtime's enforced capability set ({}) is not the published set ({})",
+                enforced.join(", "),
+                published.join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for DaemonHostError {}
 
 impl DaemonHost {
     pub fn new(
@@ -116,7 +158,16 @@ impl DaemonHost {
         store: Arc<dyn DaemonStore>,
     ) -> Self {
         let declared = executor.supported_task_kinds();
-        let runtime = Runtime::new(RuntimeConfig::default(), executor);
+        // The published set is computed FIRST, and then handed to the runtime
+        // as its enforced set. Publication and admission are therefore the
+        // same object by construction: the daemon never advertises a
+        // capability it will refuse, and never refuses one it advertised.
+        let published = published_task_kinds(&declared);
+        let runtime_config = RuntimeConfig {
+            capabilities: RuntimeCapabilities::with_task_kinds(published.clone()),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(runtime_config, executor);
         let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
         Self {
             runtime: Arc::new(runtime),
@@ -124,7 +175,7 @@ impl DaemonHost {
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            published_task_kinds: published_task_kinds(&declared),
+            published_task_kinds: published,
             enabled_features,
         }
     }
@@ -161,22 +212,37 @@ impl DaemonHost {
     /// Used when the caller needs to share the same `Runtime` instance
     /// with an executor that requires runtime session lookups (e.g.,
     /// `EggsecRuntimeExecutor` which resolves session surface/scope).
+    ///
+    /// The runtime's **enforced** capability set is fixed at its
+    /// construction, so the host publishes exactly that set -- narrowed to
+    /// the canonical list -- and refuses to construct when the two disagree.
+    /// Refusing beats narrowing silently: a published list that is wider
+    /// than the admitted list is the inconsistency this host exists to make
+    /// unrepresentable.
     pub fn with_runtime(
         config: DaemonConfig,
         runtime: Arc<Runtime>,
         store: Arc<dyn DaemonStore>,
-    ) -> Self {
+    ) -> Result<Self, DaemonHostError> {
         let declared = runtime.supported_task_kinds();
+        let published = published_task_kinds(&declared);
+        let enforced = runtime.enforced_task_kinds();
+        if capability_names(&published) != capability_names(&enforced) {
+            return Err(DaemonHostError::CapabilitySetsDisagree {
+                published: capability_names(&published),
+                enforced: capability_names(&enforced),
+            });
+        }
         let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
-        Self {
+        Ok(Self {
             runtime,
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            published_task_kinds: published_task_kinds(&declared),
+            published_task_kinds: published,
             enabled_features,
-        }
+        })
     }
 
     pub fn runtime(&self) -> &Arc<Runtime> {
@@ -412,15 +478,11 @@ impl DaemonHost {
                 // The published list is the host's stored, derived list -- not
                 // a capability constant chosen at the call site. A rejecting
                 // executor therefore publishes nothing, and a real one
-                // publishes exactly what it declared within the daemon's
-                // conservative policy.
-                let runtime_caps = eggsec_runtime::RuntimeCapabilities {
-                    task_kinds: self.published_task_kinds.clone(),
-                    transports: vec!["in-process".into()],
-                    supports_cancellation: true,
-                    supports_multiple_sessions: true,
-                    supports_multiple_active_tasks: false,
-                };
+                // publishes exactly what it declared within the canonical
+                // capability list.
+                let runtime_caps = eggsec_runtime::RuntimeCapabilities::with_task_kinds(
+                    self.published_task_kinds.clone(),
+                );
                 ServerMessage::Capabilities {
                     request_id,
                     capabilities: crate::protocol::DaemonCapabilities {
@@ -3907,7 +3969,7 @@ mod tests {
     }
 
     /// An executor that declares no support publishes no task kinds: the
-    /// "20 advertised, 0 executable" state is unreachable.
+    /// "advertised but not executable" state is unreachable.
     #[tokio::test]
     async fn an_executor_that_declares_no_support_publishes_no_task_kinds() {
         let host = DaemonHost::new(
@@ -3919,9 +3981,9 @@ mod tests {
     }
 
     /// The published list is the declared support intersected with the
-    /// daemon's conservative policy -- no more, no less.
+    /// canonical capability list -- no more, no less.
     #[tokio::test]
-    async fn the_published_list_is_the_declared_support_intersected_with_the_policy() {
+    async fn the_published_list_is_the_declared_support_intersected_with_the_canonical_list() {
         let host = DaemonHost::new(
             DaemonConfig::default(),
             DeclaringExecutor::new(&["port-scan"]),
@@ -3930,32 +3992,40 @@ mod tests {
         assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
     }
 
-    /// A kind outside the conservative policy is never published, even when
-    /// the executor declares it: the policy owns the published set.
+    /// A kind outside the canonical list is never published, even when the
+    /// executor declares it: the canonical list owns the names.
     #[tokio::test]
-    async fn a_declared_kind_outside_the_policy_is_not_published() {
+    async fn a_declared_kind_outside_the_canonical_list_is_not_published() {
         let host = DaemonHost::new(
             DaemonConfig::default(),
-            DeclaringExecutor::new(&["port-scan", "stress-test"]),
+            DeclaringExecutor::new(&["port-scan", "not-a-canonical-kind"]),
             crate::store::noop_store(),
         );
         assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
     }
 
-    /// The default declaration keeps the conservative set: a real daemon
-    /// publishes exactly what it published before the declaration seam.
+    /// The canonical list covers every capability name the task-kind set
+    /// defines, so a hazard family is advertised like any other. Advertising
+    /// is not permitting: the operator's execution policy still decides
+    /// whether the operation may run.
     #[tokio::test]
-    async fn an_executor_that_declares_nothing_keeps_the_conservative_set() {
+    async fn an_executor_that_declares_nothing_publishes_the_canonical_set() {
         let host = test_host();
         let published = published_task_kind_names(&host).await;
-        let conservative = RuntimeCapabilities::daemon_conservative();
-        assert_eq!(published.len(), conservative.task_kinds.len());
-        assert!(published.len() > 1, "the conservative set is not empty");
-        for capability in &conservative.task_kinds {
+        let canonical = RuntimeCapabilities::canonical();
+        assert_eq!(published.len(), canonical.task_kinds.len());
+        assert!(published.len() > 1, "the canonical set is not empty");
+        for capability in &canonical.task_kinds {
             assert!(
                 published.contains(&capability.name),
-                "missing conservative task kind: {}",
+                "missing canonical task kind: {}",
                 capability.name
+            );
+        }
+        for expected in &["resume", "stress-test", "wireless-active", "db-pentest"] {
+            assert!(
+                published.contains(&expected.to_string()),
+                "the canonical set must advertise {expected}"
             );
         }
     }
@@ -3975,7 +4045,7 @@ mod tests {
     #[tokio::test]
     async fn the_start_path_never_publishes_a_capability_it_cannot_execute() {
         let declaring = DeclaringExecutor::new(&["port-scan", "fuzz"]);
-        let conservative_count = RuntimeCapabilities::daemon_conservative().task_kinds.len();
+        let canonical_count = RuntimeCapabilities::canonical().task_kinds.len();
         let hosts: Vec<(DaemonHost, usize)> = vec![
             (
                 DaemonHost::new(
@@ -3993,7 +4063,7 @@ mod tests {
                 ),
                 1,
             ),
-            (test_host(), conservative_count),
+            (test_host(), canonical_count),
             (
                 DaemonHost::new_noop(DaemonConfig::default(), crate::store::noop_store()),
                 0,

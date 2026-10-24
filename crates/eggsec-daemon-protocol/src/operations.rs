@@ -23,6 +23,15 @@ use eggsec_policy::catalog::OperationMetadata;
 use eggsec_policy::{Capability, IntendedUse, OperationMode, OperationRisk};
 use serde::{Deserialize, Serialize};
 
+/// The target-policy label for an operation that binds to a **local**
+/// interface or local identifier rather than to a network target.
+///
+/// Published as [`OperationDescription::target_policy`]. A client that
+/// switches on the label must handle it: the operation accepts no network
+/// target, and its local identifier is not matched against the scope's
+/// remote target rules.
+pub const INTERFACE_BOUND_TARGET_POLICY: &str = "interface-bound";
+
 /// Wire description of one canonical operation.
 ///
 /// Every field is read from [`OperationMetadata`]; see the module docs.

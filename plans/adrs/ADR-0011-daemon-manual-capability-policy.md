@@ -1,6 +1,6 @@
 # ADR-0011: The daemon's manual capability policy
 
-Status: proposed
+Status: accepted
 
 Date: 2026-10-24
 

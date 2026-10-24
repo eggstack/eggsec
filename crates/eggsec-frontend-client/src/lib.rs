@@ -141,6 +141,15 @@ mod tests {
     struct NoopExecutor;
 
     impl RuntimeTaskExecutor for NoopExecutor {
+        /// Declares no support.
+        ///
+        /// A rejecting executor MUST declare the empty set explicitly: the
+        /// trait default is the canonical list, so "says nothing" would mean
+        /// "declares everything".
+        fn supported_task_kinds(&self) -> Vec<eggsec_runtime::TaskCapability> {
+            Vec::new()
+        }
+
         fn execute(
             &self,
             _task_id: TaskId,

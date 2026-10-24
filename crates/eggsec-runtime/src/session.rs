@@ -308,7 +308,18 @@ impl RuntimeSession {
     /// Reconstructs the metadata and completed task records from a snapshot.
     /// Active task records are not restorable (they hold runtime handles),
     /// but completed task snapshots are preserved for history and audit querying.
-    pub fn hydrate_from_snapshot(snapshot: SessionSnapshot) -> Self {
+    ///
+    /// The recovered session's capabilities are **not** taken from the
+    /// snapshot. The snapshot's own `capabilities` field records what the
+    /// runtime was configured with when the snapshot was written, and a
+    /// daemon that restarts with a different configuration would otherwise
+    /// silently narrow — or widen — the recovered session. The caller passes
+    /// the runtime's *current* capability set instead, so a recovered session
+    /// enforces exactly what a fresh session enforces.
+    pub fn hydrate_from_snapshot(
+        snapshot: SessionSnapshot,
+        capabilities: RuntimeCapabilities,
+    ) -> Self {
         Self {
             id: snapshot.session_id,
             surface: snapshot.surface,
@@ -321,7 +332,7 @@ impl RuntimeSession {
             task_timeout: None,
             closed: snapshot.closed,
             closed_at: snapshot.closed_at,
-            capabilities: RuntimeCapabilities::default(),
+            capabilities,
             owner_client_id: snapshot.owner_client_id,
         }
     }
@@ -562,7 +573,8 @@ mod tests {
             closed_at: None,
             owner_client_id: None,
         };
-        let session = RuntimeSession::hydrate_from_snapshot(snapshot.clone());
+        let session =
+            RuntimeSession::hydrate_from_snapshot(snapshot.clone(), RuntimeCapabilities::default());
         assert_eq!(session.id, snapshot.session_id);
         assert_eq!(session.execution_surface(), RuntimeSurface::McpServer);
         assert!(session.scope().is_some());
@@ -655,7 +667,8 @@ mod tests {
             closed_at: Some(200),
             owner_client_id: None,
         };
-        let session = RuntimeSession::hydrate_from_snapshot(snapshot);
+        let session =
+            RuntimeSession::hydrate_from_snapshot(snapshot, RuntimeCapabilities::default());
         assert!(session.is_closed());
         let snap = session.snapshot();
         assert!(snap.closed);

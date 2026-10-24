@@ -31,6 +31,16 @@ use tokio_util::sync::CancellationToken;
 struct RejectingExecutor;
 
 impl RuntimeTaskExecutor for RejectingExecutor {
+    /// Declares no support.
+    ///
+    /// A rejecting executor MUST declare the empty set explicitly: the trait
+    /// default is the canonical list, so "says nothing" would mean "declares
+    /// everything", and the daemon would advertise capabilities it cannot
+    /// execute.
+    fn supported_task_kinds(&self) -> Vec<eggsec_runtime::TaskCapability> {
+        Vec::new()
+    }
+
     fn execute(
         &self,
         _task_id: TaskId,

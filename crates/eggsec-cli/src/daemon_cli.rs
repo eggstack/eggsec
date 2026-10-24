@@ -1134,7 +1134,7 @@ mod tests {
                     }) => eggsec_daemon_protocol::protocol::ServerMessage::Capabilities {
                         request_id,
                         capabilities: eggsec_daemon_protocol::protocol::DaemonCapabilities {
-                            runtime: eggsec_runtime::RuntimeCapabilities::daemon_conservative(),
+                            runtime: eggsec_runtime::RuntimeCapabilities::canonical(),
                             transports: vec![],
                             operation_schema: true,
                             enabled_features: None,
@@ -1414,10 +1414,10 @@ mod tests {
         {
             ServerMessage::Capabilities { capabilities, .. } => {
                 assert!(!capabilities.runtime.task_kinds.is_empty());
-                let conservative = eggsec_runtime::RuntimeCapabilities::daemon_conservative();
+                let canonical = eggsec_runtime::RuntimeCapabilities::canonical();
                 assert_eq!(
                     capabilities.runtime.task_kinds.len(),
-                    conservative.task_kinds.len()
+                    canonical.task_kinds.len()
                 );
             }
             other => panic!("expected Capabilities, got {other:?}"),

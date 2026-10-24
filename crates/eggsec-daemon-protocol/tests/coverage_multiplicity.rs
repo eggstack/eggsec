@@ -25,13 +25,13 @@ use eggsec_daemon_protocol::operations::describe_operations;
 const EXPECTED_TASK_KIND_COUNT: usize = 30;
 
 /// The canonical number of published catalog operations.
-const EXPECTED_OPERATION_COUNT: usize = 34;
+const EXPECTED_OPERATION_COUNT: usize = 35;
 
 /// The canonical number of distinct operations the task kinds resolve to.
 ///
 /// Fewer than [`EXPECTED_TASK_KIND_COUNT`] because several wire shapes share
 /// one operation.
-const EXPECTED_DISTINCT_OPERATION_ID_COUNT: usize = 26;
+const EXPECTED_DISTINCT_OPERATION_ID_COUNT: usize = 28;
 
 /// The canonical number of distinct capability names the task kinds advertise.
 ///
@@ -40,13 +40,17 @@ const EXPECTED_DISTINCT_OPERATION_ID_COUNT: usize = 26;
 const EXPECTED_DISTINCT_CAPABILITY_NAME_COUNT: usize = 30;
 
 /// The number of operations that exactly one wire shape resolves to.
-const EXPECTED_SINGLE_SHAPE_OPERATION_COUNT: usize = 23;
+const EXPECTED_SINGLE_SHAPE_OPERATION_COUNT: usize = 26;
 
 /// The number of operations that exactly two wire shapes resolve to.
 const EXPECTED_TWO_SHAPE_OPERATION_COUNT: usize = 2;
 
 /// The number of operations that exactly three wire shapes resolve to.
-const EXPECTED_THREE_SHAPE_OPERATION_COUNT: usize = 1;
+///
+/// None: the packet family used to be the only one with three wire shapes,
+/// and the capture's split into its own `packet-capture` operation left
+/// `packet` with the two shapes that address a remote host.
+const EXPECTED_THREE_SHAPE_OPERATION_COUNT: usize = 0;
 
 /// The pinned multiplicity map: how many wire shapes resolve to each
 /// operation.
@@ -70,7 +74,8 @@ const EXPECTED_OPERATION_MULTIPLICITIES: &[(&str, usize)] = &[
     ("load-test", 1),
     ("nse", 1),
     ("oauth", 1),
-    ("packet", 3),
+    ("packet", 2),
+    ("packet-capture", 1),
     ("pipeline", 2),
     ("proxy-intercept", 1),
     ("recon", 1),
@@ -81,7 +86,8 @@ const EXPECTED_OPERATION_MULTIPLICITIES: &[(&str, usize)] = &[
     ("vuln", 1),
     ("waf-detect", 1),
     ("waf-stress", 1),
-    ("wireless", 2),
+    ("wireless", 1),
+    ("wireless-deauth", 1),
     ("workflow", 1),
 ];
 
@@ -175,7 +181,7 @@ fn shared_operations_are_exactly_the_ones_with_several_wire_shapes() {
         .collect();
     assert_eq!(
         shared,
-        vec!["packet", "pipeline", "wireless"],
+        vec!["packet", "pipeline"],
         "the set of operations shared by several wire shapes changed"
     );
 }

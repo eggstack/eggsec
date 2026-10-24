@@ -60,7 +60,7 @@ pub fn approve_run_request(
         enforcement
             .approve_manual(exec_surface, descriptor, manual_override)
             .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: e.to_string(),
+                reason: denial_reason(&e),
             })
     } else {
         if manual_override.is_some() {
@@ -70,7 +70,7 @@ pub fn approve_run_request(
         }
         enforcement.approve(exec_surface, descriptor).map_err(|e| {
             RuntimeBridgeError::EnforcementDenied {
-                reason: e.to_string(),
+                reason: denial_reason(&e),
             }
         })
     }
@@ -99,7 +99,7 @@ pub fn approve_run_request_execution(
         enforcement
             .approve_manual_execution(exec_surface, descriptor, manual_override)
             .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: e.to_string(),
+                reason: denial_reason(&e),
             })
     } else {
         if manual_override.is_some() {
@@ -110,9 +110,22 @@ pub fn approve_run_request_execution(
         enforcement
             .approve_execution(exec_surface, descriptor)
             .map_err(|e| RuntimeBridgeError::EnforcementDenied {
-                reason: e.to_string(),
+                reason: denial_reason(&e),
             })
     }
+}
+
+/// Render an enforcement refusal so the caller can report *why*.
+///
+/// The enforcement error's `Display` is a deliberate one-liner ("operation
+/// denied by policy") for a log line. A client that surfaces the refusal to
+/// an operator needs the decision's own reasons: the risk tier the
+/// execution policy refuses, the feature the build lacks, or the target
+/// that is out of scope. Without them a refusal is indistinguishable from
+/// every other refusal, which is exactly what the GUI's coverage model
+/// must not report.
+fn denial_reason(error: &crate::config::EnforcementError) -> String {
+    error.reasons().join("; ")
 }
 
 /// Error type for runtime bridge conversions.

@@ -310,6 +310,19 @@ pub struct OperationDescriptor {
     /// Capabilities required by this operation (e.g. "active-probe", "crawl").
     #[serde(default)]
     pub required_capabilities: Vec<Capability>,
+    /// The operation's target policy.
+    ///
+    /// This is the fact the enforcement kernel needs to know whether the
+    /// descriptor's `target` is a **remote host** or a **local identifier**.
+    /// Only [`TargetPolicyKind::InterfaceBound`] changes the kernel's
+    /// behaviour: an interface-bound target is carried into the decision
+    /// record for audit but is never matched against the scope's remote
+    /// target rules.
+    ///
+    /// `#[serde(default)]` keeps a legacy payload readable; the default is
+    /// behaviour-preserving because only the interface-bound value branches.
+    #[serde(default)]
+    pub target_policy: TargetPolicyKind,
 }
 
 impl OperationDescriptor {
@@ -347,7 +360,24 @@ impl OperationDescriptor {
             requires_private_or_local_target,
             requires_explicit_scope,
             required_capabilities,
+            // This constructor does not know the operation's catalog entry, so
+            // it cannot know the target policy. The default is the neutral
+            // one: only `InterfaceBound` changes the kernel's behaviour, so
+            // the default is behaviour-preserving. Callers that build a
+            // descriptor for a catalog operation should use
+            // `OperationMetadata::try_descriptor_for_target`, which sets it
+            // from the catalog.
+            target_policy: TargetPolicyKind::default(),
         }
+    }
+
+    /// Set the descriptor's target policy.
+    ///
+    /// Used by callers that construct a descriptor directly rather than
+    /// through [`OperationMetadata::try_descriptor_for_target`].
+    pub fn with_target_policy(mut self, target_policy: TargetPolicyKind) -> Self {
+        self.target_policy = target_policy;
+        self
     }
 }
 

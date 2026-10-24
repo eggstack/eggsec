@@ -26,7 +26,9 @@
 //! refuses an operation at run time, that refusal is the engine's own word
 //! about the running daemon, and no published list can overrule it.
 
-use eggsec_daemon_protocol::operations::{OperationDescription, TaskKindDescription};
+use eggsec_daemon_protocol::operations::{
+    OperationDescription, TaskKindDescription, INTERFACE_BOUND_TARGET_POLICY,
+};
 use eggsec_runtime::TaskCapability;
 
 use crate::availability::DenialLedger;
@@ -198,7 +200,7 @@ fn resolve(
         if required_features.is_empty() {
             return (
                 Reachability::Available,
-                "the daemon advertises this capability".to_owned(),
+                available_reason(operation, "the daemon advertises this capability"),
             );
         }
         return (
@@ -219,10 +221,28 @@ fn resolve(
         ),
         None => (
             Reachability::Available,
-            "the daemon advertises this capability and has its required features enabled"
-                .to_owned(),
+            available_reason(
+                operation,
+                "the daemon advertises this capability and has its required features enabled",
+            ),
         ),
     }
+}
+
+/// The reason string for an available capability.
+///
+/// An **interface-bound** operation binds to a local interface rather than to
+/// a network target, and the reason says so: an operator reading the GUI
+/// should not assume the operation addresses a host that had to be in scope.
+/// The verdict set is unchanged — this is the same `Available` verdict with a
+/// more precise reason.
+fn available_reason(operation: &OperationDescription, plain: &str) -> String {
+    if operation.target_policy == INTERFACE_BOUND_TARGET_POLICY {
+        return format!(
+            "{plain}; the operation binds to a local interface, not to a network target"
+        );
+    }
+    plain.to_owned()
 }
 
 /// The first required feature the daemon's enabled-feature set is missing.
@@ -277,6 +297,38 @@ mod tests {
 
     fn capability(name: &str) -> TaskCapability {
         TaskCapability::new(name, name)
+    }
+
+    /// An interface-bound operation is available, and its reason says that it
+    /// binds to a local interface rather than to a network target.
+    ///
+    /// The verdict set is unchanged — this is the same `Available` verdict
+    /// with a more precise reason, so an operator reading the GUI does not
+    /// assume the operation addresses a host that had to be in scope.
+    #[test]
+    fn an_interface_bound_operation_says_so() {
+        let kinds = [task_kind("Wireless", "wireless", "wireless")];
+        let description = eggsec_daemon_protocol::operations::describe_operations()
+            .operations
+            .into_iter()
+            .find(|operation| operation.id == "wireless")
+            .expect("the wireless operation is published");
+        assert_eq!(
+            description.target_policy, INTERFACE_BOUND_TARGET_POLICY,
+            "the wireless operation is interface-bound"
+        );
+        let enabled = description.required_features.clone();
+        let operations = [description];
+        let capabilities = [capability("wireless")];
+
+        let rows = coverage_for(&kinds, &operations, &capabilities, Some(&enabled));
+
+        assert_eq!(rows[0].reachability, Reachability::Available);
+        assert!(
+            rows[0].reason.contains("local interface"),
+            "the reason must say the operation binds to a local interface: {}",
+            rows[0].reason
+        );
     }
 
     #[test]

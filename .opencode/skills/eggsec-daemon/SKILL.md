@@ -61,12 +61,20 @@ packaged, signed, or auto-updating artefact, and it does not cover Windows
 ## Capability honesty
 
 The published task-kind list is **derived**, never declared beside the
-executor: it is the executor's declared support
-(`RuntimeTaskExecutor::supported_task_kinds()`) intersected with the daemon's
-conservative policy, computed once at construction. A daemon that cannot
-execute anything therefore publishes **nothing**. A *published* kind whose
-engine feature is off is a different matter — it is denied at dispatch with
-`FeatureMissing`, not `UnsupportedTaskKind`.
+executor: it is the canonical capability list — derived from the task-kind
+set — intersected with the executor's declared support
+(`RuntimeTaskExecutor::supported_task_kinds()`), computed once at construction.
+The host hands that same list to the runtime as its enforced set, so
+**publication and admission are the same object**: the daemon never
+advertises a capability it will refuse. A daemon that cannot execute anything
+therefore publishes **nothing**; an executor that rejects everything must
+declare the empty set explicitly, because the trait's default is the
+canonical list.
+
+Two refusals are different facts and must not be conflated: a *published*
+kind whose engine feature is off is denied with `FeatureMissing`, and a
+*published* kind the operator's execution policy refuses is denied with the
+risk-policy refusal naming the risk tier. Neither is `UnsupportedTaskKind`.
 
 ## Starting a daemon honestly
 

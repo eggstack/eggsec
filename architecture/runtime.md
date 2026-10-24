@@ -4,10 +4,20 @@
 > variants, not 29; the previously undocumented 30th variant is **`Resume`**
 > (`ResumeParams`, capability `resume`, shares the `pipeline` operation family).
 > `RuntimeEvent` decl is `event.rs:114` (was `:115`); `RunRequest` is
-> `request.rs:99` (was `:98`); `request.rs` has 5 tests (was 2);
-> `full_lab()` registers 29 capabilities and omits `resume`;
-> `daemon_conservative()` also excludes `resume`. Removed a duplicated
-> `TaskCancelled` in the critical-event list. All citations re-checked.
+> `request.rs:99` (was `:98`); `request.rs` has 5 tests (was 2).
+> Removed a duplicated `TaskCancelled` in the critical-event list. All
+> citations re-checked.
+>
+> **Corrections (2026-10-24, milestone 010)** — `full_lab()` and
+> `daemon_conservative()` are **gone**. The workspace now has exactly one
+> capability list, `RuntimeCapabilities::canonical()`, **derived** from the
+> canonical task-kind set and covering all 30 canonical names, `resume`
+> included. The task-kind set is declared once, in the `define_task_kinds!`
+> table in `request.rs`, which generates the enum, the capability-name
+> match, the variant enumeration, and the published description table. The
+> trait default of `RuntimeTaskExecutor::supported_task_kinds()` is the
+> canonical list, so an executor that rejects every task must declare the
+> empty set explicitly.
 
 Frontend-neutral async runtime for task lifecycle management. Provides the bridge between user-facing frontends (TUI, CLI, REST, MCP) and the eggsec engine. Intentionally dependency-light to remain a shared contract without pulling in TUI, transport, or engine dependencies.
 
@@ -212,9 +222,16 @@ Events broadcast via `tokio::sync::broadcast` channel (default capacity: 256).
 
 | Mode | Constructor | Task Kinds |
 |------|-------------|-----------|
-| Conservative | `daemon_conservative()` (default) | 20 kinds — excludes stress-test, packet-send, packet-capture, traceroute, wireless, wireless-active, db-pentest, intercept, c2, **resume** |
-| Full lab | `full_lab()` | 29 registered capabilities — every wire kind except `resume` |
+| Canonical | `canonical()` (default) | Every capability name the task-kind set defines, `resume` included — derived from `TaskKind::all_variants()`, never transcribed |
+| Narrow | `with_task_kinds(list)` | Exactly the given list — how a host makes its **published** set and the runtime's **enforced** set the same object |
 | No-op | `noop()` | Empty (no task kinds) |
+
+The capability set is an **advertisement and admission** concern, not an
+authorisation one: whether an operation may run is decided by the
+enforcement layer from the operation's risk, the operator's execution policy,
+the loaded scope, and the enabled features. Publishing a hazard family here
+therefore does not permit it — it only stops the runtime from refusing the
+submission as an unknown kind.
 
 ### RuntimeTaskExecutor Trait (`runtime.rs:41`)
 
