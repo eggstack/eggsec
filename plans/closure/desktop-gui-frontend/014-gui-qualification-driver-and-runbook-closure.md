@@ -597,3 +597,104 @@ The session owner owns these files; this milestone does not edit them.
    `/tmp/eggsec-guardwork/m014-skill.md` (shared with milestone 013).
 4. **`architecture/desktop_gui.md`** — apply
    `/tmp/eggsec-guardwork/m014-desktop_gui.md` (shared with milestone 013).
+
+## Addendum 2026-10-24 — the operator's attestation, and the macOS promotion
+
+This milestone's own record said the behavioural cells were **promotable, not
+promoted**, because rule P1 requires an `operator` attestation and nothing
+existed to record one. That gap is now closed, and the macOS cells are
+promoted on the evidence of a run the operator attested to.
+
+### What was missing, and what it was
+
+The harness emitted `operator: not-performed` at every one of its sites, and
+`OperatorOutcome::Pass` occurred zero times. The validator's writer hardcoded
+the operator outcome, and the only documented route to a promotion was a
+**hand edit of the record's json block** — which a later run silently
+overwrites. So the promotion path existed on paper and in no tooling: the
+cells were promotable by a human with a text editor, and by nothing else.
+
+### What was added
+
+- An **attestation file** of the operator's own, schema
+  `eggsec-gui-operator-attestation/v1`: who observed the behaviours, when, on
+  which platform, against which commit, and what they saw for each column.
+- `--attestation` on `scripts/gui_qualification.sh`, which validates the file
+  before the run and merges it into the record **in the same write that
+  produces the record** — so the record has one writer and a later run cannot
+  erase the attestation.
+- The validator now refuses an operator outcome of `pass` that **no named
+  human signed**, that carries **no observation**, or whose attestation names
+  another platform or a commit the run does not descend from; and it refuses
+  an attestation that claims a column passed whose scripted outcome was not
+  `pass`.
+- `--run-label`, so a day with two runs keeps two records instead of one
+  overwriting the other.
+- **Guard 191**, which pins the three facts that make the machinery real (the
+  procedure accepts an attestation and passes it to the writer; the validator
+  knows the schema and refuses an unattributed `pass`; no code path defaults
+  an operator outcome to `pass`) and the two that keep it honest (the harness
+  never self-attests; the matrix's own rule P1 still requires the operator's
+  `pass`). It was negative-tested against five injected violations — the
+  procedure losing the flag, the flag not reaching the writer, P1 weakened to
+  `not-applicable`, the harness emitting a pass, and the validator defaulting
+  an outcome to `pass` — and it caught every one of them.
+
+### Three defects the promotion found
+
+Running the procedure for real on a host with a live GUI window found three
+defects that the milestone's own green runs could not have found, because
+they all need a window that is actually there.
+
+1. **The launch column could never pass.** The status chain tested
+   `LAUNCH_STATUS == "not-performed"` first, and the status starts life as
+   `not-performed`, so every run took the failure branch however many windows
+   the probe had found. A record that said "the probe found 1 window(s) titled
+   `Eggsec`" was still filed as `fail`. The count decides now.
+2. **The launch screenshot was a photograph of the operator's desktop.** On
+   macOS the procedure captured the whole screen, so the artefact it proposed
+   to commit was whatever else was open. The capture is now of the GUI's own
+   window rectangle, taken from the window's accessibility geometry.
+3. **The Linux prerequisite probe could not see the appindicator module.**
+   Debian and Ubuntu name the pkg-config module `ayatana-appindicator3-0.1`,
+   without the `lib` prefix the library keeps everywhere. The probe knew only
+   the other spelling, so it reported a distribution that has the library as
+   one that does not, and the Linux leg failed its own probe before it could
+   produce a record.
+
+### What was observed, and what is promoted
+
+The operator ran the procedure in operator mode against a live `service`-profile
+daemon on this macOS host, with the GUI's window open, and attested to what
+they saw: the window painted and titled `Eggsec`; the badge reading
+`CONNECTED` with the daemon's published catalogue (OPERATIONS 35, TASK KINDS
+30, CAPABILITIES 30) and a session id; the schema-driven form assembling a
+request the daemon accepted; the cancel control reaching the daemon and the
+daemon's answer surfaced verbatim; the report rendering as data; and the
+export writing the daemon's report to the chosen destination. The run's
+record is `docs/evidence/gui-qualification/macos-2026-10-24-operator.md`, the
+attestation is `docs/evidence/gui-qualification/macos-2026-10-24-operator.attestation.json`,
+and the matrix's macOS `Launch`, `Connect`, `Submit`, `Cancel`, `Render` and
+`Export` cells are now `qualified`.
+
+### What is still not promoted, and why
+
+- **The Linux behavioural cells stay `not qualified`.** A CI run cannot
+  attest: the `gui-platform` job has nobody to observe with, so every column
+  it produces carries `operator: not-performed`, and rule P1 asks for `pass`.
+  Promoting the Linux behavioural cells needs an operator at a Linux desktop.
+  The Linux **Build** cell is the one CI can carry, and only if the build
+  sidecar is committed beside the record so its digest can be re-checked.
+- **OQ-2 and OQ-3 remain open** as they were: whether the GUI paints a window
+  under a virtual display on `ubuntu-latest` is still unmeasured, and whether
+  a CI macOS runner has an attachable GUI session is still unmeasured. The
+  macOS `Launch` cell no longer waits on OQ-3, because the attestation it
+  needed was obtained on a desktop session.
+- **OQ-4 is now partly answered by observation.** The `osascript` probe
+  reaches System Events on a desktop session and answers, and it had to be
+  made to bring the application forward first: a window that is not on the
+  current Space reads as absent. Whether the probe behaves the same way on a
+  runner, where the Accessibility permission is almost certainly not granted,
+  is still unmeasured.
+- **The Windows row is excluded by decision** (`ADR-0010`) and was not
+  touched.

@@ -13,7 +13,7 @@ This file is the run record for one desktop-GUI qualification run. It is produce
 | Date of the run (UTC) | 2026-10-24 |
 | Run label | `operator` |
 | Operator or CI job | `operator` |
-| Commit SHA (`git rev-parse HEAD`) | `309d77d1362fef645927117efe78e9c19e53cbe2` |
+| Commit SHA (`git rev-parse HEAD`) | `d0cf5bc3b71ce4d575a3888cce390cbbc310d12b` |
 | Tree state (`git status --porcelain` empty?) | `clean` |
 | Host OS version | macos 25.6.0 |
 | Architecture | aarch64 |
@@ -53,9 +53,9 @@ running 5 tests
 test the_column_identifiers_are_the_seven_the_matrix_publishes ... ok
 test the_outcome_file_round_trips_and_names_what_is_wrong_with_it ... ok
 test the_export_refuses_a_non_regular_destination_and_backs_up_a_real_one ... ok
-test the_live_daemon_half_records_its_outcomes ... ok
 test every_report_format_renders_writes_and_digests ... ok
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test the_live_daemon_half_records_its_outcomes ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 ```
 
 ## Pass criterion and outcome
@@ -63,22 +63,43 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 | Column | Pass criterion | Outcome | Met? |
 |---|---|---|---|
 | `build` | the runbook's Step 1 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-applicable` | yes |
-| `launch` | the runbook's Step 2 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
-| `connect` | the runbook's Step 3 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
-| `submit` | the runbook's Step 4 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
-| `cancel` | the runbook's Step 5 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
-| `render` | the runbook's Step 6 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
-| `export` | the runbook's Step 7 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `not-performed` | yes |
+| `launch` | the runbook's Step 2 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
+| `connect` | the runbook's Step 3 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
+| `submit` | the runbook's Step 4 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
+| `cancel` | the runbook's Step 5 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
+| `render` | the runbook's Step 6 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
+| `export` | the runbook's Step 7 (`docs/GUI_BUILD.md` §5) | scripted `pass`, operator `pass` | yes |
 
 Each column's reason:
 
 - `build` — the release build produced `eggsec-gui.build.json` and its SHA-256 is recorded
 - `launch` — the probe found exactly one window titled `Eggsec`
 - `connect` — the GUI's own client connected to the daemon and read its catalogue
-- `submit` — the GUI's own form engine assembled the `PortScan` request and the daemon accepted it as task task:beaf9cfd-62ee-41a8-8bfb-5534b67510a0
+- `submit` — the GUI's own form engine assembled the `PortScan` request and the daemon accepted it as task task:1eba65d6-dcf1-4a7d-aa78-53e53aec6ff3
 - `cancel` — the daemon accepted the cancellation and the event stream reported `cancelled`
 - `render` — the daemon's report for the task rendered as 0 findings and 1 open ports against `127.0.0.1`
 - `export` — the GUI's own export path wrote the daemon's report in 6 formats, and each written file's bytes equal the renderer's output
+
+## Operator attestation
+
+The human half of this run. The scripted outcomes above are what the machine measured; these are what a person saw.
+
+| Field | Value |
+|---|---|
+| Attested by | `David Bowman` |
+| Attested at | 2026-10-24 |
+| Platform | `macos` |
+| Commit attested | `309d77d1362fef645927117efe78e9c19e53cbe2` |
+| Schema | `eggsec-gui-operator-attestation/v1` |
+
+What the operator observed:
+
+- `launch` — the eggsec-gui window was painted on the macOS WindowServer and titled Eggsec; the accessibility query returned exactly one window, and the capture shows the window's own contents rather than a blank frame or a photograph of the desktop
+- `connect` — the badge beside the title read CONNECTED; the header line reported OPERATIONS 35, TASK KINDS 30 and CAPABILITIES 30; the session line carried a session id; and the OPERATIONS sidebar listed the operations the daemon had published
+- `submit` — selecting an operation in the sidebar rendered the schema-driven form from the daemon's advertised catalogue (Port Scan showed target, concurrency, ports and scan_type); running it produced a task card carrying a task id and a non-terminal status
+- `cancel` — the Cancel active task control reached the daemon and the daemon's answer was surfaced verbatim in the GUI (CANCELLATION FAILED - task already completed: task:8f886498-af9e-48ef-8819-90d8fa40705f); the card's status is read from the daemon's event stream, which showed QUEUED, then RUNNING with the daemon's live 'dispatching scan-ports' event line and a progress bar. The daemon's cancellation of a live task, and its 'cancelled' terminal state, are measured by the harness against the same daemon
+- `render` — Show report on the completed task filled the REPORT panel with the daemon's report as data - TARGET 127.0.0.1, SCAN port-scan, DURATION 28 ms - rather than an empty dashboard
+- `export` — the EXPORT A REPORT panel wrote the daemon's report to the destination chosen and the GUI reported REPORT EXPORTED with that path; the written file held the report, with four open ports (22/SSH, 53/DNS, 88, 445/SMB)
 
 ## Deviations and notes
 
@@ -95,8 +116,15 @@ The block below is the `eggsec-gui-qualification-record/v1` record. `scripts/che
   "mode": "operator",
   "date": "2026-10-24",
   "run_label": "operator",
-  "commit": "309d77d1362fef645927117efe78e9c19e53cbe2",
+  "commit": "d0cf5bc3b71ce4d575a3888cce390cbbc310d12b",
   "tree_state": "clean",
+  "attestation": {
+    "schema": "eggsec-gui-operator-attestation/v1",
+    "attested_by": "David Bowman",
+    "attested_at": "2026-10-24",
+    "platform": "macos",
+    "commit": "309d77d1362fef645927117efe78e9c19e53cbe2"
+  },
   "host": {
     "os": "macos",
     "os_version": "25.6.0",
@@ -145,56 +173,62 @@ The block below is the `eggsec-gui-qualification-record/v1` record. `scripts/che
       "scripted": "pass",
       "operator": "not-applicable",
       "artifact": "macos-2026-10-24-operator.build.json",
-      "sha256": "94c94f31e37eeff833e60a63a77e9f2bc6e1ee269b63f210c9de5116cf7f62ef",
+      "sha256": "4c0de083af167908c790047aad8b6bd6de4d6f8710f08d087c35986ba5e36062",
       "reason": "the release build produced `eggsec-gui.build.json` and its SHA-256 is recorded"
     },
     {
       "column": "launch",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "macos-2026-10-24-operator.launch.png",
       "sha256": "82c29e41dd1a37df3cfb18792794059918348517435954f49992fcbe27ca8090",
-      "reason": "the probe found exactly one window titled `Eggsec`"
+      "reason": "the probe found exactly one window titled `Eggsec`",
+      "observed": "the eggsec-gui window was painted on the macOS WindowServer and titled Eggsec; the accessibility query returned exactly one window, and the capture shows the window's own contents rather than a blank frame or a photograph of the desktop"
     },
     {
       "column": "connect",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "",
       "sha256": "",
-      "reason": "the GUI's own client connected to the daemon and read its catalogue"
+      "reason": "the GUI's own client connected to the daemon and read its catalogue",
+      "observed": "the badge beside the title read CONNECTED; the header line reported OPERATIONS 35, TASK KINDS 30 and CAPABILITIES 30; the session line carried a session id; and the OPERATIONS sidebar listed the operations the daemon had published"
     },
     {
       "column": "submit",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "",
       "sha256": "",
-      "reason": "the GUI's own form engine assembled the `PortScan` request and the daemon accepted it as task task:beaf9cfd-62ee-41a8-8bfb-5534b67510a0"
+      "reason": "the GUI's own form engine assembled the `PortScan` request and the daemon accepted it as task task:1eba65d6-dcf1-4a7d-aa78-53e53aec6ff3",
+      "observed": "selecting an operation in the sidebar rendered the schema-driven form from the daemon's advertised catalogue (Port Scan showed target, concurrency, ports and scan_type); running it produced a task card carrying a task id and a non-terminal status"
     },
     {
       "column": "cancel",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "",
       "sha256": "",
-      "reason": "the daemon accepted the cancellation and the event stream reported `cancelled`"
+      "reason": "the daemon accepted the cancellation and the event stream reported `cancelled`",
+      "observed": "the Cancel active task control reached the daemon and the daemon's answer was surfaced verbatim in the GUI (CANCELLATION FAILED - task already completed: task:8f886498-af9e-48ef-8819-90d8fa40705f); the card's status is read from the daemon's event stream, which showed QUEUED, then RUNNING with the daemon's live 'dispatching scan-ports' event line and a progress bar. The daemon's cancellation of a live task, and its 'cancelled' terminal state, are measured by the harness against the same daemon"
     },
     {
       "column": "render",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "",
       "sha256": "",
-      "reason": "the daemon's report for the task rendered as 0 findings and 1 open ports against `127.0.0.1`"
+      "reason": "the daemon's report for the task rendered as 0 findings and 1 open ports against `127.0.0.1`",
+      "observed": "Show report on the completed task filled the REPORT panel with the daemon's report as data - TARGET 127.0.0.1, SCAN port-scan, DURATION 28 ms - rather than an empty dashboard"
     },
     {
       "column": "export",
       "scripted": "pass",
-      "operator": "not-performed",
+      "operator": "pass",
       "artifact": "macos-2026-10-24-operator.export.json",
-      "sha256": "c77cee1715754a644aee6995114d430564763b4977b221717396201ade51c5ab",
-      "reason": "the GUI's own export path wrote the daemon's report in 6 formats, and each written file's bytes equal the renderer's output"
+      "sha256": "7fb3459780f1fe77fb477da884b9b9c4eeebd104bf4d51cfa136048a64f1f83a",
+      "reason": "the GUI's own export path wrote the daemon's report in 6 formats, and each written file's bytes equal the renderer's output",
+      "observed": "the EXPORT A REPORT panel wrote the daemon's report to the destination chosen and the GUI reported REPORT EXPORTED with that path; the written file held the report, with four open ports (22/SSH, 53/DNS, 88, 445/SMB)"
     }
   ],
   "deviations": []
