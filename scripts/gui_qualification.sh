@@ -523,6 +523,7 @@ fi
 WINDOW_PROBE="none"
 WINDOW_COUNT=""
 WINDOW_SCREENSHOT=""
+WINDOW_REGION=""
 WINDOW_REASON=""
 LAUNCH_STATUS="not-performed"
 LAUNCH_REASON=""
@@ -555,7 +556,16 @@ elif [[ "$PLATFORM" == "linux" ]]; then
 else
   if command -v osascript >/dev/null 2>&1; then
     WINDOW_PROBE="osascript"
-    WINDOW_COUNT="$(osascript -e 'tell application "System Events" to tell (first process whose name is "eggsec-gui") to get name of every window' 2>/dev/null | tr ',' '\n' | grep -c . || true)"
+    # A window that is not on the current Space reads as absent, so the probe
+    # brings the application forward first. That is what an operator does to
+    # look at a window, and it is the difference between a window that is
+    # there and a window the accessibility API can see.
+    osascript -e 'tell application "System Events" to set frontmost of process "eggsec-gui" to true' >/dev/null 2>&1 || true
+    sleep 1
+    # The runbook's criterion is a window *titled* `Eggsec`. The window's
+    # `name` is the owning application's name, which says nothing about
+    # whether the title bar reads what the criterion asks for.
+    WINDOW_COUNT="$(osascript -e 'tell application "System Events" to tell (first process whose name is "eggsec-gui") to get title of every window' 2>/dev/null | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -c '^Eggsec$' || true)"
     WINDOW_REASON="the window probe ran on this host"
   else
     WINDOW_REASON="\`osascript\` is not installed on this host, so the window could not be probed"
@@ -568,32 +578,53 @@ fi
 # full-screen capture of a host with no GUI running is a picture of the
 # operator's desktop, not evidence of anything, and it does not belong in the
 # repository.
+#
+# On macOS the capture is of the GUI's OWN window rectangle, not of the
+# screen. A full-screen capture on a developer's machine photographs whatever
+# else is open — other windows, other applications, whatever happens to be on
+# the desktop — and that is neither evidence of the GUI nor anybody else's
+# business to put in a repository.
+macos_window_region() {
+  local geometry x y w h
+  geometry="$(osascript -e 'tell application "System Events" to tell (first process whose name is "eggsec-gui") to get {position, size} of window 1' 2>/dev/null || true)"
+  [[ -z "$geometry" ]] && return 1
+  x="$(printf '%s' "$geometry" | cut -d, -f1 | tr -d ' ')"
+  y="$(printf '%s' "$geometry" | cut -d, -f2 | tr -d ' ')"
+  w="$(printf '%s' "$geometry" | cut -d, -f3 | tr -d ' ')"
+  h="$(printf '%s' "$geometry" | cut -d, -f4 | tr -d ' ')"
+  [[ -z "$x" || -z "$y" || -z "$w" || -z "$h" ]] && return 1
+  [[ "$w" -lt 2 || "$h" -lt 2 ]] && return 1
+  printf '%s,%s,%s,%s' "$x" "$y" "$w" "$h"
+}
+
 if [[ $GUI_RUNNING -eq 1 ]]; then
   if [[ "$PLATFORM" == "linux" ]] && command -v import >/dev/null 2>&1; then
     WINDOW_SCREENSHOT="$RECORD_NAME.launch.png"
     import -window root "$OUT_DIR/$WINDOW_SCREENSHOT" >/dev/null 2>&1 || WINDOW_SCREENSHOT=""
   elif [[ "$PLATFORM" != "linux" ]] && command -v screencapture >/dev/null 2>&1; then
-    WINDOW_SCREENSHOT="$RECORD_NAME.launch.png"
-    screencapture -x -o "$OUT_DIR/$WINDOW_SCREENSHOT" >/dev/null 2>&1 || WINDOW_SCREENSHOT=""
+    WINDOW_REGION="$(macos_window_region || true)"
+    if [[ -n "$WINDOW_REGION" ]]; then
+      WINDOW_SCREENSHOT="$RECORD_NAME.launch.png"
+      screencapture -x -o -R "$WINDOW_REGION" "$OUT_DIR/$WINDOW_SCREENSHOT" >/dev/null 2>&1 || WINDOW_SCREENSHOT=""
+    fi
   fi
 fi
 
-if [[ "$LAUNCH_STATUS" == "not-performed" ]]; then
-  if [[ $GUI_RUNNING -eq 1 ]]; then
-    LAUNCH_STATUS="fail"
-    LAUNCH_REASON="an \`eggsec-gui\` process is running, but the probe found ${WINDOW_COUNT:-0} window(s) titled \`Eggsec\`; the runbook's criterion is exactly one"
-  else
-    LAUNCH_STATUS="not-performed"
-    LAUNCH_REASON="no \`eggsec-gui\` process is running on this host, so the probe had no window to find; the launch step is an operator action"
-  fi
-elif [[ "$LAUNCH_STATUS" == "skipped" ]]; then
+# The count decides, not the order the branches happen to be written in. The
+# status starts life as `not-performed`, so a chain that tests that first
+# takes the failure branch every time -- and the launch column could never
+# pass, however many windows the probe found.
+if [[ "$LAUNCH_STATUS" == "skipped" ]]; then
   :
 elif [[ "${WINDOW_COUNT:-0}" == "1" ]]; then
   LAUNCH_STATUS="pass"
   LAUNCH_REASON="the probe found exactly one window titled \`Eggsec\`"
-else
+elif [[ $GUI_RUNNING -eq 1 ]]; then
   LAUNCH_STATUS="fail"
-  LAUNCH_REASON="the probe found ${WINDOW_COUNT:-0} windows titled \`Eggsec\`; the runbook's criterion is exactly one"
+  LAUNCH_REASON="an \`eggsec-gui\` process is running, but the probe found ${WINDOW_COUNT:-0} window(s) titled \`Eggsec\`; the runbook's criterion is exactly one"
+else
+  LAUNCH_STATUS="not-performed"
+  LAUNCH_REASON="no \`eggsec-gui\` process is running on this host, so the probe had no window to find; the launch step is an operator action"
 fi
 
 LAUNCH_ARTEFACT=""
@@ -625,7 +656,7 @@ export DAEMON_SOCKET DAEMON_READY DAEMON_VERSION DAEMON_FEATURES DAEMON_SHA
 export DAEMON_TASK_KINDS
 export HARNESS_COMMAND HARNESS_EXIT HARNESS_OUTCOME HARNESS_LOG
 export EXPORT_ARTEFACT EXPORT_SHA
-export WINDOW_PROBE WINDOW_COUNT WINDOW_SCREENSHOT WINDOW_REASON
+export WINDOW_PROBE WINDOW_COUNT WINDOW_SCREENSHOT WINDOW_REGION WINDOW_REASON
 export LAUNCH_STATUS LAUNCH_REASON LAUNCH_ARTEFACT LAUNCH_SHA
 export PROBE_LOG
 
@@ -683,6 +714,7 @@ facts = {
         "reason": os.environ["LAUNCH_REASON"],
         "artifact": os.environ["LAUNCH_ARTEFACT"],
         "sha256": os.environ["LAUNCH_SHA"],
+        "window_region": os.environ.get("WINDOW_REGION", ""),
     },
     "harness": {
         "command": os.environ["HARNESS_COMMAND"],

@@ -130,9 +130,10 @@ declares another schema is rejected by name rather than half-read.
 - `platform` is the platform they were observed on. It must be the platform of
   the run the attestation is merged into.
 - `commit` is the commit the behaviours were observed against — the tree the
-  operator actually ran. It must be the commit the run was made at, so that an
-  attestation of one run cannot be read as an attestation of another. The
-  abbreviated form git prints by default is accepted.
+  operator actually ran. The run that carries the attestation must be that
+  commit or a descendant of it, so that an attestation of one run cannot be
+  read as an attestation of another. The abbreviated form git prints by
+  default is accepted.
 - `columns` maps a column identifier to the operator's outcome and to what
   they saw. `outcome` is one of `pass`, `fail`, `not-performed` or
   `not-applicable`; `observed` is what the operator saw, and it is never

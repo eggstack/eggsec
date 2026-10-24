@@ -64,13 +64,14 @@ ATTESTATION_SCHEMA = "eggsec-gui-operator-attestation/v1"
 COMMIT_PATTERN = re.compile(r"^[0-9a-f]{7,40}$")
 
 
-def is_same_commit(named: Any, recorded: Any) -> bool:
-    """Whether an attestation's commit names the commit the run was made at.
+def attestation_binds_to_run(named: Any, recorded: Any) -> bool:
+    """Whether an attestation's commit is bound to the run that carries it.
 
-    An attestation may name the commit in full or in the abbreviated form git
-    prints by default, so an abbreviation of the recorded commit is the same
-    commit. Anything else is a different commit, and an attestation of one run
-    may not be read as an attestation of another.
+    An attestation names the commit the behaviours were *observed against*. The
+    run that carries it must be that commit or a descendant of it: a run made
+    at a commit that descends from the observed commit is the same code the
+    operator looked at, plus whatever came after. An attestation of a commit
+    the run does not descend from is an attestation of something else.
     """
     if not isinstance(named, str) or not isinstance(recorded, str):
         return False
@@ -78,7 +79,12 @@ def is_same_commit(named: Any, recorded: Any) -> bool:
     recorded = recorded.strip().lower()
     if not named or not recorded:
         return False
-    return recorded.startswith(named)
+    if recorded.startswith(named):
+        # The same commit, named in full on one side and abbreviated on the
+        # other. `git merge-base` would say the same, but this answer does not
+        # need a repository to give it.
+        return True
+    return is_ancestor(named, recorded) is True
 
 
 
@@ -795,11 +801,11 @@ class Checker:
                 )
 
             attested_commit = attestation.get("commit")
-            if not is_same_commit(attested_commit, record.get("commit")):
+            if not attestation_binds_to_run(attested_commit, record.get("commit")):
                 self.fail(
-                    f"{where} says `qualified`, but `{name}`'s `attestation` names "
-                    f"the commit `{attested_commit}`, which is not the commit the "
-                    f"record was made at (`{record.get('commit')}`); an "
+                    f"{where} says `qualified`, but `{name}`'s `attestation` "
+                    f"names the commit `{attested_commit}`, which the run "
+                    f"(`{record.get('commit')}`) does not descend from; an "
                     "attestation of one run cannot be read as an attestation of "
                     "another"
                 )
@@ -905,11 +911,11 @@ def attestation_problems_for_record(
             )
 
     attested_commit = attestation.get("commit")
-    if not is_same_commit(attested_commit, record.get("commit")):
+    if not attestation_binds_to_run(attested_commit, record.get("commit")):
         problems.append(
-            f"the attestation names the commit `{attested_commit}`, but the run "
-            f"was made at `{record.get('commit')}`; an attestation of one run "
-            "cannot be read as an attestation of another"
+            f"the attestation names the commit `{attested_commit}`, which the "
+            f"run (`{record.get('commit')}`) does not descend from; an "
+            "attestation of one run cannot be read as an attestation of another"
         )
 
     return problems
