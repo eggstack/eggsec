@@ -8,8 +8,12 @@
 //! The shell technology is Tauri v2, pinned to the 2.11.x line (`ADR-0009`).
 //! The Tauri dependency lives entirely inside this crate.
 
+pub mod availability;
 pub mod config;
 pub mod connection;
+pub mod coverage;
+pub mod daemon;
+pub mod export;
 pub mod form;
 pub mod tasks;
 

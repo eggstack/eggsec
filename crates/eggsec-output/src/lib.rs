@@ -61,9 +61,9 @@ pub use agent::{
 };
 pub use audit_summary::AuditSummary;
 pub use convert::{
-    convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
-    load_scan_report, FindingData, PortData, ScanReportData, ServiceData,
-    WirelessNetworkReportData,
+    convert_to_csv, convert_to_html, convert_to_html_self_contained, convert_to_junit,
+    convert_to_markdown, convert_to_sarif, load_scan_report, FindingData, PortData, ScanReportData,
+    ServiceData, WirelessNetworkReportData,
 };
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
 pub use diff::DiffSummary;

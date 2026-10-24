@@ -4902,6 +4902,215 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 161. The desktop GUI's coverage model is DERIVED, not transcribed. Milestone
+# 006. The GUI tells the operator which of the daemon's published task kinds it
+# can reach, and why. That answer is computed from what the daemon publishes --
+# the task kinds, the operations, their required features, the advertised
+# capabilities, and the enabled-feature set -- so an operation the engine
+# publishes tomorrow is covered the day it is published.
+#
+# A transcribed table would be a second, hand-maintained catalog. It would
+# drift silently the moment the engine published a new operation, and the
+# drift would show up as a missing row rather than as a failure.
+#
+# Guard 159 already pins the TASK-KIND VARIANTS: the GUI may not name one.
+# This check pins the other two halves of the same table -- the operation ids
+# and the capability names -- because a coverage model that names an operation
+# is just as hand-maintained as one that names a variant.
+#
+# The names are READ FROM THEIR OWNERS, not transcribed here: a guard that
+# hardcoded the operation ids would itself be the second source of truth this
+# check exists to prevent.
+echo ""
+echo "--- Check 161: the GUI's coverage model is derived, not transcribed ---"
+SECTION_FAIL=0
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+CATALOG_SOURCE="crates/eggsec-policy/src/catalog.rs"
+CAPABILITY_SOURCE="crates/eggsec-runtime/src/capabilities.rs"
+
+OPERATION_IDS=""
+CAPABILITY_NAMES=""
+if [[ -f "$CATALOG_SOURCE" ]]; then
+  OPERATION_IDS="$(sed -n 's/^[[:space:]]*id: "\([^"]*\)",$/\1/p' "$CATALOG_SOURCE" | sort -u)"
+fi
+if [[ -f "$CAPABILITY_SOURCE" ]]; then
+  CAPABILITY_NAMES="$(sed -n 's/^[[:space:]]*TaskCapability::new("\([^"]*\)".*$/\1/p' "$CAPABILITY_SOURCE" | sort -u)"
+fi
+if [[ -z "$OPERATION_IDS" && -z "$CAPABILITY_NAMES" ]]; then
+  echo "FAIL: could not read the operation ids or the capability names from their owners; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for name in $OPERATION_IDS $CAPABILITY_NAMES; do
+    # The Rust side: the PRODUCTION half only. A test may use a name as a
+    # fixture -- there are fixtures like that today -- but production code
+    # may not name one.
+    for gui_file in "$GUI_SRC_DIR"/*.rs; do
+      [[ -f "$gui_file" ]] || continue
+      GUI_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$gui_file")"
+      if printf '%s' "$GUI_PRODUCTION" | rg -q "[\"']${name}[\"']"; then
+        echo "FAIL: $gui_file names the operation id or capability '$name'; the coverage model must be derived from what the daemon publishes."
+        printf '%s' "$GUI_PRODUCTION" | rg -n "[\"']${name}[\"']" || true
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done
+    # The frontend has no test half: search it whole.
+    if [[ -d "$GUI_FRONTEND_DIR" ]]; then
+      FRONTEND_HITS="$(rg -n "[\"']${name}[\"']" "$GUI_FRONTEND_DIR" 2>/dev/null || true)"
+      if [[ -n "$FRONTEND_HITS" ]]; then
+        echo "FAIL: the frontend names the operation id or capability '$name'; the coverage table must be rendered from the data the daemon publishes."
+        echo "$FRONTEND_HITS"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    fi
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's coverage model is derived, not transcribed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 162. The GUI's report display carries no remote origin and no executable
+# content. Milestone 006.
+#
+# The report the daemon serves is ATTACKER-INFLUENCED: service banners,
+# finding text, and host names come from the target. The GUI therefore never
+# injects the engine's HTML document into the webview -- it renders the
+# report's structured content as text in its own DOM. The Content Security
+# Policy is the control that makes that safe, and this check pins it:
+#
+#   * the policy must not be relaxed to 'unsafe-inline', which would let
+#     injected content execute;
+#   * the policy must keep framing forbidden, so no report can be embedded
+#     as a document;
+#   * no GUI production source and no frontend file may reference a remote
+#     origin;
+#   * the frontend must not gain a markup-injection sink (`innerHTML` and
+#     friends), because the report content is rendered as text;
+#   * the GUI must not consume an engine-produced HTML document at all, so
+#     the export path (the CLI's artifact, written to the operator's chosen
+#     file) stays the only place the engine's HTML is used.
+echo ""
+echo "--- Check 162: the GUI's report display carries no remote origin ---"
+SECTION_FAIL=0
+GUI_CONF="crates/eggsec-gui/tauri.conf.json"
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+if [[ ! -f "$GUI_CONF" ]]; then
+  echo "FAIL: $GUI_CONF is missing; the GUI webview needs an explicit CSP."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to parse $GUI_CONF (the CSP check reads app.security.csp)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_CONF" "$GUI_SRC_DIR" "$GUI_FRONTEND_DIR" <<'PYEOF' 2>&1; then
+import json, pathlib, re, sys
+
+conf_path = pathlib.Path(sys.argv[1])
+src_dir = pathlib.Path(sys.argv[2])
+frontend_dir = pathlib.Path(sys.argv[3])
+problems = []
+
+try:
+    conf = json.loads(conf_path.read_text())
+except Exception as exc:
+    print(f"FAIL: {conf_path} is not valid JSON: {exc}")
+    sys.exit(1)
+
+csp = (((conf.get("app") or {}).get("security") or {}).get("csp")) or ""
+
+# The policy must not be relaxed into permitting inline execution.
+if "'unsafe-inline'" in csp:
+    problems.append(
+        "the CSP allows 'unsafe-inline'; the report content is attacker-influenced "
+        "and the GUI renders it as text, so inline execution must stay forbidden"
+    )
+
+# Framing must stay forbidden: a report document is never embedded as a frame.
+frame_src = None
+for directive in csp.split(";"):
+    directive = directive.strip()
+    if directive.lower().startswith("frame-src"):
+        frame_src = directive.split(None, 1)[1].strip() if " " in directive else ""
+if frame_src is None:
+    problems.append("the CSP does not state frame-src; a report could be embedded as a frame")
+elif "'none'" not in frame_src:
+    problems.append(
+        f"the CSP's frame-src is {frame_src!r}; the GUI must keep framing forbidden"
+    )
+
+# No remote origin in the GUI's production sources or its frontend. The Tauri
+# IPC origin is the single permitted exception: it is the bridge to the Rust
+# side, not a network origin.
+ALLOWED = "http://ipc.localhost"
+REMOTE = re.compile(r"https?://[^\s\"'()<>]+")
+
+
+def scan(label: str, text: str) -> None:
+    for number, line in enumerate(text.splitlines(), start=1):
+        for match in REMOTE.finditer(line):
+            url = match.group(0)
+            if url.startswith(ALLOWED):
+                continue
+            problems.append(
+                f"{label}:{number} references the remote origin {url!r}"
+            )
+
+
+for path in sorted(src_dir.glob("*.rs")):
+    production = path.read_text().split("#[cfg(test)]")[0]
+    scan(str(path), production)
+
+if frontend_dir.is_dir():
+    for path in sorted(frontend_dir.rglob("*")):
+        if path.is_file() and path.suffix in {".js", ".html", ".css", ".json"}:
+            scan(str(path), path.read_text())
+
+# The frontend renders the report's content as text. A markup-injection sink
+# would defeat that.
+SINKS = ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write")
+if frontend_dir.is_dir():
+    for path in sorted(frontend_dir.rglob("*.js")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            for sink in SINKS:
+                if sink in line:
+                    problems.append(
+                        f"{path}:{number} uses the markup sink {sink}; the report content is rendered as text"
+                    )
+
+# The GUI must not consume an engine-produced HTML document. The HTML format
+# is export-only: the exported file is the CLI's artifact, and the webview
+# shows the report's structured content.
+export_module = src_dir / "export.rs"
+if not export_module.is_file():
+    problems.append(f"{export_module} is missing; the export module is the GUI's report path")
+else:
+    export_production = export_module.read_text().split("#[cfg(test)]")[0]
+    if "convert_to_html_self_contained" in export_production:
+        problems.append(
+            "the export module consumes convert_to_html_self_contained; the GUI must not embed an engine-produced HTML document"
+        )
+    if "NoDisplayRendering" not in export_production:
+        problems.append(
+            "the export module does not refuse an HTML display rendering; the HTML format is export-only"
+        )
+
+if problems:
+    print("FAIL: the GUI's report display is not remote-origin-free:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's report display carries no remote origin and no executable content."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 # 163. The daemon's GUI-serving profile is pinned to the engine's contract.
 # Milestone 008. The engine owns the feature list -- it is the single source
 # of truth -- and the daemon's manifest consumes it. Drift between the two

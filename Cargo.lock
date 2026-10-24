@@ -2552,8 +2552,10 @@ version = "0.1.0"
 dependencies = [
  "eggsec-daemon-protocol",
  "eggsec-frontend-client",
+ "eggsec-output",
  "eggsec-runtime",
  "eggsec-ui-model",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

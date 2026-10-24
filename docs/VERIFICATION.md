@@ -50,6 +50,16 @@ cargo +1.89 check -p eggsec-gui --features shell     # in `make check-msrv`
 
 Each of those three runs through the `GUI_SHELL_GATE` macro, which **SKIPs with the reason named** when the platform webview prerequisite is absent. See [Desktop GUI platform prerequisites](#desktop-gui-platform-prerequisites). `make check-gui` is the ungated escape hatch for the same two commands.
 
+The GUI's **test suite** is not in the mandatory contract — it runs in the `gui-platform` CI job — and the daemon-protocol **published-coverage contract test** is not either, because `cargo check --workspace` compiles library and binary targets only. Both are run explicitly:
+
+```bash
+cargo test -p eggsec-gui --features shell --lib         # in the `gui-platform` CI job
+cargo test -p eggsec-gui --no-default-features --lib    # in the `gui-platform` CI job
+cargo test -p eggsec-daemon-protocol --tests            # the published-coverage contract test
+```
+
+See [The published-coverage contract test](#the-published-coverage-contract-test).
+
 ### Defect classes covered
 
 | Command | Defect class | Why merge-time |
@@ -66,7 +76,7 @@ Each of those three runs through the `GUI_SHELL_GATE` macro, which **SKIPs with 
 | `cargo check -p eggsec-gui --features shell` (gated) | Desktop GUI shell-profile regressions | The GUI's shell profile needs the platform webview SDK; the gate SKIPs with the reason named when it is absent |
 | `cargo check -p eggsec-cli --features daemon-client` | The CLI's daemon-client profile failing to compile | The `daemon`/`session`/`task` subcommands are behind a non-default feature, so without this line they sit outside the merge gate entirely |
 | `cargo test -p eggsec-cli --features daemon-client` | Behavioural regressions in the CLI's daemon path | The readiness wait, the pre-flight liveness check, and the derived capability list only exist in this profile |
-| `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests |
+| `bash scripts/check-architecture-guards.sh` | Architecture drift (dependency boundaries, stale terminology, bypass patterns) | Static grep checks catch regressions not covered by types/tests; guards 161 and 162 pin the GUI's derived coverage model and its remote-origin-free report display |
 
 ## Mandatory Python contributor contract
 
@@ -142,14 +152,58 @@ authoritative statement of what was actually built and exercised is the
 qualification matrix in
 [`GUI_PLATFORM_QUALIFICATION.md`](GUI_PLATFORM_QUALIFICATION.md), and the
 `gui-platform` CI job on `ubuntu-latest` and `macos-latest` is what promotes a
-matrix cell. `make check` runs the GUI's **no-shell** profile only — the
-GUI's own test suite is not part of the mandatory contract; it runs in the
+matrix cell. `make check` runs the GUI's **no-shell** profile only — the GUI's
+own test suite is not part of the mandatory contract; it runs in the
 `gui-platform` CI job and under `make check-gui`.
+
+The GUI's test suite covers the coverage model, the availability resolver, the
+report export path and the daemon lifecycle alongside the form engine and the
+task state, and it runs in **both** profiles — the `shell` feature gates
+`commands.rs` and `shell.rs`, so the no-shell path has to be exercised too:
+
+```bash
+cargo test -p eggsec-gui --features shell --lib
+cargo test -p eggsec-gui --no-default-features --lib
+```
+
+Both are headless-safe — no socket, no window, no subprocess — so they run
+unattended with no display. The GUI's test suite is also where the coverage
+model's own guarantee is asserted from inside the crate
+(`coverage::tests::the_gui_production_sources_name_no_operation_variant_or_capability`),
+alongside the architecture guard that enforces it from outside.
 
 The daemon's GUI-serving profile (`service`) is a **deep check**, not part of
 `make check`: it carries `nse`, which vendors OpenSSL and therefore needs a C
 toolchain. `make check-daemon-profile` runs its static conformance test, its
 runtime conformance test, and a profile `cargo check`.
+
+### The published-coverage contract test
+
+The published operation catalog is a wire contract, so its shape is pinned
+mechanically rather than by prose. The contract lives in
+`crates/eggsec-daemon-protocol/tests/coverage_multiplicity.rs`, and it is run by:
+
+```bash
+cargo test -p eggsec-daemon-protocol --tests
+```
+
+It asserts the published multiplicities — the task-kind count, the number of
+distinct operations behind them, the number of distinct capability names, and
+the wire shapes per operation — from the payload the daemon actually publishes,
+so a drift in the catalog fails the test rather than a document. The names
+themselves are not transcribed into the test; only the multiplicities are
+pinned.
+
+This command is **not** part of the `make check` expansion: `make check` runs
+`cargo check --workspace --no-default-features`, which compiles library and
+binary targets only and does not build a crate's `tests/` directory. Run the
+command above explicitly, or run the whole suite with `cargo test --workspace`.
+
+The GUI's own coverage model is pinned by a different mechanism — architecture
+guards 161 and 162, which run inside `bash scripts/check-architecture-guards.sh`
+and are therefore already inside `make check`. The guard reads the operation ids
+and capability names from their owners, so a new operation is covered the
+moment the engine publishes it.
 
 The CLI's daemon client surface (`daemon`, `session`, `task` subcommands)
 lives behind the `daemon-client` feature, so `make check` now compiles and

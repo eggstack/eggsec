@@ -1137,6 +1137,7 @@ mod tests {
                             runtime: eggsec_runtime::RuntimeCapabilities::daemon_conservative(),
                             transports: vec![],
                             operation_schema: true,
+                            enabled_features: None,
                         },
                     },
                     _ => eggsec_daemon_protocol::protocol::ServerMessage::Health {

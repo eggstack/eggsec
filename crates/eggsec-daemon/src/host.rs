@@ -87,6 +87,12 @@ pub struct DaemonHost {
     /// The list is derived rather than declared so a host cannot advertise a
     /// capability its executor rejects outright.
     published_task_kinds: Vec<TaskCapability>,
+    /// The engine feature set the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. The daemon publishes it verbatim so a
+    /// client can explain WHY an operation is unavailable.
+    enabled_features: Option<Vec<String>>,
 }
 
 /// Intersect an executor's declared support with the daemon's conservative
@@ -111,6 +117,7 @@ impl DaemonHost {
     ) -> Self {
         let declared = executor.supported_task_kinds();
         let runtime = Runtime::new(RuntimeConfig::default(), executor);
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
@@ -118,6 +125,7 @@ impl DaemonHost {
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             published_task_kinds: published_task_kinds(&declared),
+            enabled_features,
         }
     }
 
@@ -133,6 +141,10 @@ impl DaemonHost {
         // rejecting executor can never end up advertising a capability.
         let declared = executor.supported_task_kinds();
         let runtime = Runtime::new(runtime_config, executor);
+        // The no-op stub links no engine, so it publishes no feature set:
+        // the daemon reports "unknown", which is not the same as "no
+        // features are enabled".
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
@@ -140,6 +152,7 @@ impl DaemonHost {
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             published_task_kinds: published_task_kinds(&declared),
+            enabled_features,
         }
     }
 
@@ -154,6 +167,7 @@ impl DaemonHost {
         store: Arc<dyn DaemonStore>,
     ) -> Self {
         let declared = runtime.supported_task_kinds();
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
         Self {
             runtime,
             config,
@@ -161,6 +175,7 @@ impl DaemonHost {
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
             published_task_kinds: published_task_kinds(&declared),
+            enabled_features,
         }
     }
 
@@ -418,6 +433,10 @@ impl DaemonHost {
                         // This daemon can always publish the operation catalog
                         // and the derived request schema.
                         operation_schema: true,
+                        // The engine feature set is a build fact the executor
+                        // published; `None` means "unknown", which is not the
+                        // same as "no features are enabled".
+                        enabled_features: self.enabled_features.clone(),
                     },
                 }
             }
@@ -624,6 +643,32 @@ impl DaemonHost {
                             },
                         }
                     }
+                }
+            }
+
+            ClientCommand::GetTaskReport {
+                request_id,
+                session_id,
+                task_id,
+            } => {
+                // The report is produced by the engine's executor and read
+                // back through the runtime. A task whose result has no
+                // report form simply has no report; that is not an error
+                // condition for the caller, but the client needs to be able
+                // to tell it apart from a transport failure, so it is
+                // answered with a routable error rather than silence.
+                match self.runtime().report_for(&task_id) {
+                    Some(report) => ServerMessage::TaskReport {
+                        request_id,
+                        session_id,
+                        task_id,
+                        report,
+                    },
+                    None => ServerMessage::Error {
+                        request_id,
+                        code: ErrorCode::TaskNotFound,
+                        message: "no report is available for this task".to_string(),
+                    },
                 }
             }
 
@@ -1256,6 +1301,35 @@ mod tests {
         }
     }
 
+    /// An executor that publishes a report document and an engine feature
+    /// set, so the host's report read and capability publication can both be
+    /// exercised.
+    struct ReportExecutor {
+        report: Option<serde_json::Value>,
+    }
+
+    impl RuntimeTaskExecutor for ReportExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
+        }
+
+        fn enabled_features(&self) -> Option<Vec<String>> {
+            Some(vec!["cli".to_owned(), "nse".to_owned()])
+        }
+
+        fn report_for(&self, _task_id: &TaskId) -> Option<serde_json::Value> {
+            self.report.clone()
+        }
+    }
+
     fn test_host() -> DaemonHost {
         DaemonHost::new(
             DaemonConfig::default(),
@@ -1351,6 +1425,140 @@ mod tests {
                 assert!(capabilities.operation_schema);
             }
             other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// The daemon publishes the engine feature set the executor behind it
+    /// published, so a client can explain WHY an operation is unavailable.
+    #[tokio::test]
+    async fn capabilities_publish_the_executor_feature_set() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor { report: None },
+            crate::store::noop_store(),
+        );
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-features".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.enabled_features,
+                    Some(vec!["cli".to_owned(), "nse".to_owned()])
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes no feature set leaves the daemon's answer
+    /// *unknown*, which is not the same as "no features are enabled".
+    #[tokio::test]
+    async fn capabilities_report_an_unpublished_feature_set_as_unknown() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-unknown".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.enabled_features, None,
+                    "an executor that publishes nothing leaves the feature set unknown"
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// The report the executor published is served to the client, with the
+    /// document the executor recorded.
+    #[tokio::test]
+    async fn handle_get_task_report_returns_the_published_document() {
+        let report = serde_json::json!({"findings": [], "target": "10.0.0.1"});
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor {
+                report: Some(report.clone()),
+            },
+            crate::store::noop_store(),
+        );
+        let client_id = declare_test_client(&host).await;
+        let session_id = eggsec_runtime::SessionId::new();
+        let task_id = TaskId::new();
+
+        let resp = host
+            .handle_command(
+                ClientCommand::GetTaskReport {
+                    request_id: "report-1".into(),
+                    session_id,
+                    task_id,
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+
+        match resp {
+            ServerMessage::TaskReport {
+                request_id,
+                session_id: answered_session,
+                task_id: answered_task,
+                report: answered,
+            } => {
+                assert_eq!(request_id, "report-1");
+                assert_eq!(answered_session, session_id);
+                assert_eq!(answered_task, task_id);
+                assert_eq!(answered, report);
+            }
+            other => panic!("expected TaskReport, got {:?}", other),
+        }
+    }
+
+    /// A task with no report is answered with a routable error rather than
+    /// silence, so the client can tell it apart from a transport failure.
+    #[tokio::test]
+    async fn handle_get_task_report_without_a_report_is_a_task_not_found() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor { report: None },
+            crate::store::noop_store(),
+        );
+        let client_id = declare_test_client(&host).await;
+
+        let resp = host
+            .handle_command(
+                ClientCommand::GetTaskReport {
+                    request_id: "report-2".into(),
+                    session_id: eggsec_runtime::SessionId::new(),
+                    task_id: TaskId::new(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "report-2");
+                assert_eq!(code, ErrorCode::TaskNotFound);
+                assert!(
+                    message.contains("no report"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
         }
     }
 

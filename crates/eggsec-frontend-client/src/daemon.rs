@@ -10,7 +10,9 @@ use tokio::net::UnixStream;
 use tokio::sync::{oneshot, Mutex};
 
 use eggsec_daemon_protocol::operations::DescribeOperationsResponse;
-use eggsec_daemon_protocol::protocol::{ClientCommand, DaemonCapabilities, ServerMessage};
+use eggsec_daemon_protocol::protocol::{
+    ClientCommand, DaemonCapabilities, ErrorCode, ServerMessage,
+};
 
 use crate::{ClientIdentity, RuntimeClient, RuntimeClientFuture, RuntimeEventReceiverHandle};
 
@@ -143,7 +145,8 @@ impl DaemonRuntimeClient {
                                     | ServerMessage::PersistedSessions { request_id, .. }
                                     | ServerMessage::PersistedSnapshot { request_id, .. }
                                     | ServerMessage::Operations { request_id, .. }
-                                    | ServerMessage::TaskResult { request_id, .. } => {
+                                    | ServerMessage::TaskResult { request_id, .. }
+                                    | ServerMessage::TaskReport { request_id, .. } => {
                                         request_id.clone()
                                     }
                                     ServerMessage::RuntimeEvent { .. } => {
@@ -243,6 +246,42 @@ impl DaemonRuntimeClient {
         }
     }
 
+    /// Fetch the report document for one completed task.
+    ///
+    /// `Ok(None)` means "no report is available": either the daemon has no
+    /// report for that task, or the daemon is too old to know the command.
+    /// The client MUST NOT treat either case as a failure — a client with
+    /// no report available still works, it simply cannot export this task.
+    ///
+    /// Any other error is a genuine failure and is returned as one.
+    pub async fn get_task_report(
+        &self,
+        session_id: &SessionId,
+        task_id: &TaskId,
+    ) -> Result<Option<serde_json::Value>, DaemonClientError> {
+        let cmd = ClientCommand::GetTaskReport {
+            request_id: self.next_request_id(),
+            session_id: *session_id,
+            task_id: *task_id,
+        };
+        match self.send_command(cmd).await {
+            Ok(ServerMessage::TaskReport { report, .. }) => Ok(Some(report)),
+            Ok(ServerMessage::Error {
+                code: ErrorCode::UnsupportedCommand,
+                ..
+            })
+            | Ok(ServerMessage::Error {
+                code: ErrorCode::TaskNotFound,
+                ..
+            }) => Ok(None),
+            Ok(ServerMessage::Error { message, .. }) => Err(DaemonClientError::Protocol(message)),
+            Ok(other) => Err(DaemonClientError::Protocol(format!(
+                "unexpected response: {other:?}"
+            ))),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Query the daemon's health, including the protocol version it speaks.
     ///
     /// Inherent rather than a trait method for the same reason as
@@ -308,7 +347,8 @@ impl DaemonRuntimeClient {
             | ClientCommand::ApprovePolicy { request_id, .. }
             | ClientCommand::ListPersistedSessions { request_id }
             | ClientCommand::DescribeOperations { request_id }
-            | ClientCommand::GetPersistedSnapshot { request_id, .. } => request_id.clone(),
+            | ClientCommand::GetPersistedSnapshot { request_id, .. }
+            | ClientCommand::GetTaskReport { request_id, .. } => request_id.clone(),
         };
 
         let (tx, rx) = oneshot::channel();
@@ -494,5 +534,255 @@ impl RuntimeClient for DaemonRuntimeClient {
                 .await
                 .map_err(|e| e.to_string())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eggsec_daemon_protocol::client_registry::ClientKind;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixListener;
+
+    /// A unique socket path for one fake daemon.
+    fn fake_socket_path() -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let serial = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        PathBuf::from(format!(
+            "/tmp/eggsec-fc-rpt-{}-{serial}.sock",
+            std::process::id()
+        ))
+    }
+
+    /// A fake daemon that answers each command type with a canned response.
+    ///
+    /// The answer always carries the request id the client used, so the
+    /// client's request-id routing is exercised the way a real daemon
+    /// exercises it.
+    struct FakeDaemon {
+        socket_path: PathBuf,
+    }
+
+    impl FakeDaemon {
+        async fn start(responses: BTreeMap<String, serde_json::Value>) -> Self {
+            let socket_path = fake_socket_path();
+            let listener = UnixListener::bind(&socket_path).expect("the fake daemon binds");
+            tokio::spawn(async move {
+                serve_fake_daemon(listener, responses).await;
+            });
+            Self { socket_path }
+        }
+
+        fn path(&self) -> String {
+            self.socket_path.to_string_lossy().into_owned()
+        }
+    }
+
+    impl Drop for FakeDaemon {
+        fn drop(&mut self) {
+            if let Err(error) = std::fs::remove_file(&self.socket_path) {
+                tracing::debug!(
+                    path = %self.socket_path.display(),
+                    %error,
+                    "could not remove the fake daemon socket"
+                );
+            }
+        }
+    }
+
+    /// Serve one connection, answering each command with its canned
+    /// response.
+    async fn serve_fake_daemon(
+        listener: UnixListener,
+        responses: BTreeMap<String, serde_json::Value>,
+    ) {
+        let (stream, _) = match listener.accept().await {
+            Ok(pair) => pair,
+            Err(error) => {
+                tracing::warn!(%error, "the fake daemon could not accept a connection");
+                return;
+            }
+        };
+        let (read_half, mut write_half) = stream.into_split();
+        let mut lines = BufReader::new(read_half).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let request: serde_json::Value = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::warn!(%error, "the fake daemon could not parse a command");
+                    continue;
+                }
+            };
+            let request_id = request
+                .get("request_id")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            let command_type = request
+                .get("type")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default()
+                .to_owned();
+
+            let mut response = responses.get(&command_type).cloned().unwrap_or_else(|| {
+                serde_json::json!({
+                    "type": "Error",
+                    "code": {"type": "Internal"},
+                    "message": "the fake daemon has no answer for this command",
+                })
+            });
+            if let Some(object) = response.as_object_mut() {
+                object.insert(
+                    "request_id".to_owned(),
+                    serde_json::Value::String(request_id),
+                );
+            }
+
+            let encoded = match serde_json::to_string(&response) {
+                Ok(encoded) => encoded,
+                Err(error) => {
+                    tracing::warn!(%error, "the fake daemon could not encode a response");
+                    continue;
+                }
+            };
+            if write_half.write_all(encoded.as_bytes()).await.is_err()
+                || write_half.write_all(b"\n").await.is_err()
+                || write_half.flush().await.is_err()
+            {
+                break;
+            }
+        }
+    }
+
+    /// The canned responses a fake daemon needs: the client declaration
+    /// handshake plus whatever the test under exercise cares about.
+    fn fake_responses(report_response: serde_json::Value) -> BTreeMap<String, serde_json::Value> {
+        let mut responses = BTreeMap::new();
+        responses.insert(
+            "DeclareClient".to_owned(),
+            serde_json::json!({
+                "type": "ClientDeclared",
+                "client_id": "00000000-0000-0000-0000-000000000001",
+            }),
+        );
+        responses.insert("GetTaskReport".to_owned(), report_response);
+        responses
+    }
+
+    /// The crate declares no `macros` Tokio feature, so `#[tokio::test]` is
+    /// unavailable. A current-thread runtime drives the fake daemon and the
+    /// client together.
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a current-thread runtime")
+            .block_on(future)
+    }
+
+    async fn connect_fake(daemon: &FakeDaemon) -> DaemonRuntimeClient {
+        DaemonRuntimeClient::connect(
+            &daemon.path(),
+            ClientIdentity {
+                kind: ClientKind::Gui,
+                label: "eggsec-gui".to_owned(),
+                request_prefix: "gui-".to_owned(),
+            },
+        )
+        .await
+        .expect("the client connects to the fake daemon")
+    }
+
+    /// The report document comes back as the daemon sent it.
+    #[test]
+    fn get_task_report_returns_the_published_document() {
+        block_on(async {
+            let responses = fake_responses(serde_json::json!({
+                "type": "TaskReport",
+                "session_id": "00000000-0000-0000-0000-000000000002",
+                "task_id": "00000000-0000-0000-0000-000000000003",
+                "report": {"findings": [], "target": "10.0.0.1"},
+            }));
+            let daemon = FakeDaemon::start(responses).await;
+            let client = connect_fake(&daemon).await;
+
+            let report = client
+                .get_task_report(&SessionId::new(), &TaskId::new())
+                .await
+                .expect("the daemon answers the report request");
+            let report = report.expect("a report is available");
+            assert_eq!(report["target"], "10.0.0.1");
+        });
+    }
+
+    /// A daemon that does not know the command is a degraded client, not a
+    /// broken one: the client must not fail.
+    #[test]
+    fn get_task_report_degrades_when_the_daemon_does_not_know_the_command() {
+        block_on(async {
+            let responses = fake_responses(serde_json::json!({
+                "type": "Error",
+                "code": {"type": "UnsupportedCommand"},
+                "message": "unsupported command: GetTaskReport",
+            }));
+            let daemon = FakeDaemon::start(responses).await;
+            let client = connect_fake(&daemon).await;
+
+            let report = client
+                .get_task_report(&SessionId::new(), &TaskId::new())
+                .await
+                .expect("an unsupported command is not a client failure");
+            assert!(
+                report.is_none(),
+                "a daemon that does not know the command has no report to publish"
+            );
+        });
+    }
+
+    /// A task with no report is the same degradation: no report, no failure.
+    #[test]
+    fn get_task_report_degrades_when_the_task_has_no_report() {
+        block_on(async {
+            let responses = fake_responses(serde_json::json!({
+                "type": "Error",
+                "code": {"type": "TaskNotFound"},
+                "message": "no report is available for this task",
+            }));
+            let daemon = FakeDaemon::start(responses).await;
+            let client = connect_fake(&daemon).await;
+
+            let report = client
+                .get_task_report(&SessionId::new(), &TaskId::new())
+                .await
+                .expect("a missing report is not a client failure");
+            assert!(report.is_none());
+        });
+    }
+
+    /// Any other refusal is a genuine failure and is reported as one.
+    #[test]
+    fn get_task_report_reports_a_genuine_failure_as_an_error() {
+        block_on(async {
+            let responses = fake_responses(serde_json::json!({
+                "type": "Error",
+                "code": {"type": "Internal"},
+                "message": "the report store is unavailable",
+            }));
+            let daemon = FakeDaemon::start(responses).await;
+            let client = connect_fake(&daemon).await;
+
+            let error = client
+                .get_task_report(&SessionId::new(), &TaskId::new())
+                .await
+                .expect_err("a genuine failure is reported as one");
+            match error {
+                DaemonClientError::Protocol(message) => {
+                    assert_eq!(message, "the report store is unavailable")
+                }
+                other => panic!("expected a protocol error, got {other:?}"),
+            }
+        });
     }
 }

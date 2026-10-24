@@ -140,6 +140,54 @@ Domain descriptors declare report integration capabilities via `DomainDescriptor
 | `EvidenceSupport` | `crates/eggsec/src/domain/mod.rs` | 147 | Enum: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`. |
 | `BaselineSupport` | `crates/eggsec/src/domain/mod.rs` | 158 | Enum: `AlwaysAvailable`, `FeatureGated(&str)`, `NotSupported`. |
 
+## Report Delivery
+
+### The report read path
+
+A report reaches a client over the daemon's report read path. The document is
+produced by the engine, kept by the runtime, served by the daemon, and read by
+the client:
+
+| Stage | Where | What happens |
+|-------|-------|--------------|
+| Produce | `crates/eggsec/src/runtime_bridge/report.rs:54` | `report_for_result(&TaskResult) -> Option<ScanReportData>` derives the canonical report document from a completed task result. The bridge is **pure**: it performs no I/O, reads no state, and consults no clock, so the same result always yields the same document. |
+| Keep | `crates/eggsec-runtime/src/report.rs:42` | The engine records the document in the runtime's bounded report store (`RuntimeReportStore`). Retention is capped at `MAX_RETAINED_REPORTS` = 64 with oldest-first eviction (`crates/eggsec-runtime/src/report.rs:29`) — the bound is what stops a long-lived daemon accumulating one report document per task for the life of the process. |
+| Serve | `crates/eggsec-daemon-protocol/src/protocol.rs:214` | `ClientCommand::GetTaskReport { request_id, session_id, task_id }` → `ServerMessage::TaskReport { …, report }` (`crates/eggsec-daemon-protocol/src/protocol.rs:398`). The document travels as JSON, so the protocol crate keeps no report-model dependency; the consumer deserializes it into the canonical model. |
+| Read | `crates/eggsec-frontend-client/src/daemon.rs:257` | `DaemonRuntimeClient::get_task_report()` returns `Result<Option<serde_json::Value>>`. `Ok(None)` means **no report is available** — either the daemon has none for that task, or the daemon is too old to know the command. Both are degradable states, not failures. |
+
+The bridge covers the result families that have a natural report form — port
+scan, pipeline, fingerprint, fuzz, recon, and (behind their feature gates)
+wireless, wireless-active, db-pentest, and c2, the last four reusing the
+engine's existing per-domain bridges verbatim. Every other result yields
+`None`: "no report available" is the honest answer for a result with no report
+form, and a lossy document pretending to be a report is not.
+
+The **task envelope contract is untouched** by this path:
+`TaskResultEnvelope.payload` stays `json!({})` and `.artifacts` stays `vec![]`
+(`crates/eggsec/src/dispatch/canonical_execution.rs:1114`). The report body
+travels on its own path and is never folded into the envelope.
+
+### HTML rendering
+
+`eggsec-output` renders two HTML variants over the same report data:
+
+| Function | File | Remote origin |
+|----------|------|---------------|
+| `convert_to_html(&ScanReportData) -> String` | `crates/eggsec-output/src/convert.rs:82` | Carries the remote chart-library reference `<script src="https://cdn.jsdelivr.net/npm/chart.js">`. This is the default, and its output is **unchanged** — byte-for-byte. |
+| `convert_to_html_self_contained(&ScanReportData) -> String` | `crates/eggsec-output/src/convert.rs:102` | Omits that reference, so the document carries **no remote origin** — the form to use when embedding or sharing a report where a remote fetch is not acceptable. |
+
+`HtmlReport::generate_self_contained()` (`crates/eggsec-output/src/html.rs:68`)
+is the underlying entry point. The two documents differ only by that one
+reference, so the default rendering is unaffected by the self-contained mode:
+`default.replace(remote_chart_line, "") == self_contained` is the property the
+renderer's tests assert (`crates/eggsec-output/tests/html_self_contained.rs:131`).
+
+Note for accuracy: "self-contained" here means *no remote origin*. The document
+still carries an inline `<style>` block and an inline `<script>` block
+(`crates/eggsec-output/src/html.rs:158`). That inline script looks up
+`severityChart` and draws only if such an element exists — the renderer emits
+no `<canvas id="severityChart">`, so the chart never draws in either mode.
+
 ## Known Incompatibilities
 
 | # | Issue | Details |

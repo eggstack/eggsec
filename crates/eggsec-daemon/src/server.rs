@@ -75,6 +75,58 @@ impl Drop for CancelOnDrop {
     }
 }
 
+/// Classify a line that failed to deserialize as a [`ClientCommand`].
+///
+/// A client routes responses by request id, so a refusal MUST carry the
+/// request id it was asked about. An answer with an empty request id never
+/// resolves the pending request and the client waits out its timeout
+/// instead of learning that its command was refused.
+///
+/// Two refusals are distinguished:
+///
+/// * `ErrorCode::UnsupportedCommand` — the line names a command this daemon
+///   does not know. A newer client talking to an older daemon lands here,
+///   and the client can degrade instead of failing.
+/// * `ErrorCode::InvalidRequest` — the line is malformed, or it names a
+///   command this daemon knows but whose payload does not fit.
+///
+/// The request id and the command type are recovered by a best-effort parse
+/// of the raw line; when they cannot be read, the request id is empty.
+fn refused_command_response(line: &str, parse_error: &serde_json::Error) -> ServerMessage {
+    let parsed: serde_json::Value = match serde_json::from_str(line) {
+        Ok(value) => value,
+        Err(_) => {
+            return ServerMessage::Error {
+                request_id: String::new(),
+                code: ErrorCode::InvalidRequest,
+                message: format!("invalid command: {parse_error}"),
+            };
+        }
+    };
+
+    let request_id = parsed
+        .get("request_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_owned();
+
+    let command_type = parsed.get("type").and_then(|value| value.as_str());
+    match command_type {
+        Some(command_type) if !ClientCommand::command_names().contains(&command_type) => {
+            ServerMessage::Error {
+                request_id,
+                code: ErrorCode::UnsupportedCommand,
+                message: format!("unsupported command: {command_type}"),
+            }
+        }
+        _ => ServerMessage::Error {
+            request_id,
+            code: ErrorCode::InvalidRequest,
+            message: format!("invalid command: {parse_error}"),
+        },
+    }
+}
+
 /// Run the Unix socket server, dispatching commands to the host.
 ///
 /// Listens on the path from `host.config().socket_path`. Accepts
@@ -229,11 +281,7 @@ async fn handle_client(
         let cmd: ClientCommand = match serde_json::from_str(&line) {
             Ok(cmd) => cmd,
             Err(e) => {
-                let err_resp = ServerMessage::Error {
-                    request_id: String::new(),
-                    code: ErrorCode::InvalidRequest,
-                    message: format!("invalid command: {}", e),
-                };
+                let err_resp = refused_command_response(&line, &e);
                 if write_message(&mut write_half, &err_resp).await.is_err() {
                     break;
                 }
@@ -299,11 +347,7 @@ async fn handle_client(
                                 let cmd: ClientCommand = match serde_json::from_str(&line) {
                                     Ok(cmd) => cmd,
                                     Err(e) => {
-                                        let err_resp = ServerMessage::Error {
-                                            request_id: String::new(),
-                                            code: ErrorCode::InvalidRequest,
-                                            message: format!("invalid command: {}", e),
-                                        };
+                                        let err_resp = refused_command_response(&line, &e);
                                         if write_message(&mut write_half, &err_resp).await.is_err() {
                                             break;
                                         }
@@ -651,6 +695,166 @@ mod tests {
         }
 
         shutdown.cancel();
+    }
+
+    /// A command the daemon does not know is refused as
+    /// `UnsupportedCommand`, and the refusal carries the request id the
+    /// client asked with.
+    ///
+    /// The request id matters as much as the code: the client routes
+    /// responses by request id, so a refusal without one never resolves the
+    /// pending request and the client waits out its timeout instead of
+    /// learning that its command was refused.
+    #[tokio::test]
+    async fn server_unknown_command_is_refused_with_its_request_id() {
+        let (_host, socket_path, shutdown) = start_server().await;
+        let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        write_half
+            .write_all(b"{\"type\":\"NoSuchCommand\",\"request_id\":\"gui-42\"}\n")
+            .await
+            .unwrap();
+        write_half.flush().await.unwrap();
+
+        let line = read_lines
+            .next_line()
+            .await
+            .unwrap()
+            .expect("expected error response");
+        let resp: ServerMessage = serde_json::from_str(&line).unwrap();
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(
+                    request_id, "gui-42",
+                    "the refusal must echo the request id so the client can route it"
+                );
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+                assert!(
+                    message.contains("unsupported command: NoSuchCommand"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        shutdown.cancel();
+    }
+
+    /// A command the daemon *does* know, sent with a payload that does not
+    /// fit, is a malformed request rather than an unknown command — and its
+    /// request id is recovered all the same.
+    #[tokio::test]
+    async fn server_malformed_known_command_is_an_invalid_request() {
+        let (_host, socket_path, shutdown) = start_server().await;
+        let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        // `GetSnapshot` needs a session id; without one the line does not
+        // deserialize, but the command itself is one this daemon knows.
+        write_half
+            .write_all(b"{\"type\":\"GetSnapshot\",\"request_id\":\"gui-43\"}\n")
+            .await
+            .unwrap();
+        write_half.flush().await.unwrap();
+
+        let line = read_lines
+            .next_line()
+            .await
+            .unwrap()
+            .expect("expected error response");
+        let resp: ServerMessage = serde_json::from_str(&line).unwrap();
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "gui-43");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+                assert!(
+                    message.contains("invalid command"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        shutdown.cancel();
+    }
+
+    /// The refusal classification, as a unit: an unknown command type is
+    /// `UnsupportedCommand`, everything else is `InvalidRequest`, and the
+    /// request id is recovered whenever the line carries a usable one.
+    #[test]
+    fn refused_command_response_classifies_the_failure() {
+        let parse_error = |line: &str| {
+            serde_json::from_str::<ClientCommand>(line).expect_err("the line must not deserialize")
+        };
+
+        let unknown = refused_command_response(
+            r#"{"type":"NoSuchCommand","request_id":"r-1"}"#,
+            &parse_error(r#"{"type":"NoSuchCommand","request_id":"r-1"}"#),
+        );
+        match unknown {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "r-1");
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+                assert_eq!(message, "unsupported command: NoSuchCommand");
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        let known_but_malformed =
+            refused_command_response(r#"{"type":"Health"}"#, &parse_error(r#"{"type":"Health"}"#));
+        match known_but_malformed {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+                assert!(message.contains("invalid command"));
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        // A line that is not JSON at all has no type and no request id.
+        let not_json = refused_command_response("not json", &parse_error("not json"));
+        match not_json {
+            ServerMessage::Error {
+                request_id, code, ..
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        // A non-string request id cannot be recovered, so the refusal
+        // carries an empty one rather than a wrong one.
+        let non_string_request_id = refused_command_response(
+            r#"{"type":"NoSuchCommand","request_id":7}"#,
+            &parse_error(r#"{"type":"NoSuchCommand","request_id":7}"#),
+        );
+        match non_string_request_id {
+            ServerMessage::Error {
+                request_id, code, ..
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
     }
 
     #[tokio::test]

@@ -261,6 +261,14 @@ pub(crate) fn server_message_to_response(
             ),
             error_code: None,
         },
+        ServerMessage::TaskReport {
+            request_id, report, ..
+        } => DaemonResponsePy {
+            ok: true,
+            request_id,
+            message: format!("report ({} bytes)", report.to_string().len()),
+            error_code: None,
+        },
     }
 }
 

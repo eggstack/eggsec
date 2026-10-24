@@ -2,9 +2,15 @@
 //!
 //! The GUI is daemon-only by construction (`ADR-0007`): it reaches the engine
 //! only through the daemon's Unix socket, using the shared
-//! `eggsec-frontend-client` contract. It never spawns, supervises, or stops
-//! a daemon — it connects to one that is already running and, when the socket
-//! is unreachable, says precisely how to start a *usable* one.
+//! `eggsec-frontend-client` contract. It links no daemon crate and it
+//! dispatches no engine work of its own.
+//!
+//! The default is to attach to a daemon the operator started: when the
+//! socket is unreachable, this module says precisely how to start a *usable*
+//! one. The operator may opt in to the GUI starting a daemon itself by
+//! naming the executable (`--daemon-bin`); that lifecycle lives in
+//! [`crate::daemon`], and it is the only path on which the GUI ever starts
+//! a process.
 
 use eggsec_daemon_protocol::operations::DescribeOperationsResponse;
 use eggsec_daemon_protocol::protocol::{DaemonCapabilities, DAEMON_PROTOCOL_VERSION};
@@ -89,6 +95,16 @@ pub struct GuiConnection {
 }
 
 impl GuiConnection {
+    /// The capabilities the connected daemon published.
+    ///
+    /// The advertisement carries the daemon's task-kind capability list and
+    /// its enabled-feature set. The feature set is optional on the wire: a
+    /// daemon that does not publish one is *unknown*, not empty, and the
+    /// coverage model treats the two differently.
+    pub fn capabilities(&self) -> &DaemonCapabilities {
+        &self.capabilities
+    }
+
     /// Connect to the daemon, verify it, open a session, and fetch the
     /// operation catalog.
     ///

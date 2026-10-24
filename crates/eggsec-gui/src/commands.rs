@@ -8,16 +8,23 @@
 //! the surface is always `DesktopGuiManual`, stamped in Rust, and the scope
 //! is whatever the operator supplied.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use eggsec_daemon_protocol::operations::TaskKindDescription;
 use eggsec_frontend_client::RuntimeClient;
+use eggsec_output::convert::ScanReportData;
 use eggsec_runtime::TaskId;
 use tauri::Emitter;
 use tokio::sync::Mutex;
 
+use crate::availability::{denial_from_message, Denial, DenialLedger};
+use crate::config::GuiOptions;
 use crate::connection::GuiConnection;
+use crate::coverage::{self, TaskCoverage};
+use crate::daemon::{self, DaemonAttachment, SupervisedDaemon};
+use crate::export::{self, ReportFormat};
 use crate::form::{self, Control};
 use crate::tasks::{
     EventEffect, LogLine, TaskDashboardView, TaskRegistry, TaskRow, TaskState,
@@ -32,6 +39,64 @@ pub const TASK_EVENT: &str = "eggsec://task-event";
 pub struct GuiState {
     /// The live connection, if the operator has connected.
     inner: Mutex<Option<ConnectedState>>,
+    /// The options the GUI was started with.
+    options: GuiOptions,
+    /// The denials the GUI has learned from live failures.
+    ///
+    /// Bounded: one entry per published task kind.
+    denials: Arc<Mutex<DenialLedger>>,
+    /// The daemon this GUI spawned and supervises, when it spawned one.
+    ///
+    /// A standard mutex rather than the asynchronous one: the GUI's exit
+    /// path takes the daemon out of it without being able to await.
+    supervised: std::sync::Mutex<Option<SupervisedDaemon>>,
+}
+
+impl GuiState {
+    /// A state built from the options the GUI was started with.
+    pub fn new(options: GuiOptions) -> Self {
+        Self {
+            inner: Mutex::new(None),
+            options,
+            denials: Arc::new(Mutex::new(DenialLedger::default())),
+            supervised: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Take the supervised daemon out of the state, if there is one.
+    ///
+    /// The GUI's exit path uses this: the daemon the GUI started is the
+    /// GUI's to stop, and stopping it needs no runtime.
+    pub fn take_supervised(&self) -> Option<SupervisedDaemon> {
+        match self.supervised.lock() {
+            Ok(mut guard) => guard.take(),
+            Err(error) => {
+                tracing::error!("the supervised daemon's handle is poisoned: {error}");
+                None
+            }
+        }
+    }
+
+    /// The supervised daemon, without taking it out of the state.
+    pub fn supervised(&self) -> Option<SupervisedDaemon> {
+        match self.supervised.lock() {
+            Ok(guard) => guard.clone(),
+            Err(error) => {
+                tracing::error!("the supervised daemon's handle is poisoned: {error}");
+                None
+            }
+        }
+    }
+
+    /// Remember the daemon this GUI started.
+    pub fn set_supervised(&self, supervised: SupervisedDaemon) {
+        match self.supervised.lock() {
+            Ok(mut guard) => *guard = Some(supervised),
+            Err(error) => {
+                tracing::error!("the supervised daemon's handle is poisoned: {error}");
+            }
+        }
+    }
 }
 
 /// What the GUI holds once it is connected.
@@ -184,6 +249,42 @@ pub struct TaskIdView {
     pub task_id: String,
 }
 
+/// The result of one export.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExportView {
+    /// Where the export was written.
+    pub path: String,
+    /// The format it was written in.
+    pub format: ReportFormat,
+    /// The extension the format is written with.
+    pub extension: &'static str,
+}
+
+/// What the webview needs to know about the daemon it is attached to.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DaemonStatusView {
+    /// Which daemon the GUI is attached to.
+    pub attachment: DaemonAttachment,
+    /// The socket the GUI is talking to, when it is talking to one.
+    pub socket_path: Option<String>,
+    /// The engine features the daemon published.
+    ///
+    /// `None` means the daemon did not publish a set: that is **unknown**,
+    /// not "no features are enabled".
+    pub enabled_features: Option<Vec<String>>,
+    /// How many capabilities the daemon advertises.
+    pub advertised_capability_count: usize,
+    /// How many task kinds the daemon published.
+    pub task_kind_count: usize,
+    /// The export formats the GUI can write.
+    ///
+    /// The list is delivered from the Rust side, so the webview never holds
+    /// a catalog of its own.
+    pub report_formats: Vec<crate::export::ReportFormatView>,
+    /// A caveat the operator should see.
+    pub notice: Option<String>,
+}
+
 /// The event the GUI publishes to the webview.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -215,15 +316,52 @@ pub enum TaskEvent {
 ///
 /// The socket path comes from the webview so the operator can point the GUI
 /// at a different daemon without relaunching it.
+///
+/// When the socket cannot be reached, the GUI reports how to start a usable
+/// daemon — unless the operator named a daemon executable with
+/// `--daemon-bin`, in which case the GUI starts that executable and
+/// supervises it. The spawn route is opt-in: without the option the GUI
+/// never starts a process.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn connect_daemon(
     app: tauri::AppHandle,
     state: tauri::State<'_, GuiState>,
     socket: String,
 ) -> Result<CatalogView, String> {
-    let connection = GuiConnection::connect(&socket)
-        .await
-        .map_err(|error| error.to_string())?;
+    let connection = match GuiConnection::connect(&socket).await {
+        Ok(connection) => connection,
+        Err(error) => {
+            // No named daemon executable: the operator's own diagnostic
+            // stands, and nothing is started.
+            let Some(binary) = state.options.daemon_bin.clone() else {
+                return Err(error.to_string());
+            };
+
+            // The pre-flight liveness check. It is a connection attempt, not
+            // a check that the socket file exists: a live daemon must not be
+            // displaced by a spawn, and a stale socket file must not block
+            // one.
+            if daemon::daemon_is_live(&socket).await {
+                return Err(error.to_string());
+            }
+
+            let supervised = daemon::spawn_and_supervise(&binary, &socket)
+                .await
+                .map_err(|error| error.to_string())?;
+
+            let connection = match GuiConnection::connect(&socket).await {
+                Ok(connection) => connection,
+                Err(error) => {
+                    // The daemon did not answer the GUI's own handshake, so
+                    // it is stopped rather than left running unwatched.
+                    supervised.terminate().await;
+                    return Err(error.to_string());
+                }
+            };
+            state.set_supervised(supervised);
+            connection
+        }
+    };
 
     let view = CatalogView {
         socket_path: socket.clone(),
@@ -245,6 +383,7 @@ pub async fn connect_daemon(
         connection.client.clone(),
         connection.session_id,
         Arc::clone(&tasks),
+        Arc::clone(&state.denials),
     );
 
     let mut inner = state.inner.lock().await;
@@ -469,6 +608,204 @@ pub async fn task_snapshot(state: tauri::State<'_, GuiState>) -> Result<TaskDash
     Ok(view)
 }
 
+/// The coverage table: every published task kind, and why it is or is not
+/// reachable from this GUI.
+///
+/// The table is derived from what the daemon published — the catalog, the
+/// advertised capabilities, and the published enabled-feature set — plus the
+/// denials the GUI has learned from live failures. Nothing here is
+/// transcribed: a task kind the engine publishes tomorrow appears in this
+/// table without a line being added.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn coverage(state: tauri::State<'_, GuiState>) -> Result<Vec<TaskCoverage>, String> {
+    let parts = state.parts().await?;
+    let ledger = state.denials.lock().await;
+
+    Ok(coverage::coverage_for_with_ledger(
+        &parts.catalog.task_kinds,
+        &parts.catalog.operations,
+        &parts.capabilities.runtime.task_kinds,
+        parts.capabilities.enabled_features.as_deref(),
+        &ledger,
+    ))
+}
+
+/// Export a completed task's report to a file the operator chose.
+///
+/// The report is fetched from the daemon over the session, rendered through
+/// the shared report renderers, and written to the operator's chosen path.
+/// The destination is the operator's decision alone: the GUI invents no
+/// default directory and writes nowhere else.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn export_report(
+    state: tauri::State<'_, GuiState>,
+    task_id: String,
+    format: String,
+    path: String,
+) -> Result<ExportView, String> {
+    let parts = state.parts().await?;
+
+    let parsed = task_id
+        .parse::<TaskId>()
+        .map_err(|error| format!("`{task_id}` is not a task identifier: {error}"))?;
+    let format = ReportFormat::parse(&format)
+        .ok_or_else(|| format!("`{format}` is not a report format the GUI can write"))?;
+
+    let document = parts
+        .client
+        .get_task_report(&parts.session_id, &parsed)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            format!("the daemon has no report for task `{task_id}`, so there is nothing to export")
+        })?;
+
+    let report: ScanReportData = serde_json::from_value(document).map_err(|error| {
+        format!("the daemon's report for task `{task_id}` could not be read: {error}")
+    })?;
+
+    let contents = export::render(format, &report).map_err(|error| error.to_string())?;
+    let destination = PathBuf::from(&path);
+    export::write_export(&destination, &contents).map_err(|error| error.to_string())?;
+
+    Ok(ExportView {
+        path: destination.to_string_lossy().into_owned(),
+        format,
+        extension: format.extension(),
+    })
+}
+
+/// The report of a completed task, as the webview renders it.
+///
+/// The report travels to the webview as **data**: the GUI never injects the
+/// engine's HTML document into its window. That document carries an inline
+/// `<style>` block and an inline `<script>` block, and the GUI's Content
+/// Security Policy blocks both — rendering it faithfully would mean
+/// relaxing the policy, and the report's content is attacker-influenced.
+/// The frontend renders the structured content with the GUI's own stylesheet
+/// and its own escaping.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn report_for(
+    state: tauri::State<'_, GuiState>,
+    task_id: String,
+    format: String,
+) -> Result<ReportResponse, String> {
+    let parts = state.parts().await?;
+
+    let parsed = task_id
+        .parse::<TaskId>()
+        .map_err(|error| format!("`{task_id}` is not a task identifier: {error}"))?;
+    let format = ReportFormat::parse(&format)
+        .ok_or_else(|| format!("`{format}` is not a report format the GUI can write"))?;
+
+    let document = parts
+        .client
+        .get_task_report(&parts.session_id, &parsed)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            format!("the daemon has no report for task `{task_id}`, so there is nothing to show")
+        })?;
+
+    let report: ScanReportData = serde_json::from_value(document).map_err(|error| {
+        format!("the daemon's report for task `{task_id}` could not be read: {error}")
+    })?;
+
+    // The text formats have an inert rendering the frontend can show as
+    // text. The HTML format does not: the GUI shows the structured content.
+    let rendered = match export::render_for_display(format, &report) {
+        Ok(text) => Some(text),
+        Err(error) => {
+            tracing::debug!(%error, "the report has no display rendering for this format");
+            None
+        }
+    };
+
+    Ok(ReportResponse {
+        report: export::report_view(&report),
+        document: rendered,
+        format,
+    })
+}
+
+/// The report of a completed task, as the webview renders it.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReportResponse {
+    /// The report's structured content.
+    pub report: crate::export::ReportView,
+    /// The rendered text artifact for the requested format, when the format
+    /// has one.
+    ///
+    /// The HTML format has none: the GUI renders the report's structured
+    /// content instead of injecting the engine's document.
+    pub document: Option<String>,
+    /// The format the document is rendered in.
+    pub format: ReportFormat,
+}
+
+/// What the GUI knows about the daemon it is attached to.
+///
+/// The attachment state says whether the GUI is attached to a daemon the
+/// operator started or supervising one it started itself. The published
+/// enabled-feature set is reported as it was published: an absent set is
+/// *unknown*, not an empty one.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn daemon_status(state: tauri::State<'_, GuiState>) -> Result<DaemonStatusView, String> {
+    let supervised = state.supervised();
+    let inner = state.inner.lock().await;
+    let connected = inner.as_ref();
+
+    let attachment = match (&supervised, connected) {
+        (Some(_), _) => DaemonAttachment::Supervised,
+        (None, Some(_)) => DaemonAttachment::Operator,
+        (None, None) => DaemonAttachment::Disconnected,
+    };
+
+    let capabilities = connected.map(|connected| &connected.connection.capabilities);
+    let enabled_features =
+        capabilities.and_then(|capabilities| capabilities.enabled_features.clone());
+    let advertised_capability_count = capabilities
+        .map(|capabilities| capabilities.runtime.task_kinds.len())
+        .unwrap_or(0);
+    let task_kind_count = connected
+        .map(|connected| connected.connection.catalog.task_kinds.len())
+        .unwrap_or(0);
+    let socket_path = connected
+        .map(|connected| connected.socket_path.clone())
+        .or_else(|| {
+            supervised
+                .as_ref()
+                .map(|supervised| supervised.socket_path().to_owned())
+        });
+
+    // A daemon that advertises capabilities and publishes no enabled
+    // features can execute no feature-gated operation: the flags say it can,
+    // and the engine says otherwise. The GUI reports that rather than
+    // offering a submit affordance it cannot back.
+    let notice = match (&enabled_features, advertised_capability_count) {
+        (Some(features), count) if count > 0 && features.is_empty() => Some(format!(
+            "the daemon advertises {count} capabilities but publishes no enabled engine features: \
+             it can execute no feature-gated operation"
+        )),
+        (None, count) if count > 0 => Some(
+            "the daemon publishes no enabled-feature set, so its feature-gated operations cannot \
+             be verified"
+                .to_owned(),
+        ),
+        _ => None,
+    };
+
+    Ok(DaemonStatusView {
+        attachment,
+        socket_path,
+        enabled_features,
+        advertised_capability_count,
+        task_kind_count,
+        report_formats: crate::export::format_views(),
+        notice,
+    })
+}
+
 /// Forward the daemon's event stream to the webview.
 ///
 /// The GUI subscribes **once** per session; it does not resubscribe per
@@ -477,6 +814,11 @@ pub async fn task_snapshot(state: tauri::State<'_, GuiState>) -> Result<TaskDash
 /// never accumulates an unbounded queue: log lines are coalesced, and only
 /// the newest [`MAX_LOG_LINES_PER_FLUSH`] are forwarded per flush, with the
 /// rest reported as dropped.
+///
+/// A failure that names a missing feature is also **learned**: the engine's
+/// own refusal is a fact about the running daemon that no published list can
+/// overrule, so it is recorded against the task kind's variant and the
+/// coverage table reports the variant as blocked.
 ///
 /// **This task is exempt from the 30–300s timeout rule.** It is a
 /// long-lived connection reader whose lifetime is the subscription's, and
@@ -487,6 +829,7 @@ fn spawn_event_forwarder(
     client: eggsec_frontend_client::DaemonRuntimeClient,
     session_id: eggsec_runtime::SessionId,
     tasks: Arc<Mutex<TaskRegistry>>,
+    denials: Arc<Mutex<DenialLedger>>,
 ) {
     tokio::spawn(async move {
         let mut receiver = match client.subscribe(session_id).await {
@@ -509,6 +852,7 @@ fn spawn_event_forwarder(
                                 let mut registry = tasks.lock().await;
                                 registry.apply(&event)
                             };
+                            learn_from_denial(&event, &tasks, &denials).await;
                             match effect {
                                 EventEffect::TaskUpdated(task_id) => {
                                     let row = {
@@ -580,6 +924,41 @@ fn emit(app: &tauri::AppHandle, event: TaskEvent) {
     }
 }
 
+/// Record what a live denial taught the GUI.
+///
+/// A failure whose message names a missing feature is the engine's own
+/// statement about the running daemon. It is recorded against the task
+/// kind's variant, and the coverage table then reports that variant as
+/// blocked — whatever the published lists say.
+async fn learn_from_denial(
+    event: &eggsec_runtime::RuntimeEvent,
+    tasks: &Arc<Mutex<TaskRegistry>>,
+    denials: &Arc<Mutex<DenialLedger>>,
+) {
+    let eggsec_runtime::RuntimeEvent::TaskFailed { task_id, error, .. } = event else {
+        return;
+    };
+    let denial = denial_from_message(&error.message);
+    if !matches!(denial, Denial::FeatureMissing { .. }) {
+        return;
+    }
+
+    let variant = {
+        let registry = tasks.lock().await;
+        let variant = registry
+            .tasks()
+            .find(|task| task.task_id == *task_id)
+            .map(|task| task.variant.clone());
+        variant
+    };
+    let Some(variant) = variant else {
+        return;
+    };
+
+    let mut ledger = denials.lock().await;
+    ledger.record(&variant, denial);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -621,6 +1000,10 @@ mod tests {
             "cancel_task",
             "cancel_active",
             "task_snapshot",
+            "coverage",
+            "export_report",
+            "report_for",
+            "daemon_status",
         ];
         let source = include_str!("shell.rs");
         for command in registered {
@@ -648,7 +1031,7 @@ mod tests {
         let explicit = production
             .matches("#[tauri::command(rename_all = \"snake_case\")]")
             .count();
-        assert_eq!(commands, 8, "the GUI's IPC surface is eight commands");
+        assert_eq!(commands, 12, "the GUI's IPC surface is twelve commands");
         assert_eq!(
             commands, explicit,
             "every command must declare rename_all = \"snake_case\""

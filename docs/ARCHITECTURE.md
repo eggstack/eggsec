@@ -56,7 +56,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
 | `eggsec-tui` | TUI frontend | No | No | **Yes** | No | 33 tabs, enforcement toggle, packaged themes. |
-| `eggsec-gui` | Desktop GUI frontend | No | No | **Yes** | No | Tauri v2 desktop shell. **Daemon-only**: depends on `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol` and `eggsec-ui-model` — never the engine, the daemon crate, the CLI or the TUI. No outbound HTTP; buildless frontend with zero npm dependencies. |
+| `eggsec-gui` | Desktop GUI frontend | No | No | **Yes** | No | Tauri v2 desktop shell. **Daemon-only**: depends on `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol`, `eggsec-ui-model` and `eggsec-output` — never the engine, the daemon crate, the CLI or the TUI. No outbound HTTP; buildless frontend with zero npm dependencies. |
 | `eggsec-nse` (external) | NSE compatibility runtime | No | Domain execution | No | Yes | [Standalone repository](https://github.com/eggstack/eggsec-nse), consumed by Eggsec as the versioned `eggsec-nse 0.2.0` crates.io release behind the optional engine `nse` feature. |
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
@@ -79,7 +79,14 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 
 `eggsec-frontend-client` is the frontend-neutral runtime-client contract (`RuntimeClient` trait plus the embedded and daemon implementations). It depends on `eggsec-runtime` + `eggsec-daemon-protocol` and on **no frontend framework** (no `ratatui`/`crossterm`) and **not on the engine** — so a new frontend can reuse the runtime contract without inheriting the terminal UI or the composition root.
 
-`eggsec-gui` is the desktop GUI: a Tauri v2 shell that is a **frontend without an engine edge**. It depends on `eggsec-frontend-client` + `eggsec-runtime` + `eggsec-daemon-protocol` + `eggsec-ui-model` and on nothing else — it may not name `eggsec`, `eggsec-daemon`, `eggsec-cli` or `eggsec-tui`, and it performs no outbound HTTP: every engine request travels over the daemon's Unix socket. That is what keeps the desktop GUI from becoming a second composition root, and it is enforced by the architecture guards (Checks 155–158). See `architecture/desktop_gui.md`.
+`eggsec-gui` is the desktop GUI: a Tauri v2 shell that is a **frontend without an engine edge**. It depends on `eggsec-frontend-client` + `eggsec-runtime` + `eggsec-daemon-protocol` + `eggsec-ui-model` + `eggsec-output` and on no other crate — it may not name `eggsec`, `eggsec-daemon`, `eggsec-cli` or `eggsec-tui`, and it performs no outbound HTTP: every engine request travels over the daemon's Unix socket. That is what keeps the desktop GUI from becoming a second composition root, and it is enforced by the architecture guards (Checks 155–158). See `architecture/desktop_gui.md`.
+
+Two of those five edges are worth naming explicitly, because both are the reason the GUI can show a report and stop a daemon without gaining an engine edge:
+
+- **`eggsec-output` is a leaf data crate** — `eggsec-core` + `eggsec-report-model` only, no engine, no runtime, no framework. The GUI renders the same report artifacts the CLI renders through the same functions, so the export path adds no new dependency direction: the renderers sit below the engine, and the GUI reaches them directly.
+- **`libc` is unix-only** (`crates/eggsec-gui/Cargo.toml`). Tokio's `signal` module receives signals but cannot send them, so the SIGTERM the GUI delivers to a daemon it started is made through the `libc::kill` syscall directly. The GUI's other new edges are the Tokio `process` and `signal` features.
+
+The GUI still links **no engine crate, no daemon crate, no CLI crate and no TUI crate** after milestone 006 added full operation coverage, report export and the opt-in daemon spawn-and-supervise lifecycle. The spawn route is opt-in precisely because it is the one place the GUI would otherwise have owned a process: it starts a binary the operator names, over the daemon's Unix socket, and it links the daemon's *protocol* — never the daemon's *code*.
 
 The knowledge-corpus leaves (`eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan`) are near-empty-dependency data crates reached only through engine `pub use` facades. The seam is one-directional: **the corpus owns data, the engine owns I/O** — the live probers stay engine-side even though their `get_payloads()` are pure data. See `architecture/knowledge_corpus.md`.
 

@@ -31,6 +31,7 @@
         </form>
 
         <dl id="catalog-facts" class="catalog-facts"></dl>
+        <dl id="daemon-facts" class="catalog-facts catalog-facts--daemon"></dl>
       </header>
 
       <div id="banner-area" class="banner-area" role="status" aria-live="polite"></div>
@@ -51,6 +52,63 @@
               <p id="form-subheading" class="panel__subheading"></p>
             </div>
             <div id="form-body" class="panel__body"></div>
+          </section>
+
+          <section class="panel panel--coverage" aria-labelledby="coverage-heading">
+            <div class="panel__header">
+              <h2 id="coverage-heading" class="panel__heading">Coverage</h2>
+              <p class="panel__hint">
+                Every task kind the daemon published, and whether this GUI can run it.
+              </p>
+            </div>
+            <div id="coverage-body" class="panel__body"></div>
+          </section>
+
+          <section class="panel panel--report" aria-labelledby="report-heading">
+            <div class="panel__header">
+              <h2 id="report-heading" class="panel__heading">Report</h2>
+              <p class="panel__hint">
+                The report is shown as data. No markup from the scanned target is ever rendered.
+              </p>
+            </div>
+            <div id="report-body" class="panel__body"></div>
+          </section>
+
+          <section class="panel panel--export" aria-labelledby="export-heading">
+            <div class="panel__header">
+              <h2 id="export-heading" class="panel__heading">Export a report</h2>
+            </div>
+            <form id="export-form" class="export-form" autocomplete="off">
+              <label class="export-form__label" for="export-task">Task</label>
+              <input
+                id="export-task"
+                class="export-form__input"
+                type="text"
+                name="task_id"
+                placeholder="task id"
+                spellcheck="false"
+                autocapitalize="off"
+                autocorrect="off"
+              />
+              <label class="export-form__label" for="export-format">Format</label>
+              <select id="export-format" class="export-form__input" name="format"></select>
+              <label class="export-form__label" for="export-path">Destination</label>
+              <input
+                id="export-path"
+                class="export-form__input"
+                type="text"
+                name="path"
+                placeholder="/path/to/report"
+                spellcheck="false"
+                autocapitalize="off"
+                autocorrect="off"
+              />
+              <button id="export-button" class="button button--primary" type="submit" disabled>
+                Export
+              </button>
+              <button id="report-button" class="button" type="button" disabled>Show report</button>
+            </form>
+            <p id="export-hint" class="export-form__hint"></p>
           </section>
 
           <section class="panel panel--tasks" aria-labelledby="tasks-heading">

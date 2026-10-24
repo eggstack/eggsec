@@ -59,6 +59,25 @@ pub struct DaemonCapabilities {
     /// command — degrades to a static form set rather than failing.
     #[serde(default)]
     pub operation_schema: bool,
+    /// The engine features compiled into the connected daemon's build.
+    ///
+    /// This is a *build* fact, not a runtime capability: it says which
+    /// feature-gated operations the linked engine could run at all, so a
+    /// client can tell "unavailable because the daemon was built without
+    /// its feature" apart from "unavailable because the daemon does not
+    /// advertise it".
+    ///
+    /// `None` means **unknown** — the daemon links no engine, or predates
+    /// this field. `Some(vec![])` means an engine is linked with no
+    /// features enabled, which is a different, knowable fact. A client
+    /// MUST NOT read `None` as "nothing is enabled", and MUST NOT read
+    /// `Some(vec![])` as "unknown".
+    ///
+    /// `#[serde(default)]` keeps the field wire-additive in both
+    /// directions: a daemon that predates it decodes as `None`, and a
+    /// client that predates it ignores the field.
+    #[serde(default)]
+    pub enabled_features: Option<Vec<String>>,
 }
 
 /// Error codes returned by the daemon in response to client commands.
@@ -183,6 +202,20 @@ pub enum ClientCommand {
     DescribeOperations {
         request_id: String,
     },
+    /// Fetch the report document for one completed task.
+    ///
+    /// Read-only and additive: it creates no session, mutates no task
+    /// state, and takes part in no authorization decision.
+    ///
+    /// A daemon that does not know this command MUST answer
+    /// `ErrorCode::UnsupportedCommand` (see the daemon's unknown-command
+    /// handling); a client MUST treat that as "no report available" and
+    /// degrade rather than fail.
+    GetTaskReport {
+        request_id: String,
+        session_id: SessionId,
+        task_id: TaskId,
+    },
 }
 
 impl ClientCommand {
@@ -204,7 +237,8 @@ impl ClientCommand {
             | Self::ApprovePolicy { request_id, .. }
             | Self::ListPersistedSessions { request_id }
             | Self::DescribeOperations { request_id }
-            | Self::GetPersistedSnapshot { request_id, .. } => request_id,
+            | Self::GetPersistedSnapshot { request_id, .. }
+            | Self::GetTaskReport { request_id, .. } => request_id,
         }
     }
 
@@ -219,7 +253,8 @@ impl ClientCommand {
             | Self::Subscribe { session_id, .. }
             | Self::CloseSession { session_id, .. }
             | Self::ApprovePolicy { session_id, .. }
-            | Self::GetPersistedSnapshot { session_id, .. } => Some(session_id),
+            | Self::GetPersistedSnapshot { session_id, .. }
+            | Self::GetTaskReport { session_id, .. } => Some(session_id),
             _ => None,
         }
     }
@@ -243,7 +278,36 @@ impl ClientCommand {
             Self::ListPersistedSessions { .. } => "list-persisted-sessions",
             Self::DescribeOperations { .. } => "describe-operations",
             Self::GetPersistedSnapshot { .. } => "get-persisted-snapshot",
+            Self::GetTaskReport { .. } => "get-task-report",
         }
+    }
+
+    /// Every command's wire discriminant, in declaration order.
+    ///
+    /// The daemon uses this to tell "this client sent a command this daemon
+    /// does not know" apart from "this client sent a malformed command",
+    /// and to answer the former with `ErrorCode::UnsupportedCommand` and
+    /// the latter with `ErrorCode::InvalidRequest`.
+    pub fn command_names() -> &'static [&'static str] {
+        &[
+            "Health",
+            "Capabilities",
+            "DeclareClient",
+            "CreateSession",
+            "ListSessions",
+            "GetSnapshot",
+            "GetTaskResult",
+            "SubmitTask",
+            "CancelTask",
+            "CancelActive",
+            "Subscribe",
+            "CloseSession",
+            "ApprovePolicy",
+            "ListPersistedSessions",
+            "GetPersistedSnapshot",
+            "DescribeOperations",
+            "GetTaskReport",
+        ]
     }
 }
 
@@ -324,6 +388,18 @@ pub enum ServerMessage {
     Operations {
         request_id: String,
         operations: DescribeOperationsResponse,
+    },
+    /// The report document for one completed task.
+    ///
+    /// `report` is the canonical report document as JSON. It is carried as
+    /// JSON rather than as a typed report-model struct so the protocol crate
+    /// keeps no report-model dependency; the consumer deserializes it into
+    /// the canonical report model.
+    TaskReport {
+        request_id: String,
+        session_id: SessionId,
+        task_id: TaskId,
+        report: serde_json::Value,
     },
 }
 
@@ -677,6 +753,7 @@ mod tests {
                 runtime: RuntimeCapabilities::default(),
                 transports: vec![],
                 operation_schema: true,
+                enabled_features: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -1247,5 +1324,236 @@ mod tests {
         } else {
             panic!("wrong variant");
         }
+    }
+
+    /// The report read path is additive: it carries only its own identity
+    /// plus the task it names, and it round-trips on the flat
+    /// `#[serde(tag = "type")]` encoding every other command already uses.
+    #[test]
+    fn get_task_report_command_roundtrips() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let cmd = ClientCommand::GetTaskReport {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert_eq!(serde_json::to_value(&cmd).unwrap()["type"], "GetTaskReport");
+        let back: ClientCommand = serde_json::from_str(&json).unwrap();
+        if let ClientCommand::GetTaskReport {
+            session_id,
+            task_id,
+            ..
+        } = back
+        {
+            assert_eq!(session_id, sid);
+            assert_eq!(task_id, tid);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn get_task_report_command_exposes_its_identity() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let cmd = ClientCommand::GetTaskReport {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+        };
+        assert_eq!(cmd.request_id(), "req-001");
+        assert_eq!(cmd.session_id(), Some(&sid));
+        assert_eq!(cmd.discriminant(), "get-task-report");
+    }
+
+    #[test]
+    fn server_message_roundtrip_task_report() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let msg = ServerMessage::TaskReport {
+            request_id: rid(),
+            session_id: sid,
+            task_id: tid,
+            report: serde_json::json!({"findings": [], "target": "10.0.0.1"}),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: ServerMessage = serde_json::from_str(&json).unwrap();
+        if let ServerMessage::TaskReport {
+            session_id,
+            task_id,
+            report,
+            ..
+        } = back
+        {
+            assert_eq!(session_id, sid);
+            assert_eq!(task_id, tid);
+            assert_eq!(report["target"], "10.0.0.1");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn server_message_type_field_task_report() {
+        let msg = ServerMessage::TaskReport {
+            request_id: rid(),
+            session_id: SessionId::new(),
+            task_id: TaskId::new(),
+            report: serde_json::json!({}),
+        };
+        let val = serde_json::to_value(&msg).unwrap();
+        assert_eq!(val["type"], "TaskReport");
+    }
+
+    /// The daemon answers `UnsupportedCommand` for a command it does not
+    /// know, so the published name list MUST cover every variant: a name
+    /// missing from it would make the daemon reject a command it does know.
+    #[test]
+    fn command_names_covers_every_variant() {
+        let sid = SessionId::new();
+        let tid = TaskId::new();
+        let commands = vec![
+            ClientCommand::Health { request_id: rid() },
+            ClientCommand::Capabilities { request_id: rid() },
+            ClientCommand::DeclareClient {
+                request_id: rid(),
+                kind: ClientKind::Unknown,
+                label: None,
+            },
+            ClientCommand::CreateSession {
+                request_id: rid(),
+                surface: RuntimeSurface::Unknown,
+                scope: None,
+                labels: vec![],
+            },
+            ClientCommand::ListSessions { request_id: rid() },
+            ClientCommand::GetSnapshot {
+                request_id: rid(),
+                session_id: sid,
+            },
+            ClientCommand::GetTaskResult {
+                request_id: rid(),
+                session_id: sid,
+                task_id: tid,
+            },
+            ClientCommand::SubmitTask {
+                request_id: rid(),
+                session_id: sid,
+                request: RunRequest {
+                    task_kind: eggsec_runtime::TaskKind::PortScan(PortScanParams {
+                        target: "10.0.0.1".into(),
+                        ports: None,
+                        scan_type: None,
+                        timeout_ms: None,
+                        concurrency: None,
+                        udp: None,
+                    }),
+                    requested_by: None,
+                    surface: RuntimeSurface::CliManual,
+                    labels: vec![],
+                },
+            },
+            ClientCommand::CancelTask {
+                request_id: rid(),
+                session_id: sid,
+                task_id: tid,
+            },
+            ClientCommand::CancelActive {
+                request_id: rid(),
+                session_id: sid,
+            },
+            ClientCommand::Subscribe {
+                request_id: rid(),
+                session_id: sid,
+            },
+            ClientCommand::CloseSession {
+                request_id: rid(),
+                session_id: sid,
+            },
+            ClientCommand::ApprovePolicy {
+                request_id: rid(),
+                session_id: sid,
+                task_id: tid,
+                approved: true,
+                reason: None,
+            },
+            ClientCommand::ListPersistedSessions { request_id: rid() },
+            ClientCommand::GetPersistedSnapshot {
+                request_id: rid(),
+                session_id: sid,
+            },
+            ClientCommand::DescribeOperations { request_id: rid() },
+            ClientCommand::GetTaskReport {
+                request_id: rid(),
+                session_id: sid,
+                task_id: tid,
+            },
+        ];
+
+        let mut wire_names: Vec<String> = commands
+            .iter()
+            .map(|cmd| {
+                serde_json::to_value(cmd).unwrap()["type"]
+                    .as_str()
+                    .expect("every command carries a string type discriminant")
+                    .to_owned()
+            })
+            .collect();
+        wire_names.sort();
+
+        let mut published: Vec<String> = ClientCommand::command_names()
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        published.sort();
+
+        assert_eq!(
+            wire_names, published,
+            "the published command-name list must cover every command variant exactly once"
+        );
+    }
+
+    /// A daemon that predates the enabled-feature field publishes nothing,
+    /// and a client that predates it ignores the field. Both directions stay
+    /// wire-additive.
+    #[test]
+    fn daemon_capabilities_decode_without_the_enabled_features_field() {
+        let json = r#"{"runtime":{"task_kinds":[],"transports":[],"supports_cancellation":true,"supports_multiple_sessions":true,"supports_multiple_active_tasks":false},"transports":[]}"#;
+        let capabilities: DaemonCapabilities = serde_json::from_str(json).unwrap();
+        assert!(
+            capabilities.enabled_features.is_none(),
+            "an absent field means unknown, not 'nothing is enabled'"
+        );
+    }
+
+    /// An engine linked with no features enabled is a *knowable* fact and
+    /// must not decode as the unknown case.
+    #[test]
+    fn daemon_capabilities_distinguish_an_empty_feature_set_from_unknown() {
+        let json = r#"{"runtime":{"task_kinds":[],"transports":[],"supports_cancellation":true,"supports_multiple_sessions":true,"supports_multiple_active_tasks":false},"transports":[],"enabled_features":[]}"#;
+        let capabilities: DaemonCapabilities = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            capabilities.enabled_features,
+            Some(Vec::new()),
+            "an empty feature set is a knowable fact and must not decode as unknown"
+        );
+    }
+
+    #[test]
+    fn daemon_capabilities_roundtrip_the_enabled_feature_set() {
+        let capabilities = DaemonCapabilities {
+            runtime: RuntimeCapabilities::default(),
+            transports: vec![],
+            operation_schema: true,
+            enabled_features: Some(vec!["cli".into(), "nse".into()]),
+        };
+        let json = serde_json::to_string(&capabilities).unwrap();
+        let back: DaemonCapabilities = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back.enabled_features,
+            Some(vec!["cli".to_string(), "nse".to_string()])
+        );
     }
 }

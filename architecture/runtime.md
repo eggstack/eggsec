@@ -25,7 +25,7 @@ The `schema` feature (off by default) exposes `src/schema.rs`: `task_kind_schema
 
 Architecture guard: zero TUI, transport, persistence, or engine dependencies. Enforced by `scripts/check-architecture-guards.sh`.
 
-## Architecture (12 source files, Phase D)
+## Architecture (13 source files, Phase D)
 
 | Module | File | Purpose |
 |--------|------|---------|
@@ -33,6 +33,7 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 | `runtime` | `src/runtime.rs` | `Runtime` orchestrator, `RuntimeTaskExecutor` trait (facade; config/sink re-exported) |
 | `runtime_config` | `src/runtime_config.rs` | `RuntimeConfig`, `SessionOptions` (submission/lifecycle tuning) |
 | `runtime_sink` | `src/runtime_sink.rs` | `RuntimeEventReceiver`, `RuntimeEventSink`, broadcast helpers (events/backpressure) |
+| `report` | `src/report.rs` | `RuntimeReportStore`, `MAX_RETAINED_REPORTS` — the bounded store of completed-task report documents |
 | `session` | `src/session.rs` | `RuntimeSession`, `RuntimeExecutionContext`, `SessionScope`, `SessionSnapshot`, `TaskSnapshot`, `SessionSummary` |
 | `request` | `src/request.rs` | `TaskKind` (30 variants), `RuntimeSurface` (11 variants), `RunRequest`, payload structs |
 | `event` | `src/event.rs` | `RuntimeEvent` (12 variants), `TaskOutcome` (5 variants), `TaskStatus` (6 variants), `TaskProgress`, `TaskResultEnvelope`, `ArtifactRef`, `LogLevel`, `RuntimeErrorInfo`, `PolicyPrompt`, `RuntimeAuditEvent` |
@@ -47,9 +48,11 @@ Architecture guard: zero TUI, transport, persistence, or engine dependencies. En
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `Runtime` | `runtime.rs` | Main orchestrator: `create_session()`, `submit()`, `cancel()`, `cancel_active()`, `snapshot()`, `subscribe()`, `close_session()`, `hydrate_session()` |
+| `Runtime` | `runtime.rs` | Main orchestrator: `create_session()`, `submit()`, `cancel()`, `cancel_active()`, `snapshot()`, `subscribe()`, `close_session()`, `hydrate_session()`, plus the synchronous accessors `enabled_features()` and `report_for()` |
 | `RuntimeConfig` | `runtime_config.rs` | `default_task_timeout`, `max_active_tasks_per_session`, `event_channel_capacity`, `capabilities` |
-| `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic (defined at `runtime.rs:40`) |
+| `RuntimeTaskExecutor` | `runtime.rs` | Trait for frontend-supplied execution logic (defined at `runtime.rs:41`) |
+| `RuntimeReportStore` | `report.rs:42` | Bounded, in-memory store of completed-task report documents (task id → report JSON) |
+| `MAX_RETAINED_REPORTS` | `report.rs:29` | The retention bound: the number of report documents a runtime keeps at once |
 | `RuntimeEventSink` | `runtime_sink.rs` | Progress/log/completion/failure reporting for executors |
 | `RuntimeEventReceiver` | `runtime_sink.rs` | Broadcast receiver with lag recovery |
 | `RuntimeExecutionContext` | `session.rs:35` | Per-execution context: session_id, surface, scope |
@@ -213,7 +216,7 @@ Events broadcast via `tokio::sync::broadcast` channel (default capacity: 256).
 | Full lab | `full_lab()` | 29 registered capabilities — every wire kind except `resume` |
 | No-op | `noop()` | Empty (no task kinds) |
 
-### RuntimeTaskExecutor Trait (`runtime.rs:40`)
+### RuntimeTaskExecutor Trait (`runtime.rs:41`)
 
 ```rust
 fn execute(
@@ -226,21 +229,41 @@ fn execute(
 ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>;
 ```
 
+Beside `execute`, the trait has three **defaulted** methods. A default is what keeps every existing executor compiling and keeps its current behaviour: an executor that says nothing publishes the default rather than having a host guess on its behalf.
+
+| Method | Default | Exact semantics |
+|--------|---------|-----------------|
+| `supported_task_kinds()` (`runtime.rs:68`) | `RuntimeCapabilities::daemon_conservative().task_kinds` | The task kinds this executor can run. An executor that rejects every task MUST declare the empty set instead — otherwise a host would advertise capabilities the executor cannot execute. |
+| `enabled_features()` (`runtime.rs:89`) | `None` | The engine features compiled into this executor's build — a **build** fact, not a runtime capability. `None` means **unknown**: the executor links no engine, or does not publish the fact. `Some(vec![])` means an engine is linked with **no** features enabled, which is a different, knowable fact. The two must never be collapsed: reading an empty vector as "unknown" would let a client report a wrong reason for an unavailable operation. |
+| `report_for(task_id)` (`runtime.rs:100`) | `None` | The report document for a completed task. `None` means **no report for this task** — either the executor produces no reports at all, or this particular result has no report form. The executor's own retention policy decides how long a report stays available; the runtime only reads it. |
+
 The engine crate provides `EggsecRuntimeExecutor` which:
 1. Converts `RuntimeSurface` → `ExecutionSurface`
 2. Resolves scope from `RuntimeExecutionContext`
 3. Calls `approve_run_request_bundle()` for policy enforcement
 4. Calls `dispatch_approved_runtime_request()` for tool dispatch
 
-Without the daemon's `service` profile (deprecated alias `full-executor`): `NoopExecutorStub` rejects all tasks, and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support.
+It also overrides both new methods: `enabled_features()` publishes the engine's own compile-time feature registry filtered by the policy bridge's enabled-feature set, and `report_for()` reads the engine's bounded report store (`crates/eggsec/src/runtime_bridge/executor.rs:147`, `:159`).
+
+Without the daemon's `service` profile (deprecated alias `full-executor`): `NoopExecutorStub` rejects all tasks, and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support. Its `enabled_features()` is the default `None`: with no engine linked, the answer is unknown rather than empty.
+
+### `RuntimeReportStore` — bounded report retention
+
+`RuntimeReportStore` (`report.rs:42`) is the bounded store between the engine that *produces* a report document and the daemon that *serves* it. It maps a task id to the report document the engine derived from that task's result, and nothing else: the runtime owns task lifecycle, not report semantics.
+
+Retention is **bounded on purpose**. A long-lived daemon would otherwise accumulate one report document per task for the life of the process, and report documents are among the largest payloads the runtime holds. The bound is `MAX_RETAINED_REPORTS = 64` (`report.rs:29`), and eviction is **oldest-first**: once the store is full, inserting a new document evicts the oldest retained one. The bound is therefore a hard ceiling on retained report documents, not a soft target, and a burst of tasks cannot grow the store without limit.
+
+Every method takes `&self`, and its critical section is a map operation under a `std::sync::Mutex` that is never held across an await point. That keeps the store usable from the synchronous parts of an executor without forcing an async signature on the read path; the engine's executor shares one store across its tasks through an `Arc` (`crates/eggsec/src/runtime_bridge/executor.rs:45`).
 
 ## Public API
 
-All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
+All session/task methods on `Runtime` are `async` (`runtime.rs:197–772`). Two runtime-level accessors are deliberately **synchronous** — a host reads them while building its published state, and the daemon answers a report read synchronously.
 
 | Method | Signature | Purpose |
 |--------|-----------|---------|
 | `Runtime::new()` | `(config, executor) -> Self` | Create runtime |
+| `enabled_features()` | `() -> Option<&[String]>` | The enabled-feature set the executor published. `None` = unknown; `Some(vec![])` = an engine with nothing enabled |
+| `report_for()` | `(&TaskId) -> Option<serde_json::Value>` | The report document the executor recorded for a completed task. `None` = no report available |
 | `create_session()` | `(options, surface) -> Result<SessionId>` | New session |
 | `create_session_with_scope()` | `(options, surface, scope) -> Result<SessionId>` | New session with scope |
 | `submit()` | `(session_id, request) -> Result<TaskId>` | Submit task |
@@ -264,11 +287,12 @@ All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
 
 ## Testing
 
-- `runtime.rs`: 36 tests covering session creation, submit, cancel, timeout, stale completion guard, event emission, multiple sessions, cancel_active, session timeout override
+- `runtime.rs`: 39 tests covering session creation, submit, cancel, timeout, stale completion guard, event emission, multiple sessions, cancel_active, session timeout override
 - `session.rs`: 13 tests for snapshot roundtrip, hydration, scope, capabilities, close
 - `request.rs`: 5 roundtrip, surface-label, and wireless-active dry-run/legacy-payload tests
 - `event.rs`: 4 roundtrip and terminal-state tests
 - `capabilities.rs`: 10 conservative/full/noop mode tests, `supports_task_kind` positive/negative
+- `report.rs`: 6 tests — the store starts empty, an inserted document reads back unchanged, an unknown task has no report, retention is bounded and evicts the oldest first, re-inserting a task replaces its document, and clearing drops everything
 
 ## Invariants & Gotchas
 
@@ -284,6 +308,8 @@ All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
 10. **Default timeout**: 300s (5 minutes); session override takes precedence over runtime default
 11. **Broadcast channel capacity**: 256 (configurable via `RuntimeConfig::event_channel_capacity`)
 12. **Phase 3 closure (2026-09-11)**: runtime types answer transport/session questions; engine contracts answer operation questions. `RuntimeSurface` is a wire DTO (canonical owner: `eggsec::config::ExecutionSurface`; exhaustive bidirectional bridge in `runtime_bridge::surface`). `TaskKind::operation_id()`/`canonical_target()` is the single wire-side match (engine adapters delegate). `race_with_cancel` (`cancel.rs`) is the shared cancellation primitive for both executors. Backpressure: broadcast lag is recoverable (receiver logs + continues); `ExecutionSink` coalesces non-critical progress with an explicit counter while findings/terminal outcomes always deliver.
+13. **Report retention is bounded**: `RuntimeReportStore` keeps at most `MAX_RETAINED_REPORTS` (64) report documents and evicts the oldest first. The bound is what stops a long-lived daemon accumulating one report document per task for the life of the process
+14. **`None` is a value, not a gap**: `RuntimeTaskExecutor::enabled_features()` returning `None` means "unknown" and `Some(vec![])` means "an engine with nothing enabled" — two different facts. `report_for()` returning `None` means "no report for this task", covering both "this executor produces no reports" and "this result has no report form"
 
 ## See Also
 
@@ -294,4 +320,4 @@ All session/task methods on `Runtime` are `async` (`runtime.rs:100–670`).
 - [tui.md](tui.md) — TUI that consumes runtime events
 - [cli_commands.md](cli_commands.md) — CLI commands that dispatch through runtime
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25; full re-verification 2026-10-06 (TaskKind 30 variants incl. `Resume`); 2026-10-23 (`RuntimeSurface` 10 → 11 variants with `DesktopGuiManual`; optional `schema` feature added)*
+*Last verified against source: 2026-10-24 (`RuntimeTaskExecutor::enabled_features()` and `report_for()` added as defaulted methods; `Runtime::enabled_features()` and `Runtime::report_for()`; the bounded `RuntimeReportStore` and `MAX_RETAINED_REPORTS`); 2026-09-11 (Phase 3 closure); type lines and test counts re-verified 2026-09-25; full re-verification 2026-10-06 (TaskKind 30 variants incl. `Resume`); 2026-10-23 (`RuntimeSurface` 10 → 11 variants with `DesktopGuiManual`; optional `schema` feature added)*

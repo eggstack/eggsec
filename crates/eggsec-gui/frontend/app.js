@@ -54,6 +54,16 @@
     taskList: document.getElementById("task-list"),
     dashboardCounters: document.getElementById("dashboard-counters"),
     cancelActiveButton: document.getElementById("cancel-active-button"),
+    daemonFacts: document.getElementById("daemon-facts"),
+    coverageBody: document.getElementById("coverage-body"),
+    exportForm: document.getElementById("export-form"),
+    exportTask: document.getElementById("export-task"),
+    exportFormat: document.getElementById("export-format"),
+    exportPath: document.getElementById("export-path"),
+    exportButton: document.getElementById("export-button"),
+    exportHint: document.getElementById("export-hint"),
+    reportButton: document.getElementById("report-button"),
+    reportBody: document.getElementById("report-body"),
   };
 
   /* --------------------------------------------------------------- state */
@@ -78,6 +88,8 @@
     droppedLogLines: 0,
     unknownTaskEvents: 0,
     submitting: false,
+    coverage: [],
+    daemon: null,
   };
 
   const banners = new Map();
@@ -227,8 +239,343 @@
     }
   }
 
-  /* ---------------------------------------------------------- task kinds */
+  /* -------------------------------------------------------------- daemon */
 
+  /**
+   * Render what the GUI knows about the daemon it is attached to.
+   *
+   * The facts arrive from the Rust side: the attachment state, the socket,
+   * the published enabled-feature set and the advertised capability count.
+   * An absent feature set is *unknown*, not empty, and it is shown that way.
+   */
+  function renderDaemonStatus() {
+    clear(dom.daemonFacts);
+    const daemon = state.daemon;
+    if (!daemon) {
+      dom.daemonFacts.appendChild(el("dt", { class: "catalog-facts__name", text: "Daemon" }));
+      dom.daemonFacts.appendChild(
+        el("dd", { class: "catalog-facts__value", text: "Not connected to a daemon yet." })
+      );
+      return;
+    }
+
+    const features = Array.isArray(daemon.enabled_features) ? daemon.enabled_features : null;
+    const facts = [
+      ["Attachment", labelize(daemon.attachment)],
+      ["Socket", daemon.socket_path ? String(daemon.socket_path) : "none"],
+      [
+        "Engine features",
+        features === null ? "unknown" : features.length ? features.join(", ") : "none enabled",
+      ],
+      ["Capabilities", String(daemon.advertised_capability_count)],
+    ];
+    for (const fact of facts) {
+      dom.daemonFacts.appendChild(el("dt", { class: "catalog-facts__name", text: fact[0] }));
+      dom.daemonFacts.appendChild(
+        el("dd", { class: "catalog-facts__value", text: fact[1] })
+      );
+    }
+    if (daemon.notice) {
+      dom.daemonFacts.appendChild(el("dt", { class: "catalog-facts__name", text: "Notice" }));
+      dom.daemonFacts.appendChild(
+        el("dd", { class: "catalog-facts__value", text: String(daemon.notice) })
+      );
+    }
+  }
+
+  /** Capitalise a wire value for display. */
+  function labelize(value) {
+    const text = String(value === undefined || value === null ? "" : value);
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  /* ------------------------------------------------------------ coverage */
+
+  /**
+   * Render the coverage table: every published task kind, and why it is or
+   * is not reachable from this GUI.
+   *
+   * The rows arrive from the Rust side, which derives them from what the
+   * daemon published. This file renders them and holds no opinion of its
+   * own about which operations exist or which of them work.
+   */
+  function renderCoverage() {
+    clear(dom.coverageBody);
+    const rows = Array.isArray(state.coverage) ? state.coverage : [];
+
+    if (rows.length === 0) {
+      dom.coverageBody.appendChild(
+        el("p", {
+          class: "empty",
+          text: state.connected
+            ? "The connected daemon published no task kinds."
+            : "Not connected to a daemon yet.",
+        })
+      );
+      return;
+    }
+
+    const head = el("tr", null, [
+      el("th", { scope: "col", text: "Task kind" }),
+      el("th", { scope: "col", text: "Operation" }),
+      el("th", { scope: "col", text: "Capability" }),
+      el("th", { scope: "col", text: "Verdict" }),
+      el("th", { scope: "col", text: "Reason" }),
+    ]);
+
+    const body = el("tbody", null, []);
+    for (const row of rows) {
+      const verdict = String((row && row.reachability) || "");
+      body.appendChild(
+        el("tr", { class: "coverage-row" }, [
+          el("td", { class: "coverage-cell coverage-cell--name", text: String(row.variant || "") }),
+          el("td", { class: "coverage-cell", text: String(row.operation_id || "") }),
+          el("td", { class: "coverage-cell", text: String(row.capability_name || "") }),
+          el("td", { class: "coverage-cell coverage-cell--verdict" }, [
+            el("span", { class: "coverage-verdict coverage-verdict--" + verdict, text: verdict }),
+          ]),
+          el("td", { class: "coverage-cell coverage-cell--reason", text: String(row.reason || "") }),
+        ])
+      );
+    }
+
+    dom.coverageBody.appendChild(
+      el("table", { class: "coverage-table" }, [el("thead", null, [head]), body])
+    );
+  }
+
+  /* -------------------------------------------------------------- export */
+
+  /** Fill the format list from the formats the Rust side offers. */
+  function renderExportFormats() {
+    if (!dom.exportFormat) return;
+    const formats =
+      state.daemon && Array.isArray(state.daemon.report_formats) ? state.daemon.report_formats : [];
+    const selected = dom.exportFormat.value;
+    clear(dom.exportFormat);
+    for (const format of formats) {
+      const option = el("option", {
+        value: String(format.value),
+        text: String(format.label) + " (." + String(format.extension) + ")",
+      });
+      dom.exportFormat.appendChild(option);
+    }
+    if (selected) dom.exportFormat.value = selected;
+    renderExportState();
+  }
+
+  /**
+   * Enable the export only when a report can exist for the chosen task.
+   *
+   * The daemon retains a report for a completed task, so the export is
+   * offered for a task this window saw complete. Anything else says so
+   * instead of offering an action that cannot succeed.
+   */
+  function renderExportState() {
+    if (!dom.exportButton) return;
+    const taskId = dom.exportTask ? String(dom.exportTask.value || "").trim() : "";
+    const format = dom.exportFormat ? String(dom.exportFormat.value || "") : "";
+    const path = dom.exportPath ? String(dom.exportPath.value || "").trim() : "";
+    const task = taskId ? state.tasks.get(taskId) : null;
+    const completed = task && String(task.status || "") === "completed";
+
+    dom.exportButton.disabled = !(taskId && format && path && completed);
+    if (dom.reportButton) dom.reportButton.disabled = !(taskId && format && completed);
+
+    if (!dom.exportHint) return;
+    if (!taskId) {
+      dom.exportHint.textContent = "Choose a completed task to show or export its report.";
+    } else if (!task) {
+      dom.exportHint.textContent =
+        "This window has not seen that task. The daemon keeps a bounded number of reports for completed tasks.";
+    } else if (!completed) {
+      dom.exportHint.textContent = "A report exists only for a task that completed.";
+    } else {
+      dom.exportHint.textContent = "The report is written to the destination you choose.";
+    }
+  }
+
+  /* -------------------------------------------------------------- report */
+
+  /**
+   * Render a report from the **data** the Rust side sent.
+   *
+   * Nothing from the scanned target becomes markup: every value is written
+   * as a text node, so a banner or a finding title that contains markup is
+   * shown as the characters it is. The GUI never injects the engine's HTML
+   * document into this window — its inline style and inline script are
+   * blocked by the window's Content Security Policy, and the policy stays
+   * as it is.
+   */
+  function renderReport(payload) {
+    clear(dom.reportBody);
+    if (!payload || typeof payload !== "object") {
+      dom.reportBody.appendChild(
+        el("p", { class: "empty", text: "No report is loaded." })
+      );
+      return;
+    }
+
+    const report = payload.report || {};
+    const facts = [
+      ["Target", String(report.target || "")],
+      ["Scan", String(report.scan_type || "")],
+      ["Finished", String(report.timestamp || "")],
+      ["Duration", String(report.duration_ms || 0) + " ms"],
+    ];
+
+    const summary = el("dl", { class: "report-facts" });
+    for (const fact of facts) {
+      summary.appendChild(el("dt", { class: "report-facts__name", text: fact[0] }));
+      summary.appendChild(el("dd", { class: "report-facts__value", text: fact[1] }));
+    }
+    dom.reportBody.appendChild(summary);
+
+    const findings = Array.isArray(report.findings) ? report.findings : [];
+    dom.reportBody.appendChild(
+      el("h3", { class: "report-heading", text: "Findings (" + findings.length + ")" })
+    );
+    if (findings.length === 0) {
+      dom.reportBody.appendChild(el("p", { class: "empty", text: "No findings." }));
+    }
+    for (const finding of findings) {
+      const children = [
+        el("p", { class: "report-finding__title", text: String(finding.title || "") }),
+        el("p", { class: "report-finding__meta" }, [
+          el("span", {
+            class: "report-finding__severity report-finding__severity--" + String(finding.severity || ""),
+            text: String(finding.severity || ""),
+          }),
+          el("span", { class: "report-finding__category", text: String(finding.category || "") }),
+          el("span", { class: "report-finding__location", text: String(finding.location || "") }),
+        ]),
+      ];
+      if (finding.description) {
+        children.push(
+          el("p", { class: "report-finding__description", text: String(finding.description) })
+        );
+      }
+      if (finding.evidence) {
+        children.push(el("p", { class: "report-finding__evidence", text: String(finding.evidence) }));
+      }
+      if (finding.remediation) {
+        children.push(
+          el("p", { class: "report-finding__remediation", text: String(finding.remediation) })
+        );
+      }
+      dom.reportBody.appendChild(el("div", { class: "report-finding" }, children));
+    }
+
+    const ports = Array.isArray(report.open_ports) ? report.open_ports : [];
+    dom.reportBody.appendChild(
+      el("h3", { class: "report-heading", text: "Open ports (" + ports.length + ")" })
+    );
+    if (ports.length === 0) {
+      dom.reportBody.appendChild(el("p", { class: "empty", text: "No open ports." }));
+    } else {
+      const rows = el("tbody", null, []);
+      for (const port of ports) {
+        rows.appendChild(
+          el("tr", null, [
+            el("td", { text: String(port.port) }),
+            el("td", { text: String(port.protocol || "") }),
+            el("td", { text: String(port.status || "") }),
+            el("td", { text: String(port.service || "") }),
+            el("td", { text: String(port.version || "") }),
+            el("td", { text: String(port.banner || "") }),
+          ])
+        );
+      }
+      dom.reportBody.appendChild(
+        el("table", { class: "report-table" }, [
+          el("thead", null, [
+            el("tr", null, [
+              el("th", { scope: "col", text: "Port" }),
+              el("th", { scope: "col", text: "Protocol" }),
+              el("th", { scope: "col", text: "Status" }),
+              el("th", { scope: "col", text: "Service" }),
+              el("th", { scope: "col", text: "Version" }),
+              el("th", { scope: "col", text: "Banner" }),
+            ]),
+          ]),
+          rows,
+        ])
+      );
+    }
+
+    const services = Array.isArray(report.services) ? report.services : [];
+    dom.reportBody.appendChild(
+      el("h3", { class: "report-heading", text: "Services (" + services.length + ")" })
+    );
+    if (services.length === 0) {
+      dom.reportBody.appendChild(el("p", { class: "empty", text: "No services." }));
+    } else {
+      const rows = el("tbody", null, []);
+      for (const service of services) {
+        rows.appendChild(
+          el("tr", null, [
+            el("td", { text: String(service.service || "") }),
+            el("td", { text: String(service.version || "") }),
+            el("td", { text: String(service.banner || "") }),
+          ])
+        );
+      }
+      dom.reportBody.appendChild(
+        el("table", { class: "report-table" }, [
+          el("thead", null, [
+            el("tr", null, [
+              el("th", { scope: "col", text: "Service" }),
+              el("th", { scope: "col", text: "Version" }),
+              el("th", { scope: "col", text: "Banner" }),
+            ]),
+          ]),
+          rows,
+        ])
+      );
+    }
+
+    if (payload.document) {
+      dom.reportBody.appendChild(el("h3", { class: "report-heading", text: "Document" }));
+      dom.reportBody.appendChild(
+        el("pre", { class: "report-document", text: String(payload.document) })
+      );
+    }
+  }
+
+  async function showReport() {
+    if (!invoke || !dom.reportButton || dom.reportButton.disabled) return;
+    const taskId = dom.exportTask ? String(dom.exportTask.value || "").trim() : "";
+    const format = dom.exportFormat ? String(dom.exportFormat.value || "") : "";
+    if (!taskId) return;
+
+    dom.reportButton.disabled = true;
+    setBanner("report", null);
+    try {
+      const payload = await invoke(
+        "report_for",
+        commandArgs([
+          ["task_id", taskId],
+          ["format", format],
+        ])
+      );
+      renderReport(payload);
+    } catch (error) {
+      clear(dom.reportBody);
+      dom.reportBody.appendChild(
+        el("p", { class: "empty", text: "The report could not be read: " + errorMessage(error) })
+      );
+      setBanner("report", {
+        level: "error",
+        title: "The report could not be shown",
+        message: errorMessage(error),
+      });
+    } finally {
+      renderExportState();
+    }
+  }
+
+  /* ---------------------------------------------------------- task kinds */
   function isKindAvailable(kind) {
     if (!kind) return false;
     if (!kind.supported) return false;
@@ -1031,6 +1378,21 @@
     const evicted = enforceTaskCap();
     if (isNew || evicted) renderTaskList();
     else updateTaskNode(merged);
+    offerTaskForExport(merged);
+    renderExportState();
+  }
+
+  /**
+   * Point the export panel at a task that just completed.
+   *
+   * The operator's choice is never overwritten: the panel is only filled in
+   * when it is still empty.
+   */
+  function offerTaskForExport(task) {
+    if (!dom.exportTask) return;
+    if (String(dom.exportTask.value || "").trim()) return;
+    if (!task || String(task.status || "") !== "completed") return;
+    dom.exportTask.value = String(task.task_id || "");
   }
 
   function removeTask(taskId) {
@@ -1086,6 +1448,7 @@
     );
     renderTaskList();
     renderCounters();
+    renderExportState();
   }
 
   function highlightSelectedTask() {
@@ -1135,6 +1498,77 @@
         title: "Cancellation failed",
         message: errorMessage(error),
       });
+    }
+  }
+
+  async function refreshCoverage() {
+    if (!invoke) return;
+    try {
+      const rows = await invoke("coverage");
+      state.coverage = Array.isArray(rows) ? rows : [];
+      renderCoverage();
+    } catch (error) {
+      state.coverage = [];
+      renderCoverage();
+      setBanner("coverage", {
+        level: "error",
+        title: "Could not read the coverage table",
+        message: errorMessage(error),
+      });
+    }
+  }
+
+  async function refreshDaemonStatus() {
+    if (!invoke) return;
+    try {
+      const status = await invoke("daemon_status");
+      state.daemon = status || null;
+      renderDaemonStatus();
+      renderExportFormats();
+    } catch (error) {
+      state.daemon = null;
+      renderDaemonStatus();
+      renderExportFormats();
+      setBanner("daemon", {
+        level: "error",
+        title: "Could not read the daemon status",
+        message: errorMessage(error),
+      });
+    }
+  }
+
+  async function exportReport(event) {
+    if (event) event.preventDefault();
+    if (!invoke || !dom.exportButton || dom.exportButton.disabled) return;
+    const taskId = dom.exportTask ? String(dom.exportTask.value || "").trim() : "";
+    const format = dom.exportFormat ? String(dom.exportFormat.value || "") : "";
+    const path = dom.exportPath ? String(dom.exportPath.value || "").trim() : "";
+    if (!taskId || !format || !path) return;
+
+    dom.exportButton.disabled = true;
+    setBanner("export", null);
+    try {
+      const written = await invoke(
+        "export_report",
+        commandArgs([
+          ["task_id", taskId],
+          ["format", format],
+          ["path", path],
+        ])
+      );
+      setBanner("export", {
+        level: "info",
+        title: "Report exported",
+        message: written && written.path ? String(written.path) : path,
+      });
+    } catch (error) {
+      setBanner("export", {
+        level: "error",
+        title: "The export failed",
+        message: errorMessage(error),
+      });
+    } finally {
+      renderExportState();
     }
   }
 
@@ -1189,6 +1623,8 @@
       }
       await refreshCatalogLists();
       await refreshSnapshot();
+      await refreshCoverage();
+      await refreshDaemonStatus();
     } catch (error) {
       state.catalog = null;
       state.connected = false;
@@ -1196,8 +1632,14 @@
       state.operationsById = new Map();
       state.taskKinds = [];
       state.selectedKind = null;
+      state.coverage = [];
+      state.daemon = null;
       renderCatalog();
       renderTaskKinds();
+      renderCoverage();
+      renderDaemonStatus();
+      renderExportFormats();
+      renderReport(null);
       setBanner("connect", {
         level: "error",
         title: "Could not connect to the daemon",
@@ -1279,6 +1721,10 @@
     renderTaskKinds();
     renderTaskList();
     renderCounters();
+    renderCoverage();
+    renderDaemonStatus();
+    renderExportFormats();
+    renderReport(null);
 
     if (dom.connectForm) {
       dom.connectForm.addEventListener("submit", function (event) {
@@ -1286,6 +1732,22 @@
         const socket = dom.socketInput ? dom.socketInput.value : DEFAULT_SOCKET;
         connect(socket);
       });
+    }
+
+    if (dom.exportForm) {
+      dom.exportForm.addEventListener("submit", exportReport);
+    }
+    if (dom.exportTask) {
+      dom.exportTask.addEventListener("input", renderExportState);
+    }
+    if (dom.exportPath) {
+      dom.exportPath.addEventListener("input", renderExportState);
+    }
+    if (dom.exportFormat) {
+      dom.exportFormat.addEventListener("change", renderExportState);
+    }
+    if (dom.reportButton) {
+      dom.reportButton.addEventListener("click", showReport);
     }
 
     if (dom.cancelActiveButton) {

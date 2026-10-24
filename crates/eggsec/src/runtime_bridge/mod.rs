@@ -13,8 +13,8 @@
 //! # Invariants
 //!
 //! - [`RuntimeSurface::Unknown`](eggsec_runtime::RuntimeSurface::Unknown) is never executable.
-//! - Manual surfaces (`CliManual`, `TuiManual`) retain operator-directed semantics
-//!   whether embedded or daemon-backed.
+//! - Manual surfaces (`CliManual`, `TuiManual`, `DesktopGuiManual`) retain
+//!   operator-directed semantics whether embedded or daemon-backed.
 //! - Automated surfaces (`McpServer`, `RestApi`, `GrpcApi`, `SecurityAgent`, `Ci`)
 //!   never honor manual overrides.
 //! - Any new [`RuntimeSurface`](eggsec_runtime::RuntimeSurface) variant must update
@@ -25,6 +25,7 @@ mod bundle;
 mod descriptor;
 mod executor;
 mod manual;
+pub mod report;
 mod surface;
 
 pub use bundle::{

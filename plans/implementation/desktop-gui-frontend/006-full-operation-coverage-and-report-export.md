@@ -1,10 +1,11 @@
 # Desktop GUI Frontend Milestone 006 — Full Operation Coverage and Report Export
 
-Status: ready for handoff
+Status: implemented
 
-Repository baseline: branch `feat/auto-20261022-76692679` at commit `34df13d0`
-("feat(gui): add the desktop GUI frontend foundation (milestones 001-005)"),
-with milestones 001–003 closed and milestones 004–005 implemented.
+Repository baseline: branch `feat/auto-20261022-76692679` at commit `9a9b000f`
+("fix(make): drop backticks from the new help lines"), with milestones
+001–005 closed, milestones 007–009 implemented (008 and 009 closed, 007
+conditionally closed), and milestone 006 in progress.
 
 Source roadmap:
 
@@ -25,6 +26,76 @@ Applicable ADRs:
 - `plans/adrs/ADR-0009-gui-shell-technology-selection.md`
 
 Primary class: capability
+
+## 0. Amendment record
+
+**Amended 2026-10-24.** This plan was authored at `34df13d0`, before
+milestones 007–009 landed. Milestone 008 (the daemon feature profile) and
+milestone 009 (derived daemon capabilities and start honesty) falsified
+several of its §3 measured facts, and one defect it did not anticipate was
+found to block its own work. The section numbering and the 16-section
+structure are unchanged; the corrections are recorded here and applied in
+place in §3, §6, §7, and §13.
+
+| # | Plan said | Now true | Superseded by |
+|---|---|---|---|
+| A1 | `--full-executor` "enables the engine's `cli` feature and **nothing else**" (§3.7) | `full-executor` is the deprecated alias of the `service` profile, which enables **20** engine features (`crates/eggsec-daemon/Cargo.toml:25,52`) | 008 |
+| A2 | "**8 of the 20** capabilities it advertises map to operations whose features are off … A stock `eggsec-daemon --full-executor` will deny all 8 with `FeatureMissing`" (§3.7) | A `service`-profile daemon enables the features of **all 20** conservative capabilities and denies none of them. The published capability set is unchanged; the reason an operation is unavailable is now the daemon's advertised set, not a missing feature | 008, 009 |
+| A3 | "A default-built binary accepts `--full-executor` and still runs a no-op executor" (§3.7) | The CLI's rejecting `NoopExecutor` was **deleted**; the CLI now hosts `EggsecRuntimeExecutor` (`crates/eggsec-cli/src/daemon_cli.rs`). A daemon **binary** built without the `service` feature still falls back to `DaemonHost::new_noop` (`crates/eggsec-daemon/src/main.rs:119-130`) and publishes an **empty** capability list | 009 |
+| A4 | "A daemon publishes a capability list that says nothing about which operations it can execute" (§3.4) | The published list is now the executor's declaration intersected with the daemon's conservative policy (`crates/eggsec-daemon/src/host.rs:99-108`), so a rejecting executor can no longer advertise anything | 009 |
+
+**The §3.6 trap is closed.** The plan's central hazard — a daemon
+advertising 20 capabilities while executing none of them — was real at
+`34df13d0` and is now **unrepresentable**: the published list is derived
+from the executor's own declaration, and a rejecting executor declares
+nothing. The GUI's existing empty-list check remains as a belt-and-braces
+guard, but milestone 006 no longer has to work around the trap; it has to
+work *with* the derived set, which means the coverage model has to explain
+the ten canonical kinds the conservative policy withholds rather than
+merely hide them.
+
+**Scope addition (user-directed, 2026-10-24).** The user directed that the
+`DesktopGuiManual` permissive-set defect be folded into this milestone.
+The defect is engine-side (`crates/eggsec/src/runtime_bridge/executor.rs`),
+outside the GUI crate, and owned by no other milestone. It is a live
+correctness defect, not a hypothetical: a GUI session whose scope is not
+explicit takes the strict branch and fails closed, so **every GUI task
+dispatched through the daemon-hosted executor is denied**. ADR-0007 and
+§4 of the long-term specification both describe the desktop GUI as a
+**permissive manual surface**, so the code contradicts the canonical
+contract. Because the defect was found while executing this milestone and
+blocks its own end-to-end verification, it is folded in here as work
+package G rather than left unowned. The fold-in was explicitly directed by
+the user; it is not an expansion the implementer chose.
+
+**Two ambiguities are resolved here rather than left to the implementer.**
+
+1. **The enabled-feature handshake.** The plan left the wire shape open
+   between `Vec<String>` and `Option<Vec<String>>`. The resolved shape is
+   `Option<Vec<String>>` on the wire and on the executor trait:
+   `None` means **unknown** (the daemon links no engine, or predates the
+   field), `Some(vec![])` means "an engine is linked with no features
+   enabled", and `Some(names)` means "an engine is linked and these are its
+   enabled features". An empty `Vec` is therefore never ambiguous, and a
+   client that sees `None` degrades to "availability unverified" rather
+   than to "nothing is enabled".
+
+2. **The HTML export and the CSP.** §6 requires the exported HTML file to
+   be "the CLI's HTML, byte-for-byte", while §7 acceptance evidence and
+   §13 criterion 9 require "the exported HTML artifact contains no remote
+   origin reference". Those two cannot both hold: the CLI's HTML carries
+   exactly one remote reference, the `<script src="https://cdn.jsdelivr.net/npm/chart.js">`
+   tag in `crates/eggsec-output/src/html.rs`. The resolved reading, which
+   preserves both the stop condition (the CLI's HTML artifact does not
+   change) and guard 158, is:
+   - the **exported file** is the CLI's HTML byte-for-byte, including its
+     CDN reference — the operator opens it in a browser, where the CLI's
+     own artifact behaves identically;
+   - the **embedded display** uses a new self-contained rendering with the
+     remote `<script>` tag omitted, so nothing the GUI renders for display
+     references a remote origin;
+   - guard 162 constrains the *display* artifact, not the operator's
+     exported file.
 
 ## 1. Objective
 
@@ -57,7 +128,7 @@ Closed hard dependencies:
   `capability_name`, and their JSON Schema.
 - Milestone 004 (implemented 2026-10-23) — the Tauri shell, the daemon
   connection, the `DesktopGuiManual` session, and the catalog
-  (`crates/eggsec-gui/src/shell.rs:17`).
+  (`crates/eggsec-gui/src/shell.rs:24`).
 - Milestone 005 (implemented 2026-10-23) — the generic form engine
   (`crates/eggsec-gui/src/form.rs`), the bounded task state
   (`crates/eggsec-gui/src/tasks.rs`), submission, cancellation, and result
@@ -67,7 +138,7 @@ Stable interface dependencies:
 
 - `RuntimeClient` (`crates/eggsec-frontend-client/src/lib.rs:66-88`) — submit,
   cancel, cancel-active, subscribe. The GUI's eight IPC commands are registered
-  at `crates/eggsec-gui/src/shell.rs:22-31`.
+  at `crates/eggsec-gui/src/shell.rs:33-42`.
 - `TaskKind` — 30 adjacently tagged variants
   (`crates/eggsec-runtime/src/request.rs:72-103`).
 - `TaskKind::capability_name()` (`crates/eggsec-runtime/src/request.rs:562-598`)
@@ -100,16 +171,16 @@ the GUI's closure (§6, "Protocol and DTOs").
 
 | Item | Location | Note |
 |---|---|---|
-| `GuiOptions { socket_path }` | `crates/eggsec-gui/src/config.rs:21-23` | one field only |
-| `DEFAULT_SOCKET_PATH` | `crates/eggsec-gui/src/config.rs:17` | `/tmp/eggsec-daemon.sock` |
-| `--socket` parsing / `usage()` | `crates/eggsec-gui/src/config.rs:39-74,78-89` | `usage()` ends with `eggsec-daemon --full-executor --socket-path /tmp/eggsec-daemon.sock` |
-| `daemon_start_command()` | `crates/eggsec-gui/src/connection.rs:51-53` | the precise start command |
-| `unreachable_diagnostic()` | `crates/eggsec-gui/src/connection.rs:60-68` | names the socket and the start command |
-| `daemon_advertises_no_task_kinds()` | `crates/eggsec-gui/src/connection.rs:161-163` | the **empty-list** no-op check |
-| `list_task_kinds()` / `unavailable_reason()` | `crates/eggsec-gui/src/commands.rs:291-316,319-331` | two reasons only: not-exposed, not-supported |
-| `submit_task()` | `crates/eggsec-gui/src/commands.rs:374-428` | checks exposure + capability, then submits |
+| `GuiOptions { socket_path }` | `crates/eggsec-gui/src/config.rs:23-25` | one field only |
+| `DEFAULT_SOCKET_PATH` | `crates/eggsec-gui/src/config.rs:19` | `/tmp/eggsec-daemon.sock` |
+| `--socket` parsing / `usage()` | `crates/eggsec-gui/src/config.rs:48-83,78-89` | `usage()` ends with `eggsec-daemon --full-executor --socket-path /tmp/eggsec-daemon.sock` |
+| `daemon_start_command()` | `crates/eggsec-gui/src/connection.rs:57-59` | the precise start command |
+| `unreachable_diagnostic()` | `crates/eggsec-gui/src/connection.rs:66-74` | names the socket and the start command |
+| `daemon_advertises_no_task_kinds()` | `crates/eggsec-gui/src/connection.rs:177-179` | the **empty-list** no-op check |
+| `list_task_kinds()` / `unavailable_reason()` | `crates/eggsec-gui/src/commands.rs:430-455,319-331` | two reasons only: not-exposed, not-supported |
+| `submit_task()` | `crates/eggsec-gui/src/commands.rs:513-567` | checks exposure + capability, then submits |
 | log-ring caps | `crates/eggsec-gui/src/tasks.rs:28,35` | 200 per task, 50 per flush |
-| IPC command set | `crates/eggsec-gui/src/shell.rs:22-31` | 8 commands |
+| IPC command set | `crates/eggsec-gui/src/shell.rs:33-42` | 8 commands |
 
 The GUI has **34 tests** at the baseline: 6 in `config.rs`, 4 in
 `connection.rs`, 11 in `form.rs`, 9 in `tasks.rs`, 4 in `commands.rs`.
@@ -218,12 +289,12 @@ unavailable" exit condition, and it is **measured**, not assumed:
    `crates/eggsec-runtime/src/capabilities.rs` — `daemon_conservative()`
    (`:45-74`, 20 entries), `full_lab()` (`:77-115`, 29 entries), `noop()`
    (`:124-132`, 0 entries) — plus the literal at
-   `crates/eggsec-daemon/src/host.rs:380`.
+   `crates/eggsec-daemon/src/host.rs:373`.
 2. **The engine never populates `task_kinds`.** `RuntimeTaskExecutor` has
    exactly one method, `execute`
    (`crates/eggsec-runtime/src/runtime.rs:40-57`); the engine's
    `EggsecRuntimeExecutor` implements no capabilities method
-   (`crates/eggsec/src/runtime_bridge/executor.rs:128-225`).
+   (`crates/eggsec/src/runtime_bridge/executor.rs:141-238`).
 3. **`TaskCapability` carries no feature field** — it is
    `{ name, description }` (`crates/eggsec-runtime/src/capabilities.rs:7-10`).
 4. **Presence ≠ available.** `daemon_conservative()` advertises `nse`, `hunt`,
@@ -237,7 +308,7 @@ unavailable" exit condition, and it is **measured**, not assumed:
 6. **The protocol has no "enabled features" field.** `DaemonCapabilities` is
    `{ runtime, transports, operation_schema }`
    (`crates/eggsec-daemon-protocol/src/protocol.rs:46-51`), and the daemon fills
-   it with exactly those three (`crates/eggsec-daemon/src/host.rs:384-394`).
+   it with exactly those three (`crates/eggsec-daemon/src/host.rs:399-409`).
 
 **Only two reliable ways exist to learn that a feature is off:** (a) attempt
 the task and read the denial — `EnforcementContext` snapshots
@@ -278,10 +349,10 @@ facts:
 | The daemon logs to **stdout only** | `crates/eggsec-daemon/src/main.rs:50-56` — no file sink, no PID file, no lock file anywhere in the crate |
 | The data directory defaults to `$HOME/.local/share/eggsec/daemon` | `crates/eggsec-daemon/src/main.rs:74-81` |
 | Shutdown is **SIGTERM / ctrl_c** — not SIGHUP | `crates/eggsec-daemon/src/main.rs:205-227` |
-| `run_server` **unlinks the socket path before binding** | `crates/eggsec-daemon/src/server.rs:89-94`, then binds at `:95` — a second daemon silently steals a live socket |
-| The socket is chmod 0600 | `crates/eggsec-daemon/src/server.rs:100-107` |
-| The **only** readiness marker is a stdout log line | `crates/eggsec-daemon/src/server.rs:111-115`: `"Daemon listening on {socket} (max_clients={n})"`. No handshake, no PID file, no ready byte |
-| Shutdown removes the socket | `crates/eggsec-daemon/src/server.rs:144-148` |
+| `run_server` **unlinks the socket path before binding** | `crates/eggsec-daemon/src/server.rs:141-146`, then binds at `:95` — a second daemon silently steals a live socket |
+| The socket is chmod 0600 | `crates/eggsec-daemon/src/server.rs:152-159` |
+| The **only** readiness marker is a stdout log line | `crates/eggsec-daemon/src/server.rs:163-167`: `"Daemon listening on {socket} (max_clients={n})"`. No handshake, no PID file, no ready byte |
+| Shutdown removes the socket | `crates/eggsec-daemon/src/server.rs:196-200` |
 
 Consequences for spawn-and-supervise:
 
@@ -291,7 +362,7 @@ Consequences for spawn-and-supervise:
 - Readiness **can** be inferred from the socket becoming connectable, which is
   strictly stronger than the log line: the GUI's own connect path already
   proves the daemon speaks the protocol
-  (`crates/eggsec-gui/src/connection.rs:95-154`).
+  (`crates/eggsec-gui/src/connection.rs:111-170`).
 - A pre-flight liveness check is mandatory: before spawning, the GUI must
   determine whether a daemon is already serving the socket path, or it will
   start a second daemon that steals the first one's socket.
@@ -306,11 +377,16 @@ route therefore cannot assume `eggsec-daemon` is on `PATH`.**
 **The GUI must not depend on `eggsec-daemon`.** The daemon's `full-executor`
 feature pulls the engine (`crates/eggsec-daemon/Cargo.toml:18`), so a GUI that
 linked it would link the engine and violate `ADR-0007` and guard 155
-(`scripts/check-architecture-guards.sh:4516-4552`). Spawning it as a **child
+(`scripts/check-architecture-guards.sh:4768-4834`). Spawning it as a **child
 process** is a different matter from linking it — but the spawn route is still
 opt-in and operator-supplied (Work package C).
 
-### 3.6 The 20-advertised / 0-executable trap
+### 3.6 The 20-advertised / 0-executable trap — closed by milestone 009
+
+> **Superseded at the current baseline.** The trap described below was real
+> at `34df13d0` and milestone 009 closed it. The historical evidence is
+> kept because it explains why the coverage model has to explain the
+> *withheld* kinds rather than trust the advertised list.
 
 `eggsec daemon start` (the CLI's convenience wrapper) hosts a **no-op
 executor** that nonetheless advertises the full conservative capability list:
@@ -328,19 +404,34 @@ let host = std::sync::Arc::new(eggsec_daemon::host::DaemonHost::new(
 (`crates/eggsec-cli/src/daemon_cli.rs:584-607`, `:605`).
 
 The advertisement survives because `DaemonHost::new` sets
-`executor_is_noop: false` (`crates/eggsec-daemon/src/host.rs:98`) and builds
+`executor_is_noop: false` (`crates/eggsec-daemon/src/host.rs:104`) and builds
 its runtime with `RuntimeConfig::default()` (`:91`), whose capabilities are
 `daemon_conservative()` (`crates/eggsec-runtime/src/capabilities.rs:33-37`, `:45`).
 Only `DaemonHost::new_noop` sets `executor_is_noop: true`
-(`crates/eggsec-daemon/src/host.rs:116`) and answers the `Capabilities`
-command with an **empty** task-kind list (`crates/eggsec-daemon/src/host.rs:371-378`).
+(`crates/eggsec-daemon/src/host.rs:123`) and answers the `Capabilities`
+command with an **empty** task-kind list (`crates/eggsec-daemon/src/host.rs:386-393`).
 
 The GUI's existing no-op detection
-(`crates/eggsec-gui/src/connection.rs:161-163`) therefore returns **false** for
+(`crates/eggsec-gui/src/connection.rs:177-179`) therefore returns **false** for
 this daemon: the GUI would offer a submit button that always fails. The
 failure arrives as `ErrorCode::InvalidRequest`
-(`crates/eggsec-daemon/src/host.rs:650-661`). **M006 must handle this.** The
+(`crates/eggsec-daemon/src/host.rs:695-706`). **M006 must handle this.** The
 GUI cannot rely on the capability list alone to decide "this daemon can work".
+
+**At the current baseline this is no longer possible.** The CLI's rejecting
+`NoopExecutor` was deleted — the CLI now hosts `EggsecRuntimeExecutor`
+(`crates/eggsec-cli/src/daemon_cli.rs`) — and the daemon's published list is
+now *derived* from the executor's own declaration intersected with the
+conservative policy (`crates/eggsec-daemon/src/host.rs:99-108`). The
+hand-maintained `executor_is_noop` field is gone. A rejecting executor
+declares no capabilities, so it advertises none, and the GUI's existing
+empty-list check (`crates/eggsec-gui/src/connection.rs:177-179`) now catches
+every remaining no-op case.
+
+M006 therefore does not need a workaround for the trap. It needs the
+coverage model to explain the kinds the conservative policy **withholds**
+from an otherwise healthy daemon — ten of the thirty canonical kinds — so
+that "not advertised" is a reported reason rather than a silent omission.
 
 ### 3.7 The engine's feature set, and what a stock daemon actually enables
 
@@ -352,14 +443,34 @@ features plus the `full` aggregate), each with a `cfg!()`-derived `enabled`
 flag. The `full` aggregate is a **curated 28-member** list (`FULL_MEMBERS`,
 `crates/eggsec/src/config/feature_registry.rs:481-510`), not "everything".
 
-A `full-executor` daemon links the engine with **only** the `cli` feature
-(`crates/eggsec-daemon/Cargo.toml:18`), so its enabled-feature set is
-effectively `{ cli }`. **8 of the 20** capabilities it advertises map to
-operations whose features are off: `nse`, `hunt`, `browser`, `compliance`,
-`vuln`, `storage`, `integration`, `workflow` — exactly the rows of §3.3 whose
-`required_features` are non-empty and whose capability name is in the
-conservative set. A stock `eggsec-daemon --full-executor` will deny all 8
-with `FeatureMissing`.
+> **Corrected at the current baseline** (was: "A `full-executor` daemon links
+> the engine with **only** the `cli` feature … A stock `eggsec-daemon
+> --full-executor` will deny all 8 with `FeatureMissing`"). Milestone 008
+> replaced that measurement. `full-executor` is now the deprecated alias of
+> the `service` profile, which enables **20** engine features
+> (`crates/eggsec-daemon/Cargo.toml:25,52`), and the `service` profile
+> includes every feature the conservative capability set needs — `nse`,
+> `advanced-hunting`, `headless-browser`, `compliance`, `vuln-management`,
+> `database`, `external-integrations`, and `finding-workflow` are all in
+> `DAEMON_SERVICE_PROFILE`
+> (`crates/eggsec/src/config/daemon_profile.rs`). A `service`-profile daemon
+> therefore denies **none** of the 20 conservative capabilities for a missing
+> feature.
+
+What remains true, and is the reason milestone 006 still has work to do, is
+that the daemon's **published capability set is not the canonical task-kind
+set**. The daemon publishes the conservative 20, while the catalog describes
+30. The ten withheld kinds are withheld by *policy*, not by a missing
+feature, and the ten are exactly the ones whose capability is not in the
+conservative set — `stress-test`, `resume`, `packet-capture`, `traceroute`,
+`packet-send`, `wireless`, `wireless-active`, `db-pentest`, `intercept`,
+`c2`.
+
+The feature-gated-unavailability problem therefore survives, but for a
+different reason and with different numbers: the client must learn which
+kinds the daemon withholds, and — for a daemon whose feature set is
+published — whether the withholding is a policy decision or a missing
+feature.
 
 ### 3.8 Report data does not cross the wire
 
@@ -368,7 +479,7 @@ with `FeatureMissing`.
 `CreateSession`, `ListSessions`, `GetSnapshot`, `GetTaskResult`, `SubmitTask`,
 `CancelTask`, `CancelActive`, `Subscribe`, `CloseSession`, `ApprovePolicy`,
 `ListPersistedSessions`, `GetPersistedSnapshot`, `DescribeOperations`
-(`crates/eggsec-daemon-protocol/src/protocol.rs:95-183`).
+(`crates/eggsec-daemon-protocol/src/protocol.rs:114-202`).
 
 `TaskResultEnvelope.payload` is **always** `serde_json::json!({})` and
 `artifacts` is **always** empty:
@@ -384,7 +495,7 @@ TaskResultEnvelope {
 
 (`crates/eggsec/src/dispatch/canonical_execution.rs:1111-1116`.) The engine's
 executor produces exactly that envelope
-(`crates/eggsec/src/runtime_bridge/executor.rs:123-125`), so the report body is
+(`crates/eggsec/src/runtime_bridge/executor.rs:136-138`), so the report body is
 discarded at the engine boundary.
 
 **This is a pinned contract.** `crates/eggsec/tests/runtime_contract_closure.rs:618-619`
@@ -396,7 +507,7 @@ assert!(envelope.artifacts.is_empty());
 ```
 
 `GetTaskResult` — the daemon's durable result read
-(`crates/eggsec-daemon/src/host.rs:562-601`) — returns the stored
+(`crates/eggsec-daemon/src/host.rs:581-620`) — returns the stored
 `TaskOutcome` (`crates/eggsec-daemon/src/host.rs:34-66`), which is that same
 empty envelope.
 
@@ -428,9 +539,9 @@ widen the GUI's closure (§6).
 | JUnit XML | `convert_to_junit` | `crates/eggsec-output/src/convert.rs:19` |
 | SARIF | `convert_to_sarif` | `crates/eggsec-output/src/convert.rs:53` |
 | HTML | `convert_to_html` | `crates/eggsec-output/src/convert.rs:82` |
-| Markdown | `convert_to_markdown` | `crates/eggsec-output/src/convert.rs:118` |
-| CSV | `convert_to_csv` | `crates/eggsec-output/src/convert.rs:160` |
-| JSON | `convert_to_json` | `crates/eggsec-output/src/convert.rs:179` |
+| Markdown | `convert_to_markdown` | `crates/eggsec-output/src/convert.rs:148` |
+| CSV | `convert_to_csv` | `crates/eggsec-output/src/convert.rs:190` |
+| JSON | `convert_to_json` | `crates/eggsec-output/src/convert.rs:209` |
 
 The CLI's path is `eggsec report convert`
 (`crates/eggsec/src/commands/handlers/report.rs:6-49`): it reads a
@@ -442,7 +553,7 @@ formats.
 produce PDF without linking the engine. PDF is out of scope.
 
 **The HTML renderer cannot be embedded as-is.**
-`crates/eggsec-output/src/html.rs:68` emits:
+`crates/eggsec-output/src/html.rs:9-10` emits:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -450,7 +561,7 @@ produce PDF without linking the engine. PDF is out of scope.
 
 The GUI's CSP (`crates/eggsec-gui/tauri.conf.json:23`) sets
 `default-src 'self'; script-src 'self'; …` — no remote origin is permitted,
-and guard 158 (`scripts/check-architecture-guards.sh:4656-4681`) enforces that
+and guard 158 (`scripts/check-architecture-guards.sh:4708-4766`) enforces that
 mechanically. In addition, the renderer emits no `<canvas>` element (so the
 chart never draws anyway) and `frame-src 'none'` forbids an iframe. The
 current `eggsec-output` HTML renderer **cannot** be used as-is for the GUI's
@@ -477,10 +588,10 @@ place, in the GUI crate.
 - No coverage model: the GUI has no notion of "all 30 variants", only the
   catalog rows it happens to receive.
 - No feature-availability resolution: `unavailable_reason`
-  (`crates/eggsec-gui/src/commands.rs:319-331`) has exactly two reasons.
+  (`crates/eggsec-gui/src/commands.rs:458-470`) has exactly two reasons.
 - No daemon lifecycle: the GUI "never spawns, supervises, or stops a daemon"
   (`crates/eggsec-gui/src/connection.rs:3-7`,
-  `crates/eggsec-gui/src/shell.rs:12-16`).
+  `crates/eggsec-gui/src/shell.rs:13-25`).
 - No report export at all: no `eggsec-output` dependency, no export command, no
   report view.
 - The socket-path duplication is documented incorrectly in two places (§3.2).
@@ -503,7 +614,7 @@ review-by date), not an implementation task M006 may take on itself.
 
 - **The engine stays behind the daemon protocol.** The GUI MUST NOT depend on
   `eggsec`, `eggsec-daemon`, `eggsec-cli`, or `eggsec-tui` (guard 155,
-  `scripts/check-architecture-guards.sh:4516-4552`).
+  `scripts/check-architecture-guards.sh:4768-4834`).
 - **`EnforcementContext::evaluate()` remains the mandatory pre-dispatch
   gate.** The GUI MUST NOT import `EnforcementContext`,
   `EnforcedDispatcher`, `Scope::is_target_allowed`, or `tool.execute()`.
@@ -562,6 +673,13 @@ review-by date), not an implementation task M006 may take on itself.
 - **Report export** through `eggsec-output`, matching the CLI's artifacts, with
   an embedded HTML display that satisfies the CSP.
 - A **coverage test** asserting every `TaskKind` variant is reachable.
+- **The `DesktopGuiManual` permissive-set fix** (user-directed; work package
+  G). `crates/eggsec/src/runtime_bridge/executor.rs` treats only `CliManual`
+  and `TuiManual` as permissive surfaces, so a desktop-GUI session whose
+  scope is not explicit takes the strict branch and fails closed. The
+  desktop GUI is a permissive manual surface under ADR-0007, and every GUI
+  task dispatched through the daemon-hosted executor is affected, so the fix
+  is a precondition of this milestone's own end-to-end verification.
 - New guards and the documentation updates in §12.
 
 ### Explicitly out of scope
@@ -643,42 +761,44 @@ field (`crates/eggsec-daemon-protocol/src/protocol.rs:46-51`):
 
 ```rust
 #[serde(default)]
-pub enabled_features: Vec<String>,
+pub enabled_features: Option<Vec<String>>,
 ```
+
+> **Resolved in §0, ambiguity 1.** The shape is `Option<Vec<String>>`, not
+> `Vec<String>`. `None` means **unknown**; `Some(vec![])` means an engine is
+> linked with no features enabled. The distinction is the whole point of the
+> field: an empty vector would be ambiguous, and a client that read it as
+> "unknown" would report the wrong reason for an unavailable operation.
 
 This is strictly additive in both directions: a **new** daemon's capabilities
 decoded by an **old** client works, because serde ignores unknown fields by
 default; an **old** daemon's capabilities decoded by a **new** client works,
-because `#[serde(default)]` supplies an empty vector. The protocol version
-therefore stays at `DAEMON_PROTOCOL_VERSION` — the same reason milestone 003
-kept it at 2 when `ClientKind::Gui` was added.
+because `#[serde(default)]` supplies `None`. The protocol version therefore
+stays at `DAEMON_PROTOCOL_VERSION` — the same reason milestone 003 kept it at 2
+when `ClientKind::Gui` was added. The GUI MUST NOT abort its connection when
+the field is absent: a defaulted field can be absent on an old daemon, and
+the GUI degrades to "availability unverified" instead.
 
 The daemon's value comes from the executor, which gains one **defaulted**
-method (`crates/eggsec-runtime/src/runtime.rs:40-57`):
+method (`crates/eggsec-runtime/src/runtime.rs`):
 
 ```rust
 /// The engine features compiled into this executor's build.
 ///
-/// An empty result means "unknown", not "none": a no-op executor
-/// advertises nothing because it links no engine at all.
-fn enabled_features(&self) -> Vec<String> { Vec::new() }
+/// `None` means unknown: the executor links no engine, or does not publish
+/// the fact. `Some(vec![])` means an engine is linked with no features
+/// enabled — a different, knowable fact.
+fn enabled_features(&self) -> Option<Vec<String>> { None }
 ```
 
 A defaulted method is additive at the Rust level — every existing
-implementation (`NoopExecutorStub` at `crates/eggsec-daemon/src/host.rs:3553-3575`,
-`NoopExecutor` at `crates/eggsec-cli/src/daemon_cli.rs:584-607`) keeps
-compiling unchanged. The engine's `EggsecRuntimeExecutor` overrides it with
-`eggsec::policy_bridge::features::current_enabled_features()`
-(`crates/eggsec/src/policy_bridge/features.rs:11-17`), which reads the
-engine's own authoritative compile-time registry
-(`crates/eggsec/src/config/feature_registry.rs:110`).
-
-**An empty vector is ambiguous** and the GUI MUST treat it as *unknown*, not as
-*nothing is enabled*. The daemon MUST therefore distinguish "I link no engine"
-from "I link an engine with these features" — for example by returning
-`Option<Vec<String>>` (`None` = unknown) rather than an empty vector. **The
-implementer MUST pick one and document it**; the GUI's fallback behaviour
-depends on it.
+implementation (`NoopExecutorStub` at `crates/eggsec-daemon/src/host.rs`,
+the daemon binary's fallback executor) keeps compiling unchanged, and the
+no-op executor's `None` is exactly right: it links no engine, so its
+feature set is unknown. The engine's `EggsecRuntimeExecutor` overrides it
+with the engine's own authoritative compile-time registry
+(`crates/eggsec/src/config/feature_registry.rs`, whose entries each carry a
+`cfg!()`-derived `enabled` flag).
 
 **(P2) The report read path.** One new read-only command and one new
 response:
@@ -688,10 +808,39 @@ ClientCommand::GetTaskReport { request_id, session_id, task_id }
 ServerMessage::TaskReport { request_id, session_id, task_id, report }
 ```
 
-An old daemon receiving `GetTaskReport` answers `ErrorCode::UnsupportedCommand`
-(`crates/eggsec-daemon-protocol/src/protocol.rs:72`) — the protocol already
-defines that error for exactly this purpose (`:54-59`, `:181`). A new client
-MUST treat it as a graceful degradation (no export), never as a launch failure.
+> **Corrected at the current baseline.** The plan said an old daemon
+> answers `ErrorCode::UnsupportedCommand` for a command it does not know.
+> It does not: the daemon deserializes the line straight into
+> `ClientCommand`, so an unknown discriminant is a *deserialization
+> failure*, answered with `ErrorCode::InvalidRequest` **and an empty
+> `request_id`** (`crates/eggsec-daemon/src/server.rs`). Because the
+> frontend client routes responses by request id, the pending request is
+> never resolved and the client **hangs for its 30-second timeout**
+> instead of receiving an error.
+>
+> M006 MUST fix that, because M006 is the milestone that adds a command
+> older daemons will not know. The daemon MUST distinguish "this client
+> sent a command this daemon does not know" from "this client sent a
+> malformed command", answer the former with `ErrorCode::UnsupportedCommand`
+> **and the request id echoed back**, and answer the latter with
+> `ErrorCode::InvalidRequest`. The protocol therefore also gains a way for
+> the daemon to enumerate the commands it knows
+> (`ClientCommand::command_names()`).
+
+The report document itself is carried as `serde_json::Value` on the wire
+rather than as a typed report-model struct, so the protocol crate keeps no
+report-model dependency; the GUI deserializes it into the canonical
+`ScanReportData`. The engine produces it through a **pure** bridge from the
+completed task result, and it is held in a **bounded** store
+(`eggsec_runtime::RuntimeReportStore`) so a long-lived daemon cannot
+accumulate one report document per task for the life of the process. The
+store lives behind the executor and is read through the runtime, so the
+daemon never learns a report's domain semantics — it only serves what the
+engine produced.
+
+The read path MUST NOT touch `TaskResultEnvelope` (see P-HARD). A new client
+MUST treat `ErrorCode::UnsupportedCommand` and a "no report for this task"
+answer as a graceful degradation (no export), never as a launch failure.
 
 **(P3) The frontend-client accessor.** `DaemonRuntimeClient` gains an inherent
 method — **not** a `RuntimeClient` trait method, mirroring milestone 004's
@@ -758,19 +907,33 @@ need comes in through the dependency.
 - The webview MUST receive the coverage table as **data** and render it. It
   MUST NOT contain a per-variant table, a per-variant branch, or a hardcoded
   field list.
-- **Embedded HTML display.** The `eggsec-output` HTML renderer cannot be
-  embedded as-is (§3.9). The bounded options are (1) a **self-contained
-  rendering mode added to `eggsec-output`** — the renderer omits the CDN
-  `<script>` (and any other remote reference); because this changes
-  `eggsec-output`'s output for every consumer, it MUST be an **opt-in mode**,
-  not a change to the default `convert_to_html` behaviour — or (2) the **GUI
-  renders the report data itself** from the same `ScanReportData`, which does
-  **not** reproduce the CLI's HTML byte-for-byte.
-- The plan's **preference** is option 1 in an opt-in form: it keeps a single
-  renderer, keeps the CLI's bytes unchanged, and lets the GUI embed a
-  self-contained document. The implementer MUST record which option was
-  taken and, if option 2, MUST record the artifact-equivalence caveat in the
-  closure record and in `architecture/desktop_gui.md`.
+- **Embedded HTML display — corrected by a third finding.** The plan's option 1
+  assumed that a self-contained HTML rendering could be *embedded* inside the
+  GUI webview. It cannot. The GUI's CSP
+  (`crates/eggsec-gui/tauri.conf.json:23`) is
+  `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'`, and
+  that forbids the document three ways: `frame-src 'none'` rules out an
+  iframe, `script-src 'self'` means an inline `<script>` does not execute, and
+  `style-src 'self'` means an inline `<style>` does not apply. The engine's
+  HTML document carries an inline `<style>` block and an inline `<script>`
+  block, so a "self-contained" rendering of it still cannot be rendered
+  faithfully inside the webview.
+  - The CSP MUST NOT be relaxed to work around this. The report content is
+    **attacker-influenced** — banners, service names, and finding text come
+    from the target — and the CSP is exactly the control that stops that
+    content from doing anything. No `'unsafe-inline'`, no `frame-src` change,
+    no `dangerousDisableAssetCspModification`.
+  - The resolved shape is **option 2**: the GUI renders the report's
+    *structured content* in its own DOM, from the same `ScanReportData`, with
+    the GUI's own stylesheet and its own escaping. No engine HTML is injected
+    into the webview. The HTML format is therefore **export-only**.
+  - `eggsec-output` gains the opt-in `convert_to_html_self_contained` mode
+    anyway: it drops the remote chart-library reference, it leaves the
+    CLI's default `convert_to_html` byte-for-byte unchanged (verified by
+    comparing the rendered output against a pristine worktree at the
+    baseline commit), and it is a tested capability in its own right. The
+    GUI does not consume it, because the CSP makes document embedding
+    unavailable. That is recorded as a finding, not as a failure.
 - The **exported file** for HTML MUST be the CLI's HTML, byte-for-byte,
   whatever the embedded display does. The embedded view and the exported file
   are two different things, and §13 says so.
@@ -806,7 +969,7 @@ need comes in through the dependency.
     production sources MUST NOT contain a hardcoded list of the 30 variant
     names or of operation ids. The check reads the variant list from the
     runtime, exactly as guard 159 does
-    (`scripts/check-architecture-guards.sh:4725-4749`).
+    (`scripts/check-architecture-guards.sh:4783-4834`).
   - **162 — the GUI's exported HTML is self-contained.** No artifact the GUI
     writes for display may reference a remote origin. The check asserts that
     the HTML the GUI produces contains no `http://` or `https://` source
@@ -860,7 +1023,7 @@ Required changes:
    `operation_id` resolves to exactly one catalog operation.
 4. The coverage model MUST carry the reason a variant is unreachable, in
    operator-readable words — the same shape as the existing
-   `unavailable_reason` (`crates/eggsec-gui/src/commands.rs:319-331`), extended
+   `unavailable_reason` (`crates/eggsec-gui/src/commands.rs:458-470`), extended
    rather than replaced.
 
 Acceptance evidence:
@@ -942,7 +1105,7 @@ Required changes:
 1. **The decision, stated in the code and the docs.** The GUI's default
    remains today's behaviour: **connect to a running daemon**, and when the
    socket is unreachable, report precisely how to start one
-   (`crates/eggsec-gui/src/connection.rs:60-68`). That satisfies the roadmap's
+   (`crates/eggsec-gui/src/connection.rs:66-74`). That satisfies the roadmap's
    second permitted option and MUST be preserved in the diagnostic.
 2. **The opt-in spawn route.** A new GUI option, `--daemon-bin <PATH>`, names
    an operator-supplied daemon executable. When it is present and the socket
@@ -951,13 +1114,13 @@ Required changes:
    next to its own executable, not in a well-known directory.
 3. **The spawn arguments.** The child is started as
    `<daemon-bin> --full-executor --socket-path <socket>`, matching
-   `daemon_start_command` (`crates/eggsec-gui/src/connection.rs:51-53`) and the
+   `daemon_start_command` (`crates/eggsec-gui/src/connection.rs:57-59`) and the
    daemon's own flags (`crates/eggsec-daemon/src/main.rs:18-44`). The argv MUST
    be a vector; **no shell string**, so no injection surface exists.
 4. **The pre-flight liveness check.** Before spawning, the GUI MUST determine
    whether a daemon is already serving the socket path — because `run_server`
    unlinks the socket before binding
-   (`crates/eggsec-daemon/src/server.rs:89-94`), a second daemon **steals a
+   (`crates/eggsec-daemon/src/server.rs:141-146`), a second daemon **steals a
    live socket**. The check MUST attempt a connection, not merely stat the
    socket file. If a daemon is already there, the GUI MUST connect to it and
    MUST NOT spawn.
@@ -966,9 +1129,9 @@ Required changes:
    30–300s band; the implementer picks and documents it). Readiness is
    determined by a successful connect + protocol-version check — the same
    check `GuiConnection::connect` performs
-   (`crates/eggsec-gui/src/connection.rs:95-154`) — **not** by scraping the
+   (`crates/eggsec-gui/src/connection.rs:111-170`) — **not** by scraping the
    child's stdout for the `"Daemon listening on ..."` line
-   (`crates/eggsec-daemon/src/server.rs:111-115`), because that string is a log
+   (`crates/eggsec-daemon/src/server.rs:163-167`), because that string is a log
    format, not a contract. Scraping it MAY be used as a **diagnostic hint**,
    never as the readiness criterion.
 6. **The child must not outlive the GUI by accident.** The GUI owns the child's
@@ -976,14 +1139,14 @@ Required changes:
    GUI MUST terminate the child, using a bounded, escalating sequence — the
    daemon handles **SIGTERM** and ctrl_c
    (`crates/eggsec-daemon/src/main.rs:205-227`) and removes its socket on
-   shutdown (`crates/eggsec-daemon/src/server.rs:144-148`); it does **not**
+   shutdown (`crates/eggsec-daemon/src/server.rs:196-200`); it does **not**
    handle SIGHUP, so the GUI MUST NOT send SIGHUP as its first signal. If the
    child does not exit within the escalation window, the GUI escalates to an
    unconditional kill and reports that it had to.
 7. **The no-op-executor trap MUST be detected after connecting.** The
    pre-spawn check and the post-connect check are different: a daemon can be
    reachable and still be useless. The GUI's existing empty-list check
-   (`crates/eggsec-gui/src/connection.rs:161-163`) catches
+   (`crates/eggsec-gui/src/connection.rs:177-179`) catches
    `DaemonHost::new_noop` but **not** `eggsec daemon start` (§3.6). M006 MUST
    add a check that catches the 20-advertised/0-executable case. The plan
    requires the implementer to determine a **reliable** signal and to document
@@ -1012,7 +1175,7 @@ Required changes:
    (`default-features = false` with an explicit per-crate feature list), but it
    MUST be named in the manifest change and visible in the diff.
 9. **The GUI still links no daemon crate.** Spawning is not linking. Guard 155
-   (`scripts/check-architecture-guards.sh:4516-4552`) MUST stay green, and the
+   (`scripts/check-architecture-guards.sh:4768-4834`) MUST stay green, and the
    spawned path MUST be a process-spawn over a filesystem path — never a Rust
    dependency on `eggsec-daemon`.
 
@@ -1020,7 +1183,7 @@ Acceptance evidence:
 
 - A test asserting the default path (no `--daemon-bin`) never spawns anything
   and produces the exact existing diagnostic
-  (`crates/eggsec-gui/src/connection.rs:60-68`).
+  (`crates/eggsec-gui/src/connection.rs:66-74`).
 - A test asserting that a daemon already serving the socket path is **not**
   displaced by a spawn.
 - A test asserting the readiness wait has a bounded timeout and reports a
@@ -1136,8 +1299,13 @@ Required changes:
 Acceptance evidence:
 
 - The artifact-equivalence test passes for all six formats.
-- The exported HTML file contains no remote origin reference, and the
-  self-containment guard (162) is green.
+- The artifact-equivalence test passes for all six formats: the exported
+  file is byte-for-byte what the CLI's shared renderers produce.
+- The **embedded** HTML the GUI renders for display contains no remote
+  origin reference, and the self-containment guard (162) is green. The
+  **exported** HTML file deliberately keeps the CLI's remote chart-library
+  reference, because it is the CLI's artifact and is opened in the
+  operator's browser.
 - A test asserting an existing export is backed up rather than silently
   overwritten, and that a non-regular-file destination is refused.
 - A test asserting no export is written when the renderer fails — a failed
@@ -1170,11 +1338,51 @@ Acceptance evidence:
 - `python3 scripts/check_doc_references.py` reports no failure on any line the
   milestone changed.
 
+### Work package G — The `DesktopGuiManual` permissive set (user-directed fold-in)
+
+Intent:
+
+Make the desktop GUI a permissive manual surface in the engine, as ADR-0007
+and the long-term specification already say it is. Without this, every task
+the GUI dispatches through the daemon-hosted executor is denied before it
+runs, and none of this milestone's end-to-end behaviour can be observed.
+
+Required changes:
+
+1. In `crates/eggsec/src/runtime_bridge/executor.rs`, the scope-resolution
+   helper that decides whether a surface gets the permissive default scope
+   MUST treat `RuntimeSurface::DesktopGuiManual` exactly as it treats
+   `RuntimeSurface::CliManual` and `RuntimeSurface::TuiManual`. The match
+   currently names only those two, so a desktop-GUI session whose scope is
+   not explicit falls into the strict branch and is denied with an empty
+   scope.
+2. The fix MUST NOT widen any other surface. In particular it MUST NOT
+   make an agent surface permissive, and it MUST NOT make the strict
+   surfaces (`Rest`, `Mcp`, `Ci`, `Agent`) permissive. The GUI is a
+   **manual** surface; an agent surface is a different class and is not
+   part of this fix.
+3. Add a focused regression test in the engine that drives the scope
+   resolution for a `DesktopGuiManual` session and asserts the permissive
+   default, and a negative test that asserts a strict surface still takes
+   the strict branch. The regression test MUST fail against the pre-fix
+   code and pass after it.
+4. The GUI's own coverage and end-to-end evidence in work packages A–E
+   MUST be gathered **after** this fix, so that the observed behaviour is
+   the fixed behaviour and the closure record does not have to caveat it.
+
+Acceptance evidence:
+
+- A `DesktopGuiManual` session with no explicit scope receives the
+  permissive default scope rather than being denied.
+- A strict surface session with no explicit scope is still denied.
+- The GUI's end-to-end submission path succeeds against a
+  `service`-profile daemon, which is only observable once this fix lands.
+
 ## 8. Failure, cancellation, restart, and contention semantics
 
 - **The daemon is unreachable and no `--daemon-bin` was given.** The GUI
   reports the existing diagnostic verbatim
-  (`crates/eggsec-gui/src/connection.rs:60-68`) and the window opens in a "not
+  (`crates/eggsec-gui/src/connection.rs:66-74`) and the window opens in a "not
   connected" state. The GUI MUST NOT retry in a tight loop — M005's existing
   rule (`architecture/desktop_gui.md:213`).
 - **The daemon is unreachable and `--daemon-bin` was given.** The pre-flight
@@ -1193,7 +1401,7 @@ Acceptance evidence:
   what prevents the second one from stealing the socket.
 - **A second daemon is started by the operator while the GUI supervises one.**
   Because `run_server` unlinks before binding
-  (`crates/eggsec-daemon/src/server.rs:89-94`), the second daemon takes the
+  (`crates/eggsec-daemon/src/server.rs:141-146`), the second daemon takes the
   socket, and the supervised child then owns a socket path it no longer
   serves. The GUI MUST detect the disconnect and report it plainly, naming
   the possibility, rather than retrying against a stolen socket.
@@ -1270,7 +1478,7 @@ Acceptance evidence:
 - **Configuration fallback.** The GUI's new option (`--daemon-bin`) is
   optional and defaults to "no spawn route", which is today's behaviour. An
   unparseable or empty value is a usage error, consistent with `--socket`
-  (`crates/eggsec-gui/src/config.rs:47-71`).
+  (`crates/eggsec-gui/src/config.rs:56-80`).
 - **Removal criteria.** The `--daemon-bin` spawn route MAY be removed if the
   daemon gains a first-class readiness handshake or a PID file — at which
   point the pre-flight and readiness logic becomes redundant. Until then it
@@ -1487,8 +1695,18 @@ failure and MUST NOT silently widen M006 to fix it (§14).
 8. Export produces the **same artifacts as the CLI** for all six formats —
    JSON, CSV, HTML, Markdown, SARIF, JUnit — compared against the shared
    `eggsec-output` renderers. PDF is not offered.
-9. The exported HTML artifact contains no remote origin reference, and the
-   embedded HTML display renders inside the GUI's CSP.
+9. The GUI renders the report's **structured content** in its own DOM, with
+   its own escaping and its own stylesheet, and **no engine-produced HTML is
+   injected into the webview**. Nothing the GUI renders for display executes a
+   script, applies an inline style, or references a remote origin, and the
+   GUI's CSP is **unchanged** — no `'unsafe-inline'`, no `frame-src` change.
+   The **exported** HTML file is the CLI's HTML artifact byte-for-byte,
+   including the remote chart-library reference the CLI's artifact carries,
+   because the exported file is opened in the operator's browser exactly as
+   the CLI's is. (See §0, ambiguity 2, and §6 "Frontend or operator
+   surface": the plan previously required an embedded HTML document that
+   satisfies the CSP, which the CSP's own `frame-src 'none'` and inline
+   `script-src`/`style-src` forbid.)
 10. The GUI owns no authoritative storage and performs no data migration.
 11. The GUI adds no dependency on the engine, the daemon crate, the CLI, or
     the TUI; no `tauri` edge appears outside `crates/eggsec-gui`; the
@@ -1610,12 +1828,12 @@ MUST contain:
   `crates/*/gen/schemas/`). The directory is regenerated by `tauri-build`; it
   MUST NOT be committed and MUST NOT be hand-edited.
 - **`crates/eggsec-gui/icons/icon.png` MUST be kept.** Tauri's
-  `generate_context!` (`crates/eggsec-gui/src/shell.rs:32`) panics without the
+  `generate_context!` (`crates/eggsec-gui/src/shell.rs:47`) panics without the
   icon set; deleting it breaks the shell build in a way that looks like an
   unrelated failure.
 - **Tauri's command arguments default to camelCase.** Every IPC command MUST
   declare `#[tauri::command(rename_all = "snake_case")]`, as the existing eight
-  do (`crates/eggsec-gui/src/commands.rs:218,265,291,338,374,435,451,463`).
+  do (`crates/eggsec-gui/src/commands.rs:325,265,291,338,374,435,451,463`).
   A new command without it will not be callable from the frontend under the
   names the frontend uses.
 - **The frontend has zero npm dependencies and no build step, and that MUST
@@ -1627,7 +1845,7 @@ MUST contain:
   (`crates/eggsec-gui/Cargo.toml:29-35`). The GUI crate MUST continue to build
   under `--no-default-features`, which is the `make check` baseline
   (`Makefile:156`). New modules that need Tauri types MUST be gated the way
-  `commands.rs` and `shell.rs` are (`crates/eggsec-gui/src/lib.rs:16-19`).
+  `commands.rs` and `shell.rs` are (`crates/eggsec-gui/src/lib.rs:20-23`).
 - **Building the whole workspace is expensive and other crates may be busy.**
   Prefer `-p` scoped commands during development and run the full `make check`
   once, at the end.

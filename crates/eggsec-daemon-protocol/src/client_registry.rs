@@ -73,6 +73,9 @@ pub fn command_permission(cmd: &ClientCommand) -> CommandPermission {
         }
         // Durable single-task reads are read-only like snapshots.
         ClientCommand::GetTaskResult { .. } => CommandPermission::Observer,
+        // The report document is the same task's result in report form, so it
+        // carries the same read-only permission as the result read.
+        ClientCommand::GetTaskReport { .. } => CommandPermission::Observer,
         ClientCommand::SubmitTask { .. }
         | ClientCommand::CancelTask { .. }
         | ClientCommand::CancelActive { .. } => CommandPermission::Controller,

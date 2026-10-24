@@ -4,6 +4,7 @@ pub mod dispatcher;
 pub mod error;
 pub mod event;
 pub mod ids;
+pub mod report;
 pub mod request;
 pub mod runtime;
 pub mod runtime_config;
@@ -20,6 +21,7 @@ pub use event::{
     TaskOutcome, TaskProgress, TaskResultEnvelope, TaskStatus,
 };
 pub use ids::{ClientId, SessionId, TaskId};
+pub use report::{RuntimeReportStore, MAX_RETAINED_REPORTS};
 pub use request::{LoadTestParams, RunRequest, RuntimeSurface, TaskKind};
 pub use runtime::{Runtime, RuntimeTaskExecutor};
 pub use runtime_config::{RuntimeConfig, SessionOptions};

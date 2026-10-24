@@ -68,6 +68,38 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     fn supported_task_kinds(&self) -> Vec<TaskCapability> {
         RuntimeCapabilities::daemon_conservative().task_kinds
     }
+
+    /// The engine features compiled into this executor's build.
+    ///
+    /// This is a *build* fact, not a runtime capability: it says which
+    /// feature-gated operations the linked engine could run at all. A host
+    /// publishes it so a client can tell "this operation is unavailable
+    /// because the daemon was built without its feature" apart from "this
+    /// operation is unavailable because the daemon does not advertise it".
+    ///
+    /// `None` means **unknown**: the executor links no engine, or does not
+    /// publish the fact. `Some(vec![])` means an engine is linked with no
+    /// features enabled — a different, knowable fact. The distinction
+    /// matters because an empty vector must never be read as "unknown",
+    /// which would let a client report a wrong reason for an unavailable
+    /// operation.
+    ///
+    /// The default is `None` so every existing implementor keeps its current
+    /// behaviour and no host has to change to compile.
+    fn enabled_features(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    /// The report document for a completed task, if this executor produced one.
+    ///
+    /// `None` means "no report for this task" — either the executor produces
+    /// no reports at all, or this particular result has no report form. A
+    /// host reads this to answer a client's report request; it is a read
+    /// path, and the executor's own retention policy decides how long a
+    /// report stays available.
+    fn report_for(&self, _task_id: &TaskId) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 struct RuntimeState {
@@ -95,6 +127,19 @@ pub struct Runtime {
     /// while building its own derived capability list, without taking an
     /// async lock in a constructor.
     supported_task_kinds: Vec<TaskCapability>,
+    /// The executor's published enabled-feature set, captured at construction.
+    ///
+    /// `None` means the executor did not publish one (it links no engine, or
+    /// predates the declaration). It lives outside the state mutex for the
+    /// same reason `supported_task_kinds` does: a host reads it synchronously
+    /// while building its own published capability list.
+    enabled_features: Option<Vec<String>>,
+    /// The executor behind this runtime.
+    ///
+    /// It is held outside the state mutex as well as inside it, so the
+    /// synchronous read paths (`report_for`) never have to take a lock that
+    /// an async caller might be holding.
+    executor: Arc<dyn RuntimeTaskExecutor>,
 }
 
 impl Runtime {
@@ -102,15 +147,37 @@ impl Runtime {
     pub fn new(config: RuntimeConfig, executor: impl RuntimeTaskExecutor) -> Self {
         let (event_tx, _) = broadcast::channel(config.event_channel_capacity);
         let supported_task_kinds = executor.supported_task_kinds();
+        let enabled_features = executor.enabled_features();
+        let executor: Arc<dyn RuntimeTaskExecutor> = Arc::new(executor);
         Self {
             state: Arc::new(Mutex::new(RuntimeState {
                 sessions: HashMap::new(),
                 config,
                 event_tx,
-                executor: Arc::new(executor),
+                executor: Arc::clone(&executor),
             })),
             supported_task_kinds,
+            enabled_features,
+            executor,
         }
+    }
+
+    /// The enabled-feature set the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. A caller MUST NOT read `None` as "no
+    /// features are enabled"; it means the answer is unknown.
+    pub fn enabled_features(&self) -> Option<&[String]> {
+        self.enabled_features.as_deref()
+    }
+
+    /// The report document the executor recorded for a completed task.
+    ///
+    /// `None` means no report is available for that task, which covers both
+    /// "the executor produces no reports" and "this task's result has no
+    /// report form".
+    pub fn report_for(&self, task_id: &TaskId) -> Option<serde_json::Value> {
+        self.executor.report_for(task_id)
     }
 
     /// The task kinds the executor behind this runtime declares it can run.
