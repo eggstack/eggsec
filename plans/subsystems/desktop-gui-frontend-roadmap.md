@@ -1,6 +1,6 @@
 # Desktop GUI Frontend Roadmap
 
-Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24)
+Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10–M15 planned 2026-10-24)
 
 Long-term references:
 
@@ -307,7 +307,7 @@ unaffected.
     daemon from both start paths, but the check narrows the window to a race
     between two simultaneous starts; it does not close it, because
     `run_server` still unlinks the path before binding
-    (`crates/eggsec-daemon/src/server.rs:89-95`). Server-side hardening —
+    (`crates/eggsec-daemon/src/server.rs:140-147`). Server-side hardening —
     refusing to bind over a live socket — changes the server's bind contract
     and is explicitly deferred to a separate milestone.
 
@@ -329,6 +329,19 @@ unaffected.
     move together. The surface stays narrow: no command takes a surface or a
     scope from the webview, and the export command takes a task id, a format,
     and an operator-chosen path — never a pre-built report.
+
+**Gap owners.** Each open gap now has an owning milestone, so none of them is
+unowned:
+
+| Gap | Owner milestone | Note |
+|---|---|---|
+| 1 — only the GUI consumes the published schema | *none — explicitly out of scope* | Migrating the TUI's hand-built forms is an ADR-gated decision point and a stated non-goal of this roadmap. It is recorded, not scheduled. |
+| 4 — interactive approval unwired | **milestone 011** | Also a prerequisite of milestone 010's operator-visible outcome: without it, a manual daemon client cannot complete a confirmation-required operation. |
+| 5 — socket-path default duplicated in six places | **milestone 012** | Paired with gap 10 because both are the daemon's socket contract. |
+| 9 — platform qualification evidence | **milestone 014** | An evidence milestone; the driver is the deliverable. |
+| 10 — the server unlinks the socket path before binding | **milestone 012** | Paired with gap 5. |
+| 11 — the report bridge's coverage | **milestone 013** | |
+| 12 — the GUI's IPC surface is twelve commands | *none — informational* | Recorded so the count is not mistaken for a defect. |
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
 closed by milestones 001 and 002 respectively; the missing GUI surface identity
@@ -827,6 +840,167 @@ Like M8, this milestone's code surface is outside the GUI crate. It is tracked
 here because milestone 006's daemon-lifecycle work needs a daemon that can be
 obtained, and milestone 007's qualification run needs one that works.
 
+### Milestone 10 — The daemon's full manual capability policy
+
+Class: capability
+
+Objective: make the daemon **publish and admit every canonical task kind the
+engine can execute**, so that no capability is blocked for manual execution at
+the runtime layer.
+
+Dependencies: `ADR-0011` (**hard** — the milestone waits on its acceptance);
+M9 (hard — the derived publication rests on the executor's declaration).
+
+Deliverable boundary: one capability list, **derived** from the canonical
+task-kind set rather than transcribed, covering every canonical kind; the
+daemon's published set and its admitted set made equal to that list
+intersected with the executor's declaration; the interface-bound kinds given
+an explicit target story instead of a button that fails; and the wireless
+active kind's operation identity corrected so a deauth is not authorised
+under the passive operation's risk level.
+
+User or operator value: the daemon's published capability list is a
+twenty-kind ceiling against a canonical thirty, and the daemon already
+admits more than it advertises. The GUI's coverage table reports the
+difference as unavailability, so the operator sees a smaller product than
+the engine provides.
+
+Exit conditions: the published set and the admitted set are the same object
+and cover every canonical capability name; a kind that was previously
+unadvertised is reachable; a rejecting daemon still publishes and admits
+nothing; the interface-bound kinds are either runnable or reported with an
+honest reason; and the wireless active kind is authorised under the
+deauth operation.
+
+Deferred work: the confirmation path (milestone 011) and therefore the
+hazardous families' authorisation, which is a separate milestone because
+wiring it changes the daemon's execution semantics rather than its
+advertisement.
+
+Implementation plan: `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md`
+(**ready for handoff**, `Primary class: capability`).
+
+### Milestone 11 — Daemon-mediated policy approval
+
+Class: capability
+
+Objective: let a **manual daemon client answer a confirmation**, so that an
+operation requiring confirmation is completable over the daemon protocol.
+
+Dependencies: M10 (hard — the approval path is only exercisable for
+published capabilities); M6 (soft — the GUI's task state already models a
+policy prompt).
+
+Deliverable boundary: the runtime holds an operation at its confirmation
+point and exposes the decision; the daemon answers the approval command
+instead of refusing it; the frontend client exposes the answer; and the GUI
+offers the affordance.
+
+User or operator value: today an operation the operator's policy permits but
+which requires confirmation moves from "refused" to "needs confirmation" and
+then stops there — the daemon has no way to receive a "yes". The CLI can
+complete the same work, so the daemon is the weaker surface for exactly the
+operations a manual operator most wants to confirm.
+
+Exit conditions: a manual client submits an operation that requires
+confirmation, observes the decision, answers it, and the operation runs; a
+strict client of the same daemon is still refused; and a denied or unanswered
+decision leaves the operation refused rather than pending forever.
+
+Deferred work: the TUI's own approval flow, which is local, works today, and
+is a different mechanism.
+
+### Milestone 12 — The daemon's socket path and bind contract
+
+Class: corrective
+
+Objective: one canonical socket-path default, and a daemon that cannot
+displace a live one.
+
+Dependencies: none hard.
+
+Deliverable boundary: a single default socket path with an environment
+override, and a daemon that refuses to bind over a socket a live daemon is
+holding.
+
+User or operator value: the default path is transcribed in six places, and
+the server unlinks the socket path before binding, so a second start can
+take the socket from a running daemon.
+
+Exit conditions: the default exists in exactly one place; the daemon refuses
+to displace a live daemon and says so; and the CLI's start path reports the
+refusal rather than silently taking the socket.
+
+Deferred work: none.
+
+### Milestone 13 — The report bridge's full coverage
+
+Class: corrective
+
+Objective: every completed task whose result has a report form produces one.
+
+Dependencies: M6 (hard — the bridge and the bounded store exist).
+
+Deliverable boundary: the engine-side bridge covers every task-kind variant
+whose result carries the facts the canonical report model needs, and names
+the variants for which no clean mapping exists.
+
+User or operator value: an operator can export a report for some completed
+tasks and not for others, with no stated reason.
+
+Exit conditions: every variant with a clean mapping produces a document; the
+variants without one are named and justified; and the export path reports
+"no report available" rather than an empty artifact.
+
+Deferred work: none.
+
+### Milestone 14 — The GUI's qualification driver and runbook
+
+Class: capability
+
+Objective: make the behavioural cells of the platform qualification matrix
+**promotable**, and write the missing export procedure.
+
+Dependencies: M7 (hard — the matrix, the recipe, and the CI job exist); M6
+(soft — the export path the export procedure documents exists).
+
+Deliverable boundary: a window-automation driver, or a maintained operator
+procedure, for the GUI's behavioural steps; and the complete runbook,
+including the export procedure the matrix leaves undefined.
+
+User or operator value: eight behavioural cells across two platforms are
+blocked on the absence of a driver, and the export cells are blocked on a
+procedure that was never written.
+
+Exit conditions: the export procedure is written; the driver or the operator
+procedure is in the repository; and the CI job's artefacts are recorded
+against the matrix.
+
+Deferred work: the Windows row, which is out of scope under `ADR-0010`.
+
+### Milestone 15 — The dependency advisory backlog
+
+Class: corrective
+
+Objective: make the mandatory Rust contract **complete**, by upgrading the
+advisories that can be upgraded and recording the ones that cannot.
+
+Dependencies: none hard.
+
+Deliverable boundary: every advisory with a safe upgrade is upgraded; every
+retained exception carries an owner, a review-by date, and a record in the
+dependency-exception document.
+
+User or operator value: `make check` stops at the dependency-policy step, so
+the repository's mandatory contract cannot complete today. Most of the
+backlog is a stale lockfile rather than a genuine exception — the
+patch-level upgrades alone clear a majority of the entries.
+
+Exit conditions: `make check-deps` is green; every retained exception is
+recorded with an owner and a review-by date; and `make check` completes.
+
+Deferred work: none.
+
 ## 8. Cross-cutting requirements
 
 ### Storage and migration
@@ -966,7 +1140,9 @@ Decision points requiring an ADR:
 This roadmap is closed when:
 
 - a desktop GUI exists that reaches the engine's full operation surface
-  through the daemon protocol alone;
+  through the daemon protocol alone (**milestones 010 and 011** together: 010
+  publishes and admits every canonical capability kind, 011 lets a manual
+  client complete the confirmation the operator's policy demands);
 - the engine, the daemon protocol's existing shapes, and the runtime DTOs are
   demonstrably unchanged in substance by the GUI's existence, beyond the
   **additive** items recorded here — the read-only schema command and the GUI
@@ -977,7 +1153,8 @@ This roadmap is closed when:
 - the shell framework is confined to `crates/eggsec-gui`, proven by guard;
 - all workspace contracts — `make check`, `make check-deps`,
   `make check-msrv`, and the architecture guards — are green including the
-  GUI crate;
+  GUI crate (**milestone 015** closes the dependency-policy step, which is
+  the only one still red);
 - documentation and skills are updated to match the delivered crate and
   surface counts;
 - the binary has been handed to the separately-managed distribution
@@ -996,3 +1173,9 @@ This roadmap is closed when:
 | 7 — Packaging and platform qualification | **conditionally closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | `plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md` | M6 (**met** — implemented 2026-10-24, so the export path exists; the `Export` cell still needs its own evidence); outstanding operational evidence named per cell in the qualification matrix |
 | 8 — Daemon feature profile and build recipe | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | `plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md` | — |
 | 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
+| 10 — The daemon's full manual capability policy | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md` | — | `ADR-0011` (proposed — the milestone waits on its acceptance); M9 (met — closed 2026-10-23) |
+| 11 — Daemon-mediated policy approval | **planned 2026-10-24** | — | — | M10 (hard — the approval path is only exercisable for published capabilities) |
+| 12 — The daemon's socket path and bind contract | **planned 2026-10-24** | — | — | — |
+| 13 — The report bridge's full coverage | **planned 2026-10-24** | — | — | M6 (met — implemented 2026-10-24) |
+| 14 — The GUI's qualification driver and runbook | **planned 2026-10-24** | — | — | M7 (met — conditionally closed 2026-10-23); M6 (met) |
+| 15 — The dependency advisory backlog | **planned 2026-10-24** | — | — | — |
