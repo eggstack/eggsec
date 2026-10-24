@@ -246,6 +246,11 @@ mod tests {
         let tui_ops: BTreeSet<&str> = tab_specs().iter().filter_map(|s| s.operation).collect();
         // Aliases that resolve to a TUI-covered canonical op count as covered.
         let covered_via_alias: BTreeSet<&str> = BTreeSet::from(["waf", "scan-pipeline"]);
+        // Canonical operations a TUI tab drives without declaring them as the
+        // tab's own operation. The Packet tab declares `packet`, but its
+        // capture path drives `packet-capture` — a capture binds to a local
+        // interface, so it is a separate operation with its own metadata.
+        let covered_via_tab: BTreeSet<&str> = BTreeSet::from(["packet-capture"]);
         let intentionally_cli_only: BTreeSet<&str> = BTreeSet::from([
             "waf-bypass",      // via `waf --bypass` flag path
             "remote",          // via exec/remote lifecycle surface
@@ -265,7 +270,8 @@ mod tests {
                         *canonical == meta.id
                             && (tui_ops.contains(alias) || covered_via_alias.contains(alias))
                     });
-            if !direct && !via_alias {
+            let via_tab = covered_via_tab.contains(meta.id);
+            if !direct && !via_alias && !via_tab {
                 assert!(
                     intentionally_cli_only.contains(meta.id),
                     "canonical operation '{}' has no TUI tab and no intentional classification",
