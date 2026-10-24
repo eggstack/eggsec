@@ -1,0 +1,28 @@
+{
+  "allow_dirty": true,
+  "binary": "eggsec-gui",
+  "binary_path": "/var/folders/2j/dlwhrpps66scv9bw8f7vdfg40000gq/T//eggsec-gui-qualification-64193/build/eggsec-gui",
+  "binary_sha256": "479e6c6d9814d6d7d3014ab038f0f2d83f310635e4a48d128cda73b8a72b5a6f",
+  "binary_size_bytes": 6210736,
+  "built_at_utc": "2026-10-24T22:47:51Z",
+  "bundle_active": false,
+  "bundled": false,
+  "cargo_features_requested": "shell",
+  "cargo_features_resolved": [
+    "default",
+    "shell"
+  ],
+  "cargo_lock_sha256": "7ae228c9ce7cba21995c2b02ed64a06525be60d4e4f71582240e2628d54bf6e1",
+  "cargo_version": "cargo 1.99.1 (5f94df478 2026-08-27)",
+  "commit_sha": "309d77d1362fef645927117efe78e9c19e53cbe2",
+  "credential_env_vars_present": [],
+  "dirty": false,
+  "notarized": false,
+  "published": false,
+  "rustc_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "rustc_version_verbose": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "schema": "eggsec-gui-build-metadata/v1",
+  "signed": false,
+  "target_triple": "aarch64-apple-darwin",
+  "tree_state": "clean"
+}
