@@ -404,7 +404,8 @@ The twelve excluded **kinds** are the same twelve as the excluded variants'
 kinds, each of which yields only excluded variants: `LoadTest`, `StressTest`,
 `Waf` (×2), `WafStress`, `PacketCapture`, `PacketTraceroute`, `PacketSend`,
 `Storage` (×3), `Integrations` (×3), `Workflow`, `Vuln`, `Intercept` — that is
-twelve kinds producing eighteen variants.
+twelve kinds producing seventeen variants, and the terminal `Error` shape is the
+eighteenth.
 
 ### 3.6 What the export path does today for a task with no report
 

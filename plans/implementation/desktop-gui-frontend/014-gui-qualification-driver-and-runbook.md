@@ -63,15 +63,16 @@ scope is larger than "write a driver".
 The matrix's header says "**Last regenerated:** 2026-10-23 — commit
 `7332baeafe5391e228a0b91fec48cf68999729f1`"
 (`docs/GUI_PLATFORM_QUALIFICATION.md:54-55`), and the matrix is *regenerated*,
-not hand-maintained (`:99-120`). Three of its stated blockers are false
-against the current baseline, so **the exit condition "the CI job's artefacts
-are recorded against the matrix" cannot be met against a matrix whose blockers
-are stale**:
+not hand-maintained (`:99-120`). Its stated blockers are false against the
+current baseline, so **the exit condition "the CI job's artefacts are
+recorded against the matrix" cannot be met against a matrix whose blockers are
+stale**:
 
 | The matrix says | Where | Measured truth |
 |---|---|---|
 | "The GUI frontend has no export affordance today — there is no `export` reference anywhere in `crates/eggsec-gui/frontend/app.js`" | `docs/GUI_PLATFORM_QUALIFICATION.md:239-243`, and the same sentence inside **both** `pending M6` cells (`:59`, `:60`) | False. `grep -c "export" crates/eggsec-gui/frontend/app.js` returns **50**; `"export_report"` is at `:1624`, `"report_for"` at `:556`, `state.daemon.report_formats` at `:354`. The Rust side has `export_report` at `crates/eggsec-gui/src/commands.rs:670` and `report_for` at `:718`. Milestone 006 is implemented. |
 | "the daemon's engine-feature profile and obtainability recipe (milestones 008 and 009) had not closed" | `docs/GUI_PLATFORM_QUALIFICATION.md:60` (macos Submit cell) | False. Milestones 008 and 009 are both closed (2026-10-23). |
+| "milestone 006 owns the export path" as the reason the `Export` column is blocked | `docs/GUI_PLATFORM_QUALIFICATION.md:59`, `:60` | The milestone is closed; the *procedure* is what is missing. |
 
 The **full** drift inventory — these two plus every stale `path:line` anchor
 in the three documents — is §3.5, and §7's first work package applies all of
@@ -100,6 +101,7 @@ evidence:
 |---|---|---|
 | The plan file for milestone 010 is `010-full-operation-coverage-and-report-export.md`. | The directory holds `006-full-operation-coverage-and-report-export.md` and `010-daemon-full-manual-capability-policy.md`. | The house-voice references for this plan are `010-daemon-full-manual-capability-policy.md` and `011-daemon-mediated-policy-approval.md`. |
 | The export cells are blocked "on a procedure that was never written", and the matrix says the GUI has no export affordance. | The export affordance **exists**: `crates/eggsec-gui/frontend/index.html:77-111` (the export panel), `crates/eggsec-gui/frontend/app.js:1612-1624` (the submit handler invoking `export_report`), `crates/eggsec-gui/src/commands.rs:670` (the command), `crates/eggsec-gui/src/export.rs:59-76` (the six formats). | The export cells are blocked on **two** things: the unwritten procedure *and* a matrix that still asserts the feature is absent. Both are M014's to fix. |
+| The guards start at **177**. | The guard script's highest number is 176, but four milestones are being planned in parallel and have reserved disjoint ranges: 012 takes **177–179**, 013 takes **180**, 014 takes **181–189**, and 015 takes **190**. | M014's nine guards are **181–189**. Taking 177–185 would collide with 012 and 013. §3.8 states the reservation and the re-derivation rule for an implementer who lands this milestone out of order. |
 | "Eight behavioural cells across two platforms are blocked on the absence of a driver." | The roadmap says this (`plans/subsystems/desktop-gui-frontend-roadmap.md:1032-1034`), but the matrix's own cell text gives **two different** root causes: the macOS `Connect` cell says "no windowed operator session or window-automation driver was available in this environment; the repository ships no such driver" (`docs/GUI_PLATFORM_QUALIFICATION.md:60`), while every Linux cell says "no Linux host was executed in this environment; the `gui-platform` CI job on `ubuntu-latest` is the evidence path" (`docs/GUI_PLATFORM_QUALIFICATION.md:59`). | The brief's phrasing is the roadmap's shorthand. The plan separates the two root causes, because they need different remedies: a driver-shaped gap on macOS and a **no-host / no-display** gap on Linux. See §3.3. |
 
 ## 2. Why this milestone is ready
