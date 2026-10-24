@@ -169,7 +169,7 @@ compiled with its full original test suite passing (payload corpus 233, secret d
 - `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` — **closed 2026-10-05**; closure `plans/closure/security-knowledge-corpus/003-closure.md`. `recon/secrets.rs` moved into `crates/eggsec-secrets` with a **one-line** body diff (the `Severity` import); 11 tests green, `eggsec-core` the only workspace edge, and **zero** consumer diffs — so `eggsec-python`'s exhaustive 30-arm `SecretType` match compiles untouched. Check 149 pins the owner, the facade, and freezes the AWS-scoped entropy gate at `3.5`.
 - `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` — **closed 2026-10-05 (deferral)**; closure `plans/closure/security-knowledge-corpus/005-closure.md`, decision in `plans/adrs/ADR-0006-knowledge-corpus-publication.md` (accepted). Publication **deferred**: corpora still evolving (14 commits since 2026-06-01, `+550 payloads`), release qualification proven expensive (NSE M007C, 74-function break), `eggsec-core` would need publishing on a shared version line, **no external consumer identified**, and `eggsec-payloads` would ship a `get_payloads` that panics for 6 of 40 variants. Reopening requires all four ADR conditions. No code changed.
 
-### desktop-gui-frontend (M1–M3 closed 2026-10-23; M4–M5 implemented 2026-10-23; M6–M9 planned 2026-10-23)
+### desktop-gui-frontend (M1–M3 closed 2026-10-23; M4–M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8–M9 closed 2026-10-23; M6 planned 2026-10-23)
 
 Governed by `plans/subsystems/desktop-gui-frontend-roadmap.md` with
 `plans/adrs/ADR-0007-desktop-gui-frontend-boundary.md` (accepted),
@@ -178,11 +178,14 @@ Governed by `plans/subsystems/desktop-gui-frontend-roadmap.md` with
 The three foundation plans below were mutually independent and were executed in
 one pass; all three are **closed**. The two product plans that follow them are
 **implemented**; their closure records are owned by the closure workstream and
-are not written here. The four plans after those are **planned and ready for
-handoff**: M6, M8, and M9 are `capability` milestones and M7 is an `operational`
-one. **M7 is gated on M6, M8, and M9 closing.** M8 and M9 are tracked in this
-roadmap because M6 and M7 depend on them and no daemon subsystem roadmap
-exists, even though their code surface is outside the GUI crate.
+are not written here. The four plans after those were **implemented on
+2026-10-23**: M8 and M9 are `capability` milestones and are **closed**; M7 is an
+`operational` milestone and is **conditionally closed**, pending the evidence
+named per cell in its qualification matrix. M7 was gated on M6, M8, and M9
+closing, so that gate is satisfied for M8 and M9 but **not for M6** — M7's
+`Export` column remains `pending M006`. M8 and M9 are tracked in this roadmap
+because M6 and M7 depend on them and no daemon subsystem roadmap exists, even
+though their code surface is outside the GUI crate.
 
 The premise recorded here, because it determines the size of everything that
 follows: the engine is already frontend-neutral, and the gap is not
