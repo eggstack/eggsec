@@ -1,6 +1,6 @@
 # Desktop GUI Frontend Roadmap
 
-Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10 implemented 2026-10-24; M11–M15 planned 2026-10-24)
+Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10 and M11 implemented 2026-10-24; M12–M15 planned 2026-10-24)
 
 Long-term references:
 
@@ -228,10 +228,13 @@ unaffected.
    bounded grace period, and a readiness timeout terminates the child rather
    than leaving an orphan. The default remains attaching to an
    operator-started daemon.
-4. **Interactive approval is unwired in the daemon.** `ApprovePolicy` returns
-   `ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs`), so a
-   daemon-mediated confirmation flow cannot complete today. The GUI handles
-   `PolicyDecisionRequired` defensively and offers no approval affordance.
+4. **Interactive approval in the daemon.**
+   **CLOSED by milestone 011 (2026-10-24).** The daemon holds an operation at
+   its confirmation point, exposes the decision, and takes the operator's
+   answer. The answer names *yes* or *no*; what it permits is computed by the
+   policy kernel, bounded by the confirmation classes the kernel demanded. A
+   strict surface never holds a decision, so a strict client is still
+   refused. The GUI shows the policy's own prompt with Approve and Reject.
 5. **The socket-path default is duplicated in six places** — the CLI's
    `--socket`, the daemon's `DaemonConfig::default`, the daemon binary's
    `--socket-path`, the GUI crate's own default, and the same literal in the
@@ -322,9 +325,10 @@ unaffected.
     not for others. A workspace-wide bridge for all thirty variants is a
     separate corrective milestone: it is a mapping exercise, not a contract
     change, and doing it half-way would be worse than not doing it.
-12. **The GUI's IPC surface is twelve commands.** Milestone 006 added four
+12. **The GUI's IPC surface is thirteen commands.** Milestone 006 added four
     over milestone 005's eight — the coverage table, the export, the report
-    content, and the daemon status. The command set's three pinning sites (the
+    content, and the daemon status — and milestone 011 added the thirteenth,
+    `approve_task`. The command set's three pinning sites (the
     argument-naming test, the declared-set test, and the shell's handler list)
     move together. The surface stays narrow: no command takes a surface or a
     scope from the webview, and the export command takes a task id, a format,
@@ -336,19 +340,20 @@ unowned:
 | Gap | Owner milestone | Note |
 |---|---|---|
 | 1 — only the GUI consumes the published schema | *none — explicitly out of scope* | Migrating the TUI's hand-built forms is an ADR-gated decision point and a stated non-goal of this roadmap. It is recorded, not scheduled. |
-| 4 — interactive approval unwired | **milestone 011** | Also a prerequisite of milestone 010's operator-visible outcome: without it, a manual daemon client cannot complete a confirmation-required operation. |
+| 4 — interactive approval unwired | **closed by milestone 011** | Also a prerequisite of milestone 010's operator-visible outcome: without it, a manual daemon client cannot complete a confirmation-required operation. |
 | 5 — socket-path default duplicated in six places | **milestone 012** | Paired with gap 10 because both are the daemon's socket contract. |
 | 9 — platform qualification evidence | **milestone 014** | An evidence milestone; the driver is the deliverable. |
 | 10 — the server unlinks the socket path before binding | **milestone 012** | Paired with gap 5. |
 | 11 — the report bridge's coverage | **milestone 013** | |
-| 12 — the GUI's IPC surface is twelve commands | *none — informational* | Recorded so the count is not mistaken for a defect. |
+| 12 — the GUI's IPC surface is thirteen commands | *none — informational* | Recorded so the count is not mistaken for a defect. Milestone 011 added the thirteenth (`approve_task`). |
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
 closed by milestones 001 and 002 respectively; the missing GUI surface identity
 was closed by milestone 003, which added `RuntimeSurface::DesktopGuiManual` and
 `ExecutionSurface::DesktopGuiManual` and classified both as manual; milestone
 004 delivered the GUI crate and its shell, and milestone 005 delivered the
-schema-driven form engine and the task dashboard. Milestone 005 also
+schema-driven form engine and the task dashboard. Milestone 011 closed gap 4,
+the daemon's unwired interactive approval. Milestone 005 also
 **discharged `ADR-0009`'s deferred JavaScript dependency policy**: the
 frontend ships an empty dependency set, so no JavaScript review policy is
 needed today — any dependency admitted later requires a recorded policy with
@@ -891,7 +896,8 @@ operation requiring confirmation is completable over the daemon protocol.
 
 Dependencies: M10 (hard — the approval path is only exercisable for
 published capabilities); M6 (soft — the GUI's task state already models a
-policy prompt).
+policy prompt); `ADR-0012` (hard — **met**: the decision record this milestone
+implements).
 
 Deliverable boundary: the runtime holds an operation at its confirmation
 point and exposes the decision; the daemon answers the approval command
@@ -911,6 +917,29 @@ decision leaves the operation refused rather than pending forever.
 
 Deferred work: the TUI's own approval flow, which is local, works today, and
 is a different mechanism.
+
+Implementation plan: `plans/implementation/desktop-gui-frontend/011-daemon-mediated-policy-approval.md`
+(**implemented 2026-10-24**; closure
+`plans/closure/desktop-gui-frontend/011-daemon-mediated-policy-approval-closure.md`,
+`Primary class: capability`).
+
+**Implemented.** The daemon can now hold an operation at its confirmation
+point and take the operator's answer. The runtime owns the hold — a pending
+decision registered before the prompt is announced, so a client that answers
+immediately never races the registration — and it stays policy-neutral: the
+registry holds a prompt and returns an answer, and only `eggsec-policy` decides
+what an answer permits. The engine's executor re-runs the *same*
+authorisation path with an override bounded by exactly the confirmation classes
+the kernel demanded, so the answer is bounded by the policy rather than by the
+client. A strict surface never holds a decision, so there is nothing for a
+strict client to answer; the GUI shows the policy's own prompt with Approve
+and Reject, and still never auto-approves. The daemon audits every answer
+under the action `approve-policy`.
+
+Like M8 and M10, this milestone's code surface is mostly outside the GUI
+crate. It is tracked here because milestone 010's operator-visible outcome
+depends on it: without the approval path, a manual daemon client can start a
+confirmation-required operation but cannot finish it.
 
 ### Milestone 12 — The daemon's socket path and bind contract
 
