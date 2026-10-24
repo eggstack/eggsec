@@ -1366,6 +1366,24 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
             return
         raise SystemExit(f"the self-test's matrix row is absent: {platform}")
 
+    def cited_evidence_name(matrix_text: str, platform: str) -> str:
+        """The evidence file a matrix row cites.
+
+        The self-test follows the matrix rather than a hard-coded file name:
+        a name that drifts from the matrix makes every case that touches it
+        fail for the wrong reason, and "the self-test's mutation target is
+        absent" is a failure of the test, not of the thing it tests.
+        """
+        for line in matrix_text.splitlines():
+            if not line.startswith(f"| `{platform}` |"):
+                continue
+            match = re.search(
+                r"docs/evidence/gui-qualification/([A-Za-z0-9._-]+\.md)", line
+            )
+            if match:
+                return match.group(1)
+        raise SystemExit(f"the matrix's `{platform}` row cites no evidence file")
+
     def blank_a_cell(matrix_copy: str, _evidence_copy: str) -> None:
         replace_cell(matrix_copy, "macos", 1, " **qualified** — ")
 
@@ -1411,9 +1429,12 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
         )
 
     def missing_evidence_file(matrix_copy: str, _evidence_copy: str) -> None:
+        with open(matrix_copy, "r", encoding="utf-8") as handle:
+            text = handle.read()
+        cited = cited_evidence_name(text, "macos")
         rewrite_matrix(
             matrix_copy,
-            "docs/evidence/gui-qualification/macos-2026-10-24.md",
+            f"docs/evidence/gui-qualification/{cited}",
             "docs/evidence/gui-qualification/macos-9999-01-01.md",
         )
 
@@ -1460,25 +1481,29 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
         """
 
         def mutate(matrix_copy: str, evidence_copy: str) -> None:
-            replace_cell(
-                matrix_copy,
-                "macos",
-                3,
-                " **qualified** — evidence: `docs/evidence/gui-qualification/"
-                "macos-2026-10-24.md` (run 2026-10-24) ",
-            )
+            with open(matrix_copy, "r", encoding="utf-8") as handle:
+                text = handle.read()
+            cited = cited_evidence_name(text, "macos")
 
             def mutate_the_record(record: Dict[str, Any]) -> None:
-                if attestation is not None:
+                if attestation is None:
+                    # "No attestation at all": an operator `pass` that nobody
+                    # signed is exactly what this case is about.
+                    record.pop("attestation", None)
+                else:
                     record["attestation"] = attestation
                 for entry in record["columns"]:
                     if entry.get("column") != "connect":
                         continue
                     entry["operator"] = "pass"
-                    if observed is not None:
+                    if observed is None:
+                        # "No observation": an operator `pass` nobody recorded
+                        # what they saw is exactly what this case is about.
+                        entry.pop("observed", None)
+                    else:
                         entry["observed"] = observed
 
-            mutate_record(evidence_copy, "macos-2026-10-24.md", mutate_the_record)
+            mutate_record(evidence_copy, cited, mutate_the_record)
 
         return mutate
 
