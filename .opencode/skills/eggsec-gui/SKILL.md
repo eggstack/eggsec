@@ -19,7 +19,7 @@ through the daemon's Unix socket and nothing else.
 | Shell framework | Tauri v2, confined to this crate (`crates/eggsec-gui/src/shell.rs:3`) |
 | Frontend | Buildless: hand-written HTML, CSS, and vanilla JavaScript, **zero npm dependencies** |
 | Features | `default = ["shell"]`; the crate compiles with `--no-default-features` (`crates/eggsec-gui/Cargo.toml:24`) |
-| Enforced by | architecture guards 155–189 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, the daemon's derived capability list, the daemon endpoint's single default and bind contract, the report bridge's single coverage table, and the platform qualification's procedure and promotion rules) |
+| Enforced by | architecture guards 155–191 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, the daemon's derived capability list, the daemon endpoint's single default and bind contract, the report bridge's single coverage table, the platform qualification's procedure and promotion rules, and the operator attestation's attribution) |
 
 Headline crate and surface counts live in `architecture/overview.md` — point at
 it rather than restating the numbers.
@@ -521,6 +521,8 @@ qualified on. Three entry points make that statement checkable:
 
 The run record is `docs/evidence/gui-qualification/<platform>-<date>.md`, and
 it carries a machine-readable `eggsec-gui-qualification-record/v1` block. A
+second run on the same day adds a label — `--run-label operator` names it
+`<platform>-<date>-operator.md` — so a day with two runs keeps two records. A
 CI run may be cited instead of a checked-in file; the runs are indexed in
 `docs/evidence/gui-qualification/CI-RUNS.md`.
 
@@ -530,8 +532,22 @@ both halves: `scripted` (what the harness measured) **and** `operator` (what
 a person attested). The harness proves the cause; only the operator proves the
 effect. A promotion resting on the harness alone is not a promotion.
 
+**The operator's half is a file, not a hand edit.** The operator writes an
+attestation of their own —
+`docs/evidence/gui-qualification/<platform>-<date>.attestation.json`, schema
+`eggsec-gui-operator-attestation/v1` — naming who observed the behaviours,
+when, on which platform, against which commit, and what they saw for each
+column. The procedure merges it into the record in the same write that
+produces the record, so the record has one writer and a later run cannot
+erase the attestation. The validator refuses an operator `pass` that nobody
+signed, that carries no observation, or whose attestation names another
+platform or a commit the run does not descend from. Guard 191 pins this: no
+code path may default an operator outcome to `pass`, and the harness never
+self-attests.
+
 ```bash
-bash scripts/gui_qualification.sh --platform macos --mode ci --daemon-bin <path>
+bash scripts/gui_qualification.sh --platform macos --mode operator --socket <path> \
+  --run-label operator --attestation <attestation file>
 cargo test -p eggsec-gui --no-default-features --test qualification
 python3 scripts/check_gui_qualification.py
 ```
@@ -566,6 +582,10 @@ is set in the daemon's environment — the procedure sets it.
   does not drive the window, click, or type. There is no window-automation
   driver and no Node client in this repository, and the zero-npm posture is
   why. The `windows` row of the matrix stays `out of scope` by `ADR-0010`.
+- **The Linux behavioural cells still need an operator at a Linux desktop.** A
+  CI run cannot attest: the `gui-platform` job has nobody to observe with, so
+  every column it produces carries `operator: not-performed` while rule P1
+  asks for `pass`. The macOS cells are promoted on an operator-attested run.
 - **Binary distribution, signing, notarization, and installers are out of
   scope** — handled separately.
 

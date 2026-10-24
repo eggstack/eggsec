@@ -761,8 +761,24 @@ proves the cause, and only the operator proves the effect.
 
 The **run record** is `docs/evidence/gui-qualification/<platform>-<date>.md`
 and it carries a machine-readable `eggsec-gui-qualification-record/v1` block.
-A CI run may be cited instead of a checked-in file; the runs are indexed in
+A second run on the same day adds a label (`--run-label operator` names it
+`<platform>-<date>-operator.md`), so a day with two runs keeps two records. A
+CI run may be cited instead of a checked-in file; the runs are indexed in
 `docs/evidence/gui-qualification/CI-RUNS.md`.
+
+The **operator's half of a promotion** is a file of its own:
+`docs/evidence/gui-qualification/<platform>-<date>.attestation.json`, schema
+`eggsec-gui-operator-attestation/v1`, naming who observed the behaviours, when,
+on which platform, against which commit, and what they saw for each column.
+The procedure merges it into the record **in the same write that produces the
+record** (`--attestation <file>`), so the record has one writer and a later
+run cannot erase the attestation — a promotion by hand edit is a promotion a
+later run silently undoes. The validator refuses an operator outcome of
+`pass` that no named human signed, that carries no observation, or whose
+attestation names another platform or a commit the run does not descend from.
+Guard 191 pins that machinery, and pins the two things that keep it honest:
+no code path may default an operator outcome to `pass`, and the harness never
+attests for a human.
 
 **The harness's target is the loopback fixture** (`127.0.0.1`). The engine
 admits a loopback target only when `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` is set
