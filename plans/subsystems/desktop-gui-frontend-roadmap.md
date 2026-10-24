@@ -1,6 +1,6 @@
 # Desktop GUI Frontend Roadmap
 
-Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10–M15 planned 2026-10-24)
+Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24; M10 implemented 2026-10-24; M11–M15 planned 2026-10-24)
 
 Long-term references:
 
@@ -878,7 +878,9 @@ wiring it changes the daemon's execution semantics rather than its
 advertisement.
 
 Implementation plan: `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md`
-(**ready for handoff**, `Primary class: capability`).
+(**implemented 2026-10-24**; closure
+`plans/closure/desktop-gui-frontend/010-daemon-full-manual-capability-policy-closure.md`,
+`Primary class: capability`).
 
 ### Milestone 11 — Daemon-mediated policy approval
 
@@ -1173,7 +1175,7 @@ This roadmap is closed when:
 | 7 — Packaging and platform qualification | **conditionally closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | `plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md` | M6 (**met** — implemented 2026-10-24, so the export path exists; the `Export` cell still needs its own evidence); outstanding operational evidence named per cell in the qualification matrix |
 | 8 — Daemon feature profile and build recipe | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | `plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md` | — |
 | 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
-| 10 — The daemon's full manual capability policy | **planned 2026-10-24** | `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md` | — | `ADR-0011` (**met** — accepted 2026-10-24); M9 (met — closed 2026-10-23) |
+| 10 — The daemon's full manual capability policy | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/010-daemon-full-manual-capability-policy.md` | `plans/closure/desktop-gui-frontend/010-daemon-full-manual-capability-policy-closure.md` | `ADR-0011` (**met** — accepted 2026-10-24); M9 (met — closed 2026-10-23) |
 | 11 — Daemon-mediated policy approval | **planned 2026-10-24** | — | — | M10 (hard — the approval path is only exercisable for published capabilities) |
 | 12 — The daemon's socket path and bind contract | **planned 2026-10-24** | — | — | — |
 | 13 — The report bridge's full coverage | **planned 2026-10-24** | — | — | M6 (met — implemented 2026-10-24) |
