@@ -49,8 +49,9 @@ writes**, through the same `eggsec-output` renderers, in the six formats
 packaging the GUI should expect those six files beside a report and no
 seventh: the PDF renderer lives in the engine, and the GUI links no engine
 crate. The procedure that exercises the path is `docs/GUI_BUILD.md` §5.7,
-and the recorded run — with each exported file's digest — is in
-[`docs/evidence/gui-qualification/macos-2026-10-24.md`](evidence/gui-qualification/macos-2026-10-24.md).
+and the recorded run — with each exported file's digest, on a run an operator
+attested to — is in
+[`docs/evidence/gui-qualification/macos-2026-10-24-operator.md`](evidence/gui-qualification/macos-2026-10-24-operator.md).
 
 > **The SHA-256 identifies an artefact, not a commit.** A second run of the
 > same command later the same day, against the then-current tree, produced
