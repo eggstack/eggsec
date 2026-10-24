@@ -74,7 +74,7 @@ are stale**:
 | "the daemon's engine-feature profile and obtainability recipe (milestones 008 and 009) had not closed" | `docs/GUI_PLATFORM_QUALIFICATION.md:60` (macos Submit cell) | False. Milestones 008 and 009 are both closed (2026-10-23). |
 
 The **full** drift inventory — these two plus every stale `path:line` anchor
-in the three documents — is §3.6, and §7's first work package applies all of
+in the three documents — is §3.5, and §7's first work package applies all of
 it.
 
 **Therefore regenerating the matrix is in scope for M014**, and §7's
@@ -112,10 +112,9 @@ closes milestone 007 **conditionally** and names three outstanding conditions
 operator steps in `docs/GUI_BUILD.md` §5 must be executed and recorded; and
 milestone 006 must close before the `Export` column can leave `pending M6`.
 
-Condition 3 is now **met**: "Milestone 7's dependency on milestone 6 is now
+Condition 3 is now **met** — "Milestone 7's dependency on milestone 6 is now
 **met**: the export path …"
 (`plans/closure/desktop-gui-frontend/006-full-operation-coverage-and-report-export-closure.md:445`).
-
 Conditions 1 and 2 are the *substance* of this milestone: M014 builds the
 mechanism by which both are discharged, and states honestly that the
 **recording** of a green run is an operational event that may follow the merge.
@@ -169,7 +168,7 @@ the build recipe; the CI job.
 `docs/GUI_PLATFORM_QUALIFICATION.md:57-61` is one table: a header row and
 **three platform rows** (`linux`, `macos`, `windows`) against **seven
 columns** (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`,
-`Export`). That is **21 cells**.
+`Export`) — **21 cells**.
 
 **Measurement rule.** The status tokens are the bolded words at the start of
 each cell; each is counted with
@@ -427,8 +426,8 @@ start at **181**. The house style, read from the tail of the script: a
    introduced.
 5. **No parallel lookup tables.** The seven column names and the seven
    assertion identifiers are the same seven concepts. M014 introduces them in
-   exactly two places — the matrix header and the harness — and guards 181 and
-   182 pin their agreement.
+   exactly two places — the matrix header and the harness — and guards 185 and
+   186 pin their agreement.
 6. **No `let _ =` and no `filter_map(|e| e.ok())`.** Every failure is logged
    through `tracing` and surfaced as a named outcome, never discarded.
 7. **TLS stays ring-only.** The harness opens a Unix socket and nothing else;
@@ -470,7 +469,7 @@ start at **181**. The house style, read from the tail of the script: a
   publishes the run record as a job artefact.
 - **Guards 181–189** in `scripts/check-architecture-guards.sh`, plus the
   matching entries in `docs/CI_ARCHITECTURE_GUARDS.md`.
-- The **stale-claim corrections** enumerated in §3.6, in the three documents
+- The **stale-claim corrections** enumerated in §3.5, in the three documents
   that carry them.
 
 ### Explicitly out of scope
@@ -482,8 +481,8 @@ start at **181**. The house style, read from the tail of the script: a
   Windows: no Windows cell, no Windows CI leg, no Windows transport. The
   re-entry path is a daemon-subsystem change requiring its own ADR
   (`docs/GUI_PLATFORM_QUALIFICATION.md:214-226`).
-- **A window-automation driver.** See §6 (Frontend or operator surface) for
-  the decision and its justification. M014 does not add one.
+- **A window-automation driver.** See §6 (Frontend or operator surface) for the
+  decision and its justification. M014 does not add one.
 - **The daemon's socket-path contract** — milestone 012's subject
   (`plans/subsystems/desktop-gui-frontend-roadmap.md:344`).
 - **The report bridge's remaining coverage** — milestone 013's subject (`:347`).
@@ -503,11 +502,10 @@ start at **181**. The house style, read from the tail of the script: a
 
 ### Core/domain
 
-M014 adds no production domain type, no new engine concept, and no new
-operation. Its one new *domain* artefact is the qualification run record —
-the seven column identifiers the matrix and the harness share, and the
-record block that carries them. The seven identifiers are exactly the
-matrix's seven columns:
+M014 adds no production domain type, no engine concept, and no operation. Its
+one new *domain* artefact is the qualification run record — the seven column
+identifiers the matrix and the harness share. They are exactly the matrix's
+seven columns:
 
 `build`, `launch`, `connect`, `submit`, `cancel`, `render`, `export`.
 
@@ -519,11 +517,11 @@ rather than restate it — so the seven concepts have exactly one owner
 
 ### Storage and migrations
 
-**None.** M014 persists nothing. The run record is a file artefact under
+**None.** M014 persists nothing: the run record is a file artefact under
 `docs/evidence/gui-qualification/`, written by the procedure script and
-committed like any other evidence file; it is not a database table, not a
-daemon store, and not a GUI-side cache. The daemon's own report store is
-unchanged and stays in-memory and bounded at 64 documents
+committed like any other evidence file — not a table, not a daemon store, not
+a GUI-side cache. The daemon's own report store is unchanged and stays
+in-memory and bounded at 64 documents
 (`crates/eggsec-runtime/src/report.rs:29`). No persisted representation
 changes, so no data migration is required.
 
@@ -543,22 +541,20 @@ no command's signature, and does not widen what the webview may request.
 ### Runtime and concurrency
 
 - **The harness's own concurrency.** One operation at a time against the
-  daemon; the GUI's event forwarder is the only concurrent consumer, and
-  it "never spawns a task per event"
-  (`crates/eggsec-gui/src/commands.rs:843`). The forwarder is
-  `crates/eggsec-gui/src/commands.rs:857`.
+  daemon; the GUI's event forwarder (`crates/eggsec-gui/src/commands.rs:857`)
+  is the only concurrent consumer, and it "never spawns a task per event"
+  (`:843`).
 - **Timeout wrappers.** Every awaited socket wait and every spawned task in
   the harness and the script carries a 30–300 s timeout wrapper.
-- **The event stream is the authority** for a terminal state, not the
-  cancel request's own acknowledgement
-  (`crates/eggsec-gui/src/commands.rs:572`).
-- **The cancel race** is expected and recorded, not treated as an error
-  (`docs/GUI_BUILD.md:443-450`).
+- **The event stream is the authority** for a terminal state, not the cancel
+  request's own acknowledgement
+  (`crates/eggsec-gui/src/commands.rs:572`); the cancel race is expected and
+  recorded, not treated as an error (`docs/GUI_BUILD.md:443-450`).
 - **The report-retention window** bounds when an export may happen
   (`crates/eggsec-runtime/src/report.rs:29`).
-- **The daemon's lifecycle.** The script starts the daemon it owns and
-  stops it on every exit path; the GUI supervises and stops a daemon it
-  started itself (`crates/eggsec-gui/src/shell.rs:21-23`, `:53-56`).
+- **The daemon's lifecycle.** The script starts the daemon it owns and stops
+  it on every exit path; the GUI supervises and stops a daemon it started
+  itself (`crates/eggsec-gui/src/shell.rs:21-23`, `:53-56`).
 
 ### Frontend or operator surface
 
@@ -670,7 +666,7 @@ directory at `:50-52`, uses a `cleanup` trap at `:52-64`, exits 0/1 at
 | Aspect | Requirement |
 |---|---|
 | Interface | `--platform <linux\|macos>`, `--socket <path>`, `--daemon-bin <path>`, `--out <dir>`, `--mode <operator\|ci>`, `--skip-window`. |
-| Daemon lifecycle | Starts the daemon on the given socket, waits for a **real readiness signal** (the pattern `crates/eggsec-daemon/src/host.rs` uses and the CLI's start path implements — guard 166, `scripts/check-architecture-guards.sh:5334`), and stops it on exit. In `--mode operator` it may instead attach to a daemon the operator started. |
+| Daemon lifecycle | Starts the daemon on the given socket, waits for a **real readiness signal** (the CLI's start path implements — guard 166, `scripts/check-architecture-guards.sh:5334`), and stops it on exit. In `--mode operator` it may instead attach to a daemon the operator started. |
 | Build | Delegates to `scripts/build_gui_release.sh --out <dir>` (the M007 recipe) and records the sidecar's fields. |
 
 | Window probe | Linux: `xdotool search --name '^Eggsec$'` (XTest, named at `docs/GUI_BUILD.md:75-78`). macOS: `osascript -e 'tell application "System Events" to tell process "eggsec-gui" to get count of windows'` (the probe the macOS evidence file used at `:46`). Both are **recorded**, not asserted, when the prerequisite is absent — a named SKIP. |
@@ -728,9 +724,9 @@ An **integration test** in the GUI crate. Rationale:
   `export`, `tasks`, `availability`, `connection`
   (`crates/eggsec-gui/src/lib.rs:11-18`) — because the Tauri-gated modules
   (`commands`, `shell`, `crates/eggsec-gui/src/lib.rs:20-23`) require a
-  `tauri::State` and a live webview.
-- The Tauri-gated glue stays covered by the crate's existing unit tests; the CI
-  job already runs both profiles (`.github/workflows/deep-checks.yml:128-131`).
+  `tauri::State` and a live webview; that glue stays covered by the crate's
+  existing unit tests, which the CI job already runs in both profiles
+  (`.github/workflows/deep-checks.yml:128-131`).
 
 **The SKIP discipline.** The test reads `EGGSEC_QUALIFY_SOCKET` and
 `EGGSEC_QUALIFY_DAEMON_BIN`. When they are absent, it prints a **SKIP line
@@ -798,8 +794,8 @@ cells become promotable"). Six rules, each mechanically checkable:
    exists in `crates/eggsec-gui/frontend/app.js` (guard 182 makes the same
    check static; the validator makes it semantic).
 
-It exits 0 only if every check above holds; otherwise it prints the offending
-cell and exits non-zero.
+It exits 0 only if every check holds; otherwise it prints the offending cell
+and exits non-zero.
 
 The validator is the same shape as the repository's existing Python guards
 (`scripts/check-python-architecture-guards.py`), and it is a *semantic*
@@ -854,7 +850,7 @@ stop asserting facts that milestone 006 made false. The drift is invisible to
 the toolchain: `scripts/check_doc_references.py:6` checks path existence
 only, never a `path:line` anchor.
 
-**Required changes.** The whole table in §3.6: the two "no export affordance"
+**Required changes.** The whole table in §3.5: the two "no export affordance"
 claims (`docs/GUI_BUILD.md:466`, `docs/GUI_PLATFORM_QUALIFICATION.md:239-243`),
 the two stale daemon-lifecycle claims (`docs/GUI_BUILD.md:375-377`,
 `docs/GUI_DISTRIBUTION_HANDOFF.md:181-186`), every stale `path:line` anchor,
@@ -992,7 +988,6 @@ cell is blank; every `qualified` cell resolves.
 | The operator's daemon is restarted mid-run | The daemon's report store is in-memory (`crates/eggsec-runtime/src/report.rs:29-40`), so every report published before the restart is gone. The `export` column is recorded as `fail` with the restart named as the cause; the run is **not** silently continued as if the export had succeeded. |
 | A cancel races the task's completion | The event stream is authoritative (`crates/eggsec-gui/src/commands.rs:572`). A `completed` terminal state after a cancel click is recorded as a completed task, not a failed cancellation (`docs/GUI_BUILD.md:443-450`). |
 | The submit is refused by the daemon | A refusal is a legitimate observation and is recorded as such (`docs/GUI_BUILD.md:431`). The `submit` column is `pass` when the GUI surfaced the refusal correctly — which is what the cell says the GUI's job is. |
-| The operator skips a step | The column's `operator` outcome is `not-performed`; the column cannot be promoted (rule P1); the deviation is recorded in the record's `deviations` array. |
 | Two operators run concurrently | Each writes its own record, `<platform>-<date>.md`. A same-day collision is resolved by a distinct suffix — the validator requires the matrix's cited file to exist, not a unique name. |
 | The operator aborts | The cleanup trap stops the daemon it started and removes the socket; the evidence directory keeps what was captured, with the incomplete columns recorded as `not-performed`. |
 
@@ -1062,7 +1057,6 @@ the matrix update.
 | Test | Where | Assertion |
 |---|---|---|
 | The daemon restarts between the task and the export | `crates/eggsec-gui/tests/qualification.rs` | The export is refused with the daemon's own reason ("the daemon has no report for task …"), and the record's `export` outcome is `fail` with the restart named. The harness does **not** report a silent success. |
-| The report store's bound is respected | `crates/eggsec-runtime`'s existing tests, referenced not rewritten | The harness never assumes more than `MAX_RETAINED_REPORTS` (64) reports are retained (`crates/eggsec-runtime/src/report.rs:29`). |
 | The script's cleanup leaves nothing behind | `scripts/gui_qualification.sh` | After the script exits — normally, on failure, and on `SIGINT` — no daemon process and no socket file remain. |
 
 ### Contention and cancellation tests
@@ -1078,7 +1072,6 @@ the matrix update.
 | Test | Where | Assertion |
 |---|---|---|
 | No enforcement bypass | `crates/eggsec-gui/tests/qualification.rs` | The harness's submit path goes through the daemon and is subject to the daemon's enforcement; a task the daemon refuses is refused for the harness too. |
-| The GUI links no engine crate | existing guard (the no-engine edge) | Unchanged; M014 adds no dependency to `crates/eggsec-gui`. |
 | The harness adds no network reach | `crates/eggsec-gui/tests/qualification.rs` | The harness opens exactly one socket, a Unix socket; no HTTP client is constructed. |
 | No credentials are logged | `crates/eggsec-gui/tests/qualification.rs` | The record's fields contain no credential material; the harness logs no token. |
 | The harness writes only where it says | `scripts/gui_qualification.sh` | The script's write paths are confined to `--out` and `${TMPDIR:-/tmp}`; a sentinel file elsewhere is untouched. |
@@ -1144,7 +1137,7 @@ existing pair) and `gui-qualification-${{ matrix.os }}` (the new one).
 | `docs/GUI_BUILD.md` | §5.7 rewritten (the export procedure); §5.0's daemon-lifecycle paragraph corrected; §5.1–§5.6's stale anchors re-anchored and each step's operator observation made specific; §2 gains a note that the webdriver tooling the document names is **not** used by the repository's own procedure; §6 names the export artefact. |
 | `docs/GUI_PLATFORM_QUALIFICATION.md` | The two "no export affordance" claims corrected; the stale root causes rewritten; §6's promotion table replaced by rules P1–P6; the `Last regenerated` header refreshed. |
 | `docs/GUI_DISTRIBUTION_HANDOFF.md` | §4's daemon-lifecycle limitation corrected; the §1 artefact-identity table's stale `config.rs:17` anchor re-anchored to `:19`; the handoff gains a line stating what the export procedure produces. |
-| `docs/evidence/gui-qualification/TEMPLATE.md` and the new `CI-RUNS.md` | The `eggsec-gui-qualification-record` block, the `export` row, and the index of CI runs a cell may cite. |
+| `docs/evidence/gui-qualification/TEMPLATE.md` and the new `CI-RUNS.md` | The `eggsec-gui-qualification-record` block, the `export` row, and the index of CI runs a cell may cite. The handoff's stale `server.rs:95` anchor (§3.5) is re-pointed at `:147`. |
 | `architecture/desktop_gui.md` | The "qualification matrix" section (`:669-678`) names the procedure, the harness, and the validator. |
 | `docs/CI_ARCHITECTURE_GUARDS.md` | Guards 181–189. |
 | `.opencode/skills/eggsec-gui/SKILL.md` | The procedure's and the validator's entry points; the counted-set claims checked. |
@@ -1154,8 +1147,8 @@ existing pair) and `gui-qualification-${{ matrix.os }}` (the new one).
 
 1. `docs/GUI_BUILD.md` §5.7 contains a complete export procedure — four filled
    rows, no `Not yet defined` — naming the panel's controls, the
-   `export_report` command, the six formats, the digest check, the parse
-   check, the `.bak` backup, and the refusal cases.
+   `export_report` command, the six formats, the digest and parse checks, the
+   `.bak` backup, and the refusal cases.
 2. `scripts/gui_qualification.sh` exists in the repository, is hermetic, and
    writes a run record with all seven columns.
 3. `crates/eggsec-gui/tests/qualification.rs` exists, adds **no** dependency
@@ -1166,11 +1159,11 @@ existing pair) and `gui-qualification-${{ matrix.os }}` (the new one).
    run record as a job artefact.
 6. The matrix contains no `pending M6` token, no blank cell, and no
    `qualified` cell without a resolving evidence reference.
-7. Every behavioural cell's root cause names the **current** blocker. The
+7. Every behavioural cell's root cause names the **current** blocker; the
    macOS `Connect` cell no longer says "the repository ships no such driver",
    because the repository now ships a procedure.
 8. Guards 181–189 exist, are numbered after 176, and each fails when its
-   invariant is violated.
+   invariant is broken.
 9. No cell is promoted without a recorded run satisfying P1–P6.
 10. The Windows row is byte-identical to its baseline state.
 
@@ -1191,8 +1184,8 @@ The agent must stop and report rather than improvise when:
   and does **not** weaken the cell's criterion to make it green (OQ-2).
 - **The `service` daemon profile cannot be built on a CI leg.** Then the
   harness's daemon half cannot run there and the leg records a named SKIP. The
-  implementer does not add a fake executor to the daemon binary to work
-  around it — that is a daemon-subsystem change outside this milestone.
+  implementer does not add a fake executor to the daemon binary to work around
+  it — that is a daemon-subsystem change outside this milestone.
 - **The report bridge's coverage** (milestone 013) turns out to be a
   precondition for the export column. The export procedure then documents the
   limitation rather than waiting for 013.
@@ -1222,7 +1215,7 @@ The closure record must contain:
    change, with the four rows filled and the six formats named.
 2. **The procedure script** — `scripts/gui_qualification.sh` in the
    repository, with a transcript of one run per platform (or an explicit
-   statement that a platform had no host and the run was not performed).
+   statement that a platform had no host).
 3. **A run record** — a `docs/evidence/gui-qualification/<platform>-<date>.md`
    file containing the `eggsec-gui-qualification-record` block, with the
    artefact paths and digests it claims.
@@ -1240,8 +1233,8 @@ The closure record must contain:
 8. **The matrix diff** — the before and after, with every promotion tied to a
    specific record and every non-promotion tied to a specific missing
    precondition.
-9. **The dependency statement** — that `crates/eggsec-gui`'s dependency
-   closure is unchanged, or, if it is not, the `deny.toml` entry and the
+9. **The dependency statement** — that `crates/eggsec-gui`'s dependency closure
+   is unchanged, or the `deny.toml` entry and the
    `docs/DEPENDENCY_EXCEPTIONS.md` record with owner and review-by date.
 10. **The `make check` transcript** — including the advisory count observed,
     attributed to milestone 015 rather than absorbed.
@@ -1264,7 +1257,7 @@ The closure record must contain:
 - **The `service` daemon profile is heavy.** It links the engine, so the
   `gui-platform` job becomes materially slower. That job lives in the
   scheduled `deep-checks` workflow, not per-PR CI.
-- **The matrix and the runbook are load-bearing for guards 181–185.** Editing
+- **The matrix and the runbook are load-bearing for guards 181–189.** Editing
   their structure without updating the guards produces a guard failure that
   looks like a defect in the matrix.
 - **The frontend has no JavaScript test infrastructure at all.** The webview's
