@@ -1,6 +1,6 @@
 # Desktop GUI Frontend Roadmap
 
-Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 planned 2026-10-23)
+Status: active (M1–M3 closed 2026-10-23; ADR-0009 ratified 2026-10-23; M4 and M5 implemented 2026-10-23; M7 conditionally closed 2026-10-23; M8 and M9 closed 2026-10-23; M6 implemented 2026-10-24)
 
 Long-term references:
 
@@ -117,10 +117,13 @@ The subsystem **does not own**:
 
 The engine is already frontend-neutral, and the workspace already contains
 most of the pieces a GUI needs. Milestones 001–005 have since turned those
-pieces into a working desktop frontend; what remains is coverage, export, and
+pieces into a working desktop frontend; what remained was coverage, export, and
 daemon lifecycle — not the foundation. **Milestones 007, 008, and 009 were
-implemented on 2026-10-23** (007 conditionally closed, 008 and 009 closed);
-**milestone 006 remains planned and registered** but not yet implemented.
+implemented on 2026-10-23** (007 conditionally closed, 008 and 009 closed), and
+**milestone 006 was implemented on 2026-10-24** — the coverage model, the
+report path, and the daemon lifecycle all landed. **Every milestone in this
+roadmap now has a closure record.** What remains is the evidence work in
+milestone 007's qualification matrix and the gaps listed below.
 
 **The supported-platform set is decided.** `ADR-0010` fixes the desktop GUI's
 platforms at **Linux and macOS** and records **Windows as out of scope**, with
@@ -189,26 +192,42 @@ unaffected.
    `request_schema` is a human-readable hint, not a schema. The GUI renders
    every published task kind from the schema, but **the TUI's ~65,000 lines
    are still mostly hand-built forms.**
-2. **The GUI's operation coverage and report export are not finished.**
-   Milestone 005 renders a form for any published task kind and reports an
-   operation as unavailable when the connected daemon cannot run it, but
+2. **The GUI's operation coverage and report export were not finished.**
+   Milestone 005 rendered a form for any published task kind and reported an
+   operation as unavailable when the connected daemon could not run it, but
    hiding unavailable operations rather than reporting them, and export
-   through `eggsec-output`, are milestone 006's work. **Milestone 008 has
-   since removed the underlying cause of the *inaccuracy***: the daemon now
-   publishes a capability list **derived from what its executor can actually
-   execute** (milestone 009), so a daemon can no longer advertise a
-   capability it rejects outright. Milestone 006's remaining work is the
-   *reporting* of feature-gated unavailability, which needs the additive
-   enabled-features handshake field.
-3. **The GUI does not manage the daemon's lifecycle.** It requires an
-   already-running daemon and names the exact start command when the socket
-   is unreachable. Spawning and supervising a daemon is milestone 006's work.
-   **Milestones 008 and 009 have closed the two defects that made the
-   instruction unusable**: the daemon now has a documented, reproducible
-   build recipe for a profile that actually contains the engine's features,
-   and the documented start command names the cargo feature the binary must
-   be **built** with — the runtime `--full-executor` flag alone cannot add an
-   engine that was not compiled in.
+   through `eggsec-output`, were milestone 006's work.
+   **CLOSED by milestone 006 (2026-10-24).** The GUI now publishes a **derived
+   coverage model** — one row per task kind the daemon publishes, with the
+   verdict and the reason — instead of hiding an operation and saying nothing.
+   The daemon publishes its enabled-feature set additively, so the GUI can
+   distinguish "the daemon withholds this capability" from "the daemon was
+   built without the feature", and a live `FeatureMissing` denial becomes a
+   learned verdict that wins over every static one. Report export produces the
+   CLI's artifacts for six formats, written with the TUI's export discipline.
+   The coverage model is derived from what the daemon publishes, so it cannot
+   drift into a second, hand-maintained catalog.
+3. **The GUI did not manage the daemon's lifecycle.** It required an
+   already-running daemon and named the exact start command when the socket
+   was unreachable. Spawning and supervising a daemon was milestone 006's work.
+   **Milestones 008 and 009 closed the two defects that made the instruction
+   unusable**: the daemon has a documented, reproducible build recipe for a
+   profile that actually contains the engine's features, and the documented
+   start command names the cargo feature the binary must be **built** with —
+   the runtime `--full-executor` flag alone cannot add an engine that was not
+   compiled in.
+   **CLOSED by milestone 006 (2026-10-24).** The GUI can now spawn and
+   supervise a daemon, but only **opt-in** and only for a binary the operator
+   names with `--daemon-bin`: there is no `PATH` lookup and no sidecar
+   convention, because nothing in the workspace installs `eggsec-daemon`. The
+   spawn is an argv vector, never a shell string. The pre-flight check is a
+   **connection attempt**, so a stale socket file does not block the spawn and
+   a live daemon is never displaced. The readiness wait is bounded and
+   completes the **protocol handshake** rather than scraping the child's
+   stdout. Teardown sends SIGTERM first and escalates to SIGKILL after a
+   bounded grace period, and a readiness timeout terminates the child rather
+   than leaving an orphan. The default remains attaching to an
+   operator-started daemon.
 4. **Interactive approval is unwired in the daemon.** `ApprovePolicy` returns
    `ErrorCode::Unsupported` (`crates/eggsec-daemon/src/host.rs`), so a
    daemon-mediated confirmation flow cannot complete today. The GUI handles
@@ -249,29 +268,40 @@ unaffected.
    outcome; and both start paths refuse to displace a live daemon. The
    obtainability recipe is in `docs/DAEMON.md`.
 
-8. **The GUI's manual surface is not in the engine's permissive set.**
-   `resolve_loaded_scope` treats only `RuntimeSurface::CliManual` and
+8. **The GUI's manual surface was not in the engine's permissive set.**
+   `resolve_loaded_scope` treated only `RuntimeSurface::CliManual` and
    `RuntimeSurface::TuiManual` as permissive
-   (`crates/eggsec/src/runtime_bridge/executor.rs:70-73`). A
-   `DesktopGuiManual` session with a non-explicit scope therefore takes the
-   strict branch and **fails closed** (`:102-113`) instead of receiving the
-   default empty scope the CLI and TUI get. The GUI is documented — here and in
-   `ADR-0007` — as a permissive manual surface, so this is a **behavioural
-   divergence**, not a design choice. It is an engine-side defect in the
-   runtime bridge, outside the GUI crate, and it is not owned by any milestone
-   in this roadmap. It is recorded here so it is not lost.
+   (`crates/eggsec/src/runtime_bridge/executor.rs`). A
+   `DesktopGuiManual` session with a non-explicit scope therefore took the
+   strict branch and **failed closed** instead of receiving the default empty
+   scope the CLI and TUI get. The GUI is documented — here and in `ADR-0007` —
+   as a permissive manual surface, so this was a **behavioural divergence**, not
+   a design choice. It was an engine-side defect in the runtime bridge, outside
+   the GUI crate, and it was not owned by any milestone in this roadmap. It was
+   recorded here so it was not lost.
+   **CLOSED by milestone 006 (2026-10-24).** The defect was found while
+   executing milestone 006 and blocked its own end-to-end verification, so the
+   user directed that it be folded in. `RuntimeSurface::DesktopGuiManual` is
+   now matched with the CLI and TUI surfaces on the permissive branch, and no
+   other surface was widened — the strict surfaces still fail closed. The
+   policy crate had always classified the desktop GUI as a peer of the CLI and
+   the TUI manual surfaces; the engine's scope resolution was the outlier.
+   The regression test was demonstrated to fail before the fix.
 9. **The desktop GUI's platform qualification is honest but incomplete.**
    Milestone 007 produced the matrix, the build recipe, the prerequisite
    probe, the CI matrix job, the runbook, and the distribution handoff
    artifact — but only **one** behavioural cell is qualified (`macos` /
    Build), `macos` / Launch is partially qualified, the **Linux row is not
-   qualified** (no Linux host was executed), the behavioural cells are not
-   qualified (no window-automation driver, and milestone 006 owns the daemon
-   lifecycle the runbook otherwise has to do by hand), and `Export` is
-   `pending M6`. The milestone is therefore **conditionally closed**. The
-   evidence path for each cell is recorded in the matrix's promotion table
-   and in `docs/GUI_PLATFORM_QUALIFICATION.md`; the `gui-platform` CI job on
-   `ubuntu-latest` and `macos-latest` is what promotes a cell.
+   qualified** (no Linux host was executed), and the behavioural cells are not
+   qualified (no window-automation driver). The milestone is therefore
+   **conditionally closed**. The evidence path for each cell is recorded in the
+   matrix's promotion table and in `docs/GUI_PLATFORM_QUALIFICATION.md`; the
+   `gui-platform` CI job on `ubuntu-latest` and `macos-latest` is what
+   promotes a cell. **Milestone 006 has since removed one blocker**: the
+   daemon lifecycle the runbook otherwise had to perform by hand is now the
+   GUI's own opt-in `--daemon-bin` route, so the `Export` cell's path is
+   shorter — but the cell still needs its own evidence, and the behavioural
+   cells still need a window-automation driver.
 10. **The daemon's server still unlinks the socket path before binding.**
     Milestone 009's pre-flight liveness check refuses to displace a live
     daemon from both start paths, but the check narrows the window to a race
@@ -281,6 +311,24 @@ unaffected.
     refusing to bind over a live socket — changes the server's bind contract
     and is explicitly deferred to a separate milestone.
 
+11. **The report bridge covers only the result families with a clean
+    mapping.** Milestone 006 derives a report document from a completed task
+    result through a **pure** engine-side bridge, and it covers the families
+    whose result carries the facts the canonical report model needs — the
+    scan, pipeline, fingerprint, fuzz, and recon families, plus the wireless,
+    database-pentest, and C2 domains that already had a bridge. Every other
+    `TaskResult` variant yields **no report form** rather than a lossy
+    document, so an operator can export a report for some completed tasks and
+    not for others. A workspace-wide bridge for all thirty variants is a
+    separate corrective milestone: it is a mapping exercise, not a contract
+    change, and doing it half-way would be worse than not doing it.
+12. **The GUI's IPC surface is twelve commands.** Milestone 006 added four
+    over milestone 005's eight — the coverage table, the export, the report
+    content, and the daemon status. The command set's three pinning sites (the
+    argument-naming test, the declared-set test, and the shell's handler list)
+    move together. The surface stays narrow: no command takes a surface or a
+    scope from the webview, and the export command takes a task id, a format,
+    and an operator-chosen path — never a pre-built report.
 **Gaps closed by the delivered milestones** (recorded so the history is not
 rewritten): the parameter-schema gap and the TUI-namespaced client trait were
 closed by milestones 001 and 002 respectively; the missing GUI surface identity
@@ -564,7 +612,8 @@ opaque failure.
 Deferred work: visual refinement, accessibility conformance beyond defaults.
 
 Implementation plan: `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md`
-(**planned 2026-10-23**, `Primary class: capability`; not yet implemented).
+(**implemented 2026-10-24**, `Primary class: capability`; closure
+`plans/closure/desktop-gui-frontend/006-full-operation-coverage-and-report-export-closure.md`).
 
 Two findings recorded at plan-authoring time, because they shape what this
 milestone can deliver and they were measured rather than assumed:
@@ -584,6 +633,50 @@ The daemon-lifecycle choice this milestone owns is resolved in the plan as: the
 default remains "connect to a running daemon" with the precise start command,
 and spawn-and-supervise is **opt-in behind an operator-supplied executable path**,
 because nothing in the workspace installs `eggsec-daemon`.
+
+**What the implementation established (2026-10-24).** Both findings above were
+confirmed and closed. The daemon publishes its enabled-feature set additively,
+so the GUI can now distinguish "the daemon withholds this capability" from "the
+daemon was built without the feature", and the denial-driven fallback turns a
+live `FeatureMissing` refusal into a reported verdict that wins over every
+static one. Report data reaches the client over a new read-only command, with
+the envelope's pinned empty payload untouched. The coverage model is derived
+from what the daemon publishes — one row per published task kind — so an
+operation the engine publishes tomorrow is covered without a line being added.
+
+**Three findings the implementation produced, each recorded in the closure
+record:**
+
+- **The `DesktopGuiManual` surface was missing from the engine's permissive
+  set.** The policy crate has always classified the desktop GUI as a peer of
+  the CLI and the TUI manual surfaces; the engine's scope resolution did not,
+  so every task the GUI dispatched through the daemon-hosted executor was
+  denied. The fix is one arm in one `matches!`, and it is a user-directed
+  fold-in of a defect no milestone owned.
+- **An unknown daemon command was answered with an empty request id.** The
+  daemon deserialized the line straight into `ClientCommand`, so a command it
+  did not know was a deserialization failure answered with
+  `ErrorCode::InvalidRequest` and no request id — and because the client
+  routes responses by request id, the client waited out its 30-second
+  timeout instead of learning the command was refused. M006 adds a command
+  older daemons will not know, so this had to be fixed: the daemon now
+  answers `ErrorCode::UnsupportedCommand` with the request id echoed.
+- **The GUI's Content Security Policy forbids embedding the engine's HTML
+  document.** `frame-src 'none'` rules out a frame, and `script-src 'self'`
+  and `style-src 'self'` mean the document's inline script and style do not
+  apply. The report content is attacker-influenced — banners and service
+  names come from the target — so the CSP was **not** relaxed to make an
+  embedded document work. The GUI renders the report's structured content as
+  text in its own DOM, and the HTML format is **export-only**.
+
+**What the implementation did not deliver.** The report bridge covers the
+result families with a clean, non-lossy mapping to the canonical report
+model; every other `TaskResult` variant yields "no report form" rather than a
+lossy document, so an operator can export a report for some completed tasks
+and not for others. A workspace-wide bridge is a separate corrective
+milestone. The GUI's IPC surface grew from eight commands to twelve: the
+coverage table, the export, the report content, and the daemon status are four
+new commands, and the command set's three pinning sites moved together.
 
 ### Milestone 7 — Packaging and platform qualification
 
@@ -899,7 +992,7 @@ This roadmap is closed when:
 | 3 — Desktop GUI surface parity | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/003-desktop-gui-surface-parity.md` | `plans/closure/desktop-gui-frontend/003-desktop-gui-surface-parity-closure.md` | — |
 | 4 — GUI shell skeleton | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/004-gui-shell-skeleton.md` | `plans/closure/desktop-gui-frontend/004-gui-shell-skeleton-closure.md` | — |
 | 5 — Schema-driven forms and task dashboard | **implemented 2026-10-23** | `plans/implementation/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard.md` | `plans/closure/desktop-gui-frontend/005-schema-driven-forms-and-task-dashboard-closure.md` | — |
-| 6 — Full operation coverage and report export | **planned 2026-10-23** | `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` | — (not yet closed) | M5 (met — M5 implemented 2026-10-23) |
-| 7 — Packaging and platform qualification | **conditionally closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | `plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md` | M6 (**open** — the `Export` column is `pending M006`); outstanding operational evidence named per cell in the qualification matrix |
+| 6 — Full operation coverage and report export | **implemented 2026-10-24** | `plans/implementation/desktop-gui-frontend/006-full-operation-coverage-and-report-export.md` | `plans/closure/desktop-gui-frontend/006-full-operation-coverage-and-report-export-closure.md` | M5 (met — M5 implemented 2026-10-23) |
+| 7 — Packaging and platform qualification | **conditionally closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/007-packaging-and-platform-qualification.md` | `plans/closure/desktop-gui-frontend/007-packaging-and-platform-qualification-closure.md` | M6 (**met** — implemented 2026-10-24, so the export path exists; the `Export` cell still needs its own evidence); outstanding operational evidence named per cell in the qualification matrix |
 | 8 — Daemon feature profile and build recipe | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe.md` | `plans/closure/desktop-gui-frontend/008-daemon-feature-profile-and-build-recipe-closure.md` | — |
 | 9 — Daemon obtainability and start honesty | **closed 2026-10-23** | `plans/implementation/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty.md` | `plans/closure/desktop-gui-frontend/009-daemon-obtainability-and-start-honesty-closure.md` | — (M8 met: closed 2026-10-23) |
