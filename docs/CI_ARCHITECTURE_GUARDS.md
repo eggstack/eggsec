@@ -268,6 +268,13 @@ dated exceptions. One check keeps that state from rotting:
   parsed, the check reports the failure rather than passing because it found
   nothing, because a guard that silently passes is worse than none.
 
+### Dependency-Tool Invariants (2026-10-25, guard Check 193)
+
+`make check-deps` **is** the dependency policy, and it is decided by whichever
+`cargo-deny` the machine happens to have. One check keeps that tool honest:
+
+- The CI's **cargo-deny is one version, and not a stalled one** (Check 193): every `tool: cargo-deny` in `.github/workflows/*.yml` must name an exact `x.y.z` version, every one of those versions must be the same, and that version must be at least **0.19.9**. The uniformity is milestone 015's finding **F4** — the local tool was 0.20.2 while CI ran 0.19.0, so "a local green is not proof of a CI green" — and the floor is upstream's: cargo-deny 0.19.0's `bans` check can stop making forward progress on a runner's small thread pool (this workspace has 194 duplicated crates, each with an inclusion graph to print), leaving the job hung with no output and no error. Upstream fixed it in 0.19.9 by spawning scoped threads directly ([EmbarkStudios/cargo-deny#868](https://github.com/EmbarkStudios/cargo-deny/issues/868), PR#870). A version bump that forgets the floor is how the job hangs again, and a floating `tool: cargo-deny` decides the policy by whatever the day brought.
+
 ### Desktop-GUI Platform-Qualification Invariants (2026-10-23, guard Check 168)
 - The desktop GUI's platform qualification is machine-checked (Check 168): `docs/GUI_PLATFORM_QUALIFICATION.md` must carry a matrix with a row per platform and a cell per behaviour (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`, `Export`). Every cell must begin with one of the enumerated status tokens — `qualified`, `partially qualified`, `not qualified`, `out of scope` — and no cell may be blank or carry an unqualified support claim. The `windows` row must be `out of scope` in every column and must name `ADR-0010`, the decision that excludes it. `crates/eggsec-gui/tauri.conf.json` must keep `bundle.active` false, because the installers belong to the distribution workstream.
 

@@ -989,3 +989,70 @@ defect was in the tab, not in the contract.
   clipboard round-trip and was observed failing once across a twelve-run
   sweep. It is pre-existing, unrelated to the Intercept tab, and outside the
   change recorded here.
+
+## Addendum 2026-10-25 — finding F4 is discharged, and the tool that stalled the CI was the one this record named
+
+**Finding F4** read: "local `cargo-deny` is 0.20.2; CI installs
+`cargo-deny@0.19.0`. Reporting may differ across the version boundary
+(ordering, extra diagnostics, and in principle whether an advisory is
+surfaced at all). **A local green is not proof of a CI green.**" It was
+recorded at `low` severity, on the grounds that it might only reorder
+diagnostics.
+
+**It was worse than that, and it cost the CI a job.** After the Intercept
+repair, the deep-check job stopped at `make check-full` — but not at a test
+and not at a guard. It **hung**, with no output and no error, inside
+`cargo deny --workspace --all-features check bans`. Two runs on two
+different runners stalled at the same byte of the same dependency tree
+(the inclusion graph for `r-efi`), and the log did not move for 47 minutes
+before the run was cancelled.
+
+### Why the stall was not this milestone's code
+
+The Rust inputs to `cargo deny` are **byte-identical** between the head
+where CI's `cargo deny` completed (run `40147251811`, head `27fe3a93`) and
+the head where it hung (head `a3b40aeb`): `Cargo.lock`, every
+`Cargo.toml`, and `deny.toml` are unchanged between them, and `cargo deny`
+reads nothing else. The changed files were the workflows, the validator,
+the guard script and the docs — none of which had run yet, because
+`make check-deps` is `Makefile:179` and the architecture guards are
+`Makefile:193`.
+
+The mechanism is upstream's. cargo-deny's changelog for **0.19.9** records
+[PR#870](https://github.com/EmbarkStudios/cargo-deny/pull/870) resolving
+[#868](https://github.com/EmbarkStudios/cargo-deny/issues/868) "by spawning
+scoped threads directly, **allowing forward progress even on severely
+constrained thread pool counts**". A GitHub-hosted runner has a small core
+count, and this workspace has **194 duplicated crates**, each with an
+inclusion graph for the `bans` check to print. The 0.19.0 `bans` check
+could stop making progress there. Locally — where the tool is 0.20.2 — the
+same command finishes in about a second, every time.
+
+### What changed
+
+- **The CI pin moves from `cargo-deny@0.19.0` to `cargo-deny@0.20.2`** in all
+  three install steps (`.github/workflows/ci.yml` ×2,
+  `.github/workflows/deep-checks.yml` ×1). 0.20.2 is the version the local
+  contract has been running, so **F4's skew is gone**: the tool that
+  decides the dependency policy is now the same tool, at the same version,
+  everywhere — which is what makes a local green worth anything. The
+  advisory result is unchanged under it: `cargo deny --workspace
+  --all-features check` reports `advisories ok, bans ok, licenses ok,
+  sources ok` on this workspace with 0.20.2, so the 23 cleared advisories
+  stay cleared and the owned exceptions stay owned.
+- **Guard 193** pins both facts: every `tool: cargo-deny` must name an exact
+  version, every workflow's version must be the same, and that version must
+  be at least **0.19.9** — the release that fixed the stall. It is
+  negative-tested against four violations (drift, a version below the
+  floor, an unpinned `tool: cargo-deny`, and a missing pin).
+
+`deny.toml` is **unchanged**: the policy did not move, the tool that
+measures it did.
+
+### What this says about F4's severity
+
+F4 was filed at `low`, on the theory that a version difference could only
+reorder diagnostics. The skew did reorder diagnostics — and it also left
+CI unable to finish the dependency check at all, silently, with a green log
+and a hung job. **A tool that decides policy must be one tool at one
+version**, and the guard now says so where a version bump cannot forget it.
