@@ -19,7 +19,7 @@ through the daemon's Unix socket and nothing else.
 | Shell framework | Tauri v2, confined to this crate (`crates/eggsec-gui/src/shell.rs:3`) |
 | Frontend | Buildless: hand-written HTML, CSS, and vanilla JavaScript, **zero npm dependencies** |
 | Features | `default = ["shell"]`; the crate compiles with `--no-default-features` (`crates/eggsec-gui/Cargo.toml:24`) |
-| Enforced by | architecture guards 155–191 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, the daemon's derived capability list, the daemon endpoint's single default and bind contract, the report bridge's single coverage table, the platform qualification's procedure and promotion rules, and the operator attestation's attribution) |
+| Enforced by | architecture guards 155–192 (no engine edge, framework confinement, no second TLS stack, CSP forbids remote origins, no per-operation form code, bounded event retention, derived coverage model, remote-origin-free report display, the daemon's derived capability list, the daemon endpoint's single default and bind contract, the report bridge's single coverage table, the platform qualification's procedure and promotion rules, the operator attestation's attribution, and a CI checkout that carries the history the validator decides the attestation's binding against) |
 
 Headline crate and surface counts live in `architecture/overview.md` — point at
 it rather than restating the numbers.
@@ -544,6 +544,13 @@ signed, that carries no observation, or whose attestation names another
 platform or a commit the run does not descend from. Guard 191 pins this: no
 code path may default an operator outcome to `pass`, and the harness never
 self-attests.
+
+The commit binding is decided against the repository's history, so the
+checkout has to carry it: `git merge-base` cannot say whether one commit
+descends from another when the older commit is not there. A shallow checkout
+makes the binding **undecidable** rather than false, and the validator says
+so instead of accusing the attestation. Guard 192 pins the CI side: every
+checkout fetches the full history (`fetch-depth: 0`).
 
 ```bash
 bash scripts/gui_qualification.sh --platform macos --mode operator --socket <path> \

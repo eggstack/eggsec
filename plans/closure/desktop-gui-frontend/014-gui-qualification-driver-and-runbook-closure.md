@@ -702,3 +702,108 @@ and the matrix's macOS `Launch`, `Connect`, `Submit`, `Cancel`, `Render` and
   is still unmeasured.
 - **The Windows row is excluded by decision** (`ADR-0010`) and was not
   touched.
+
+## Addendum 2026-10-25 — the promotion validator's verdict is decided in CI, and CI could not decide it
+
+CI run **40147251811** (head `27fe3a93`) is the run that followed the
+Intercept repair. Six of its seven jobs are green — both `GUI platform`
+legs, `MSRV (1.89)`, both `Portability` legs and `Platform integration` —
+and **Deep Checks** failed again. This time not at the TUI tests, which the
+repair fixed, but at **guard 188**: the promotion validator rejected the
+matrix's seven qualified macOS cells, each with the same message:
+
+> the `macos` row's `Build` cell says `qualified`, but
+> `macos-2026-10-24-operator.md`'s `attestation` names the commit
+> `309d77d1…`, which the run (`d0cf5bc3…`) does not descend from; an
+> attestation of one run cannot be read as an attestation of another
+
+**The attestation was not the problem. The checkout was.**
+
+### What was actually wrong
+
+The validator decides the attestation's binding by asking `git merge-base`
+whether the run's commit descends from the commit the operator observed.
+`git` can only answer that when the checkout carries the history. The two
+commits are correctly ordered — `309d77d1` *is* an ancestor of `d0cf5bc3`,
+and both are on the pushed branch — but `actions/checkout` fetches the tip
+alone by default, so on a CI runner neither commit is in the object store.
+`git merge-base` exits 128 (`Not a valid commit name`), and the validator
+read that non-zero exit as "not an ancestor".
+
+So the validator reported **"cannot tell"** as **"does not descend from"**:
+a false accusation of the operator's work, caused by the checkout. The
+macOS attestation is sound, the matrix is sound, and the record's commit
+(`d0cf5bc3`) and the attested commit (`309d77d1`) are related exactly as the
+rule requires.
+
+The failure was **latent** until the Intercept repair let CI get further.
+Guard 188 runs in the *last* step of `make check`, after every test; run
+`40143483040` failed earlier, at the TUI tests, and never reached it.
+
+The reproduction is exact. A depth-1 clone of the branch produces the same
+seven problems, byte for byte, and `git fetch --unshallow` makes all seven
+disappear:
+
+```
+$ git clone --depth 1 --branch feat/auto-20261022-76692679 …
+$ python3 scripts/check_gui_qualification.py
+FAIL: … cannot say whether the run (`d0cf5bc3…`) descends from it …   # the new message
+$ git fetch --unshallow && python3 scripts/check_gui_qualification.py
+ok: …/docs/GUI_PLATFORM_QUALIFICATION.md is consistent with its evidence
+```
+
+### What changed
+
+Two changes, because the environment was at fault and the reporting was
+also wrong.
+
+**The checkout carries the history.** All nine `actions/checkout` steps
+across `.github/workflows/ci.yml` and `.github/workflows/deep-checks.yml`
+now set `fetch-depth: 0`. The rule is uniform rather than per-job on
+purpose: a job that forgets the history is exactly the failure that was
+just repaired, and the cost is a 29 MB clone instead of an 8.8 MB one.
+
+**The verdict is three-valued.** `is_ancestor` now distinguishes "is not an
+ancestor" (git exits 1) from "cannot be told" (git exits 128), and
+`commit_binding_problem` — one function, shared by the matrix's cell check
+and the record writer's own check, so both say the same thing about the same
+commit — reports the two differently. The old message for a missing commit
+is unchanged, so a genuine contradiction still reads as one. The new one
+names the cause and the remedy:
+
+> … and this checkout cannot say whether the run (`d0cf5bc3…`) descends
+> from it: the checkout is shallow and does not carry the commit's history;
+> fetch it (`git fetch --unshallow`) and check again
+
+The verdict still **fails closed**: an undecidable binding is a problem,
+not a pass. The change is to the *truthfulness* of the failure, not to its
+strictness.
+
+**Guard 192** pins the environment half, so the cause cannot come back
+unnoticed: every `actions/checkout` in the workflows must ask for the full
+history. It is negative-tested — `fetch-depth: 1` and a missing
+`fetch-depth` are both rejected, and the unmutated tree passes.
+
+### What was not changed
+
+- **The matrix was not edited.** Its "Last regenerated" commit stays
+  `d0cf5bc3`, because `check_commit` requires a cited record's commit to be
+  the matrix's commit or a descendant of it, and the macOS record and its
+  attestation are bound to `d0cf5bc3`. Bumping it would invalidate the
+  promotion until an operator re-attested.
+- **No promotion rule was weakened.** Rule P1 still requires an operator
+  outcome of `pass` for the behavioural columns, and guard 191 still holds
+  that no code path may default one.
+- **The Linux behavioural cells stay `not qualified`.** Nothing here changed
+  what a CI run can attest.
+
+### Evidence
+
+- The validator's self-test grew **five** cases that build a real shallow
+  clone (`git clone --depth 1 file://…`) and prove the three answers are
+  kept apart: a full checkout says the run descends, a shallow checkout
+  says it cannot tell, a shallow checkout is recognised as shallow, a
+  shallow checkout does not accuse the attestation of another run, and a
+  full checkout accepts it. **21 cases pass.**
+- Guard 192 is negative-tested against two injected violations.
+- `make check` is green on the branch.

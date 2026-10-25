@@ -780,6 +780,16 @@ Guard 191 pins that machinery, and pins the two things that keep it honest:
 no code path may default an operator outcome to `pass`, and the harness never
 attests for a human.
 
+**The binding is decided against the repository's history.** The validator
+asks `git merge-base` whether the run's commit descends from the commit the
+operator observed, and `git` cannot answer when the older commit is not
+there to be compared. A shallow checkout — what `actions/checkout` gives you
+by default — therefore makes the binding **undecidable**, not false, and the
+validator says exactly that instead of accusing the attestation of belonging
+to another run. The CI side is pinned by guard 192: every checkout fetches the
+full history (`fetch-depth: 0`), so the question is answerable where it is
+asked.
+
 **The harness's target is the loopback fixture** (`127.0.0.1`). The engine
 admits a loopback target only when `EGGSEC_ALLOW_LOOPBACK_FIXTURE=1` is set
 in the daemon's environment (`crates/eggsec/src/utils/parsing.rs:77`), and the

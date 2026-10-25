@@ -312,8 +312,11 @@ that produces the record (`bash scripts/gui_qualification.sh … --attestation
 <path>`), so the record has one writer and a later run cannot erase the
 attestation. The validator refuses an unattributed `pass`: a record whose
 operator outcome is `pass` with no attestation block, an empty attester, or
-no observation is rejected, and an attestation that names a platform or a
-commit the run was not made at is rejected. The runbook's procedure is
+no observation is rejected, and an attestation that names a platform, or a
+commit the run does not descend from, is rejected. The commit binding is
+decided against the repository's history, so the checkout has to carry it:
+a checkout that cannot answer says so rather than accusing the attestation,
+and an undecidable binding is still a rejection. The runbook's procedure is
 [`docs/GUI_BUILD.md`](GUI_BUILD.md) §5.8, and the file's fields are in
 [`docs/evidence/gui-qualification/TEMPLATE.md`](evidence/gui-qualification/TEMPLATE.md).
 
