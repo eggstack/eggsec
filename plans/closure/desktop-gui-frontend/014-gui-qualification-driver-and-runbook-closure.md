@@ -683,8 +683,12 @@ and the matrix's macOS `Launch`, `Connect`, `Submit`, `Cancel`, `Render` and
   attest: the `gui-platform` job has nobody to observe with, so every column
   it produces carries `operator: not-performed`, and rule P1 asks for `pass`.
   Promoting the Linux behavioural cells needs an operator at a Linux desktop.
-  The Linux **Build** cell is the one CI can carry, and only if the build
-  sidecar is committed beside the record so its digest can be re-checked.
+  The `gui-platform` job has now run on both legs (run
+  `https://github.com/eggstack/eggsec/actions/runs/40143483040`, at commit
+  `d0cf5bc3`), and the Linux record carries the scripted outcome `pass` for
+  every behavioural column — the harness measured them on Linux. The Linux
+  **Build** cell is qualified on that run, with its build sidecar committed
+  beside the record so its digest is re-checked rather than merely cited.
 - **OQ-2 and OQ-3 remain open** as they were: whether the GUI paints a window
   under a virtual display on `ubuntu-latest` is still unmeasured, and whether
   a CI macOS runner has an attachable GUI session is still unmeasured. The
