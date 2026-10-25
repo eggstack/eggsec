@@ -24,6 +24,26 @@ fn test_intercept_tab_start_stop() {
 }
 
 #[test]
+fn test_stop_session_keeps_the_end_stamp_after_the_start_stamp() {
+    // The wall clock ticks far coarser than the lifetime of a short session,
+    // so the start and end stamps can land on the same tick and render as
+    // the same RFC 3339 string. `test_intercept_tab_start_stop` only catches
+    // that when the clock happens to collide, so drive the collision directly
+    // and assert the production code repairs it.
+    let mut tab = InterceptTab::new();
+    tab.start_session();
+    let mut session = tab.session.clone().expect("session");
+    session.ended_at = session.started_at.clone();
+
+    InterceptTab::ensure_end_after_start(&mut session, Some(std::time::Duration::from_micros(250)));
+
+    assert_ne!(session.ended_at, session.started_at);
+    let started_at = chrono::DateTime::parse_from_rfc3339(&session.started_at).expect("start");
+    let ended_at = chrono::DateTime::parse_from_rfc3339(&session.ended_at).expect("end");
+    assert!(ended_at > started_at);
+}
+
+#[test]
 fn test_intercept_tab_add_flow() {
     let mut tab = InterceptTab::new();
     let flow = ProxyFlow {
