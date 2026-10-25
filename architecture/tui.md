@@ -520,7 +520,7 @@ extension allowlist → canonical root containment), not a TUI filesystem read.
 
 ### Feature-Profile Verification
 
-- `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only).
+- `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only). The sweep runs on **bash 3.2**, so it can be run on a stock macOS shell as well as on the Linux CI runner — guard Check 196 keeps the repository's scripts inside that language, because a bash-4 construct aborts the script rather than degrading it, and a sweep that cannot start is a sweep that never sees anything.
 - `make check-feature-profiles` includes the broad dependency-light TUI profile (`db-pentest,web-proxy,c2` check + lib tests) for fast cross-feature compile-drift detection between weekly deep sweeps. `eggsec-tui/full` remains a Deep Checks gate.
 - Guard 98 (`scripts/check-architecture-guards.sh`) pins these three invariants; DTO field-level contracts belong to Rust compilation and the builder semantic tests, not to grep guards.
 

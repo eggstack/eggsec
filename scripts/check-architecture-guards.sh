@@ -549,10 +549,18 @@ echo "--- Check 28: NSE registry entries have corresponding Rust modules ---"
 SECTION_FAIL=0
 # Nmap Lua library names that map to different Rust module names.
 # Format: "nmap_name:rust_module1,rust_module2"
-declare -A NSE_NAME_MAP=(
-  ["ssl"]="sslcert,openssl"
-  ["lfs"]="lfs"
-)
+#
+# A `case` function rather than an associative array: `declare -A` needs
+# bash 4, and this script must run on a stock macOS shell, where /bin/bash is
+# 3.2 and the declaration aborts the whole guard run. Guard Check 196 keeps
+# the repository's scripts free of bash-4 constructs.
+nse_rust_modules() {
+  case "$1" in
+    ssl) echo "sslcert,openssl" ;;
+    lfs) echo "lfs" ;;
+    *) echo "" ;;
+  esac
+}
 REGISTRY_NAMES=$(rg -o 'name: "[^"]*"' crates/eggsec-nse/src/resolver/registry.rs \
   | sed 's/.*name: "\([^"]*\)".*/\1/' | sort -u)
 for NAME in $REGISTRY_NAMES; do
@@ -561,7 +569,7 @@ for NAME in $REGISTRY_NAMES; do
     continue
   fi
   # Check name mapping
-  MAPPED="${NSE_NAME_MAP[$NAME]:-}"
+  MAPPED="$(nse_rust_modules "$NAME")"
   FOUND=0
   if [[ -n "$MAPPED" ]]; then
     IFS=',' read -ra MODULES <<< "$MAPPED"
@@ -7479,6 +7487,139 @@ fi
 
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: a TUI tab does not redefine a method its input macro emits."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 196. The repository's shell scripts run on a stock macOS bash.
+# Milestone 015 (the dependency advisory backlog), portability addendum.
+#
+# macOS ships bash 3.2 as /bin/bash, and that is the shell a maintainer on a
+# Mac actually runs. A bash-4 construct in a script is therefore not a
+# portability detail: it aborts the script. `scripts/check-features-individual.sh`
+# used `declare -A`, and on macOS it died with `db: unbound variable` before
+# compiling a single feature profile -- so the repository's exhaustive oracle
+# could not be run locally at all, and the one defect it would have caught
+# (a feature-gated TUI tab that did not compile) reached `main` unfixed.
+#
+# So the scripts stay inside the bash 3.2 language, and this check keeps them
+# there. It scans every shell script for the bash-4 constructs, ignoring
+# comments -- a script is allowed to *mention* the construct it refuses to
+# use.
+#
+# The check's own detection block names those constructs, so it exempts
+# itself between the sentinels below. It fails closed: a script it cannot
+# read is a failure, not a pass.
+echo ""
+echo "--- Check 196: the repository's shell scripts run on a stock macOS bash ---"
+SECTION_FAIL=0
+# >>> BASH4-SCAN EXEMPTION BEGIN (this block names the constructs it forbids)
+if ! python3 - <<'PY'
+import glob
+import os
+import re
+import sys
+
+#: The bash constructs this repository's scripts may not use, each with the
+#: release that introduced it. macOS ships bash 3.2.
+CONSTRUCTS = [
+    (re.compile(r"\bdeclare\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\blocal\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\btypeset\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\bmapfile\b"), "mapfile (bash 4.0)"),
+    (re.compile(r"\breadarray\b"), "readarray (bash 4.0)"),
+    (re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*,,"), "${var,,} case conversion (bash 4.0)"),
+    (re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\^\^"), "${var^^} case conversion (bash 4.0)"),
+    (re.compile(r"\bwait\s+-n\b"), "wait -n (bash 4.3)"),
+    (re.compile(r"\[\[\s+-v\s"), "[[ -v ]] (bash 4.2)"),
+    (re.compile(r"\bcoproc\b"), "coproc (bash 4.0)"),
+]
+
+#: The guard script exempts its own detection block: it necessarily names the
+#: constructs it forbids.
+EXEMPT_BEGIN = "# >>> BASH4-SCAN EXEMPTION BEGIN"
+EXEMPT_END = "# <<< BASH4-SCAN EXEMPTION END"
+
+
+def strip_comment(line):
+    """Remove a shell comment, respecting quotes.
+
+    A `#` only opens a comment at the start of a word and outside quotes, so
+    `echo "a#b"` and `echo '#x'` keep their `#`.
+    """
+    quote = None
+    for index, char in enumerate(line):
+        if quote is not None:
+            if char == quote:
+                quote = None
+            continue
+        if char in "'\"":
+            quote = char
+            continue
+        if char == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+    return line
+
+
+def exempt_lines(lines):
+    """0-based indices inside this file's own exemption block."""
+    exempt = set()
+    inside = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(EXEMPT_BEGIN):
+            inside = True
+            continue
+        if stripped.startswith(EXEMPT_END):
+            inside = False
+            continue
+        if inside:
+            exempt.add(index)
+    return exempt
+
+
+scripts = sorted(glob.glob("scripts/*.sh")) + sorted(glob.glob("*.sh"))
+if not scripts:
+    print("FAIL: no shell script was found to check.")
+    sys.exit(1)
+
+problems = []
+for path in scripts:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError as error:
+        print(f"FAIL: {path} could not be read: {error}")
+        sys.exit(1)
+    exempt = exempt_lines(lines)
+    for index, line in enumerate(lines):
+        if index in exempt:
+            continue
+        code = strip_comment(line)
+        for pattern, construct in CONSTRUCTS:
+            if pattern.search(code):
+                problems.append((path, index + 1, construct, code.strip()))
+
+for path, number, construct, code in problems:
+    print(f"FAIL: {path}:{number} uses {construct}: {code}")
+if problems:
+    print(
+        "FAIL: these constructs need bash 4, and macOS ships bash 3.2, where "
+        "they abort the script outright -- the repository's own per-feature "
+        "sweep could not be run locally at all. Use a `case` function or a "
+        "plain lookup instead."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# <<< BASH4-SCAN EXEMPTION END
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the repository's shell scripts run on a stock macOS bash."
 else
   FAIL=$((FAIL + 1))
 fi

@@ -294,6 +294,10 @@ make release-check
 profiles, not every possible `--all-features` combination. Exhaustive
 per-feature coverage comes from `make check-features-individual`
 (weekly/manual; missing system prerequisites are reported as SKIP, not FAIL).
+That sweep runs on bash 3.2, so it can be run from a stock macOS shell as well
+as from the Linux release host — the repository's shell scripts stay inside the
+bash 3.2 language for that reason (guard Check 196), because a bash-4
+construct aborts a script outright rather than degrading it.
 Unsupported or currently broken all-feature combinations are not release gates.
 Python wheel validation is limited to the artifacts built by the manual release
 process; cross-platform wheel production is not claimed unless it is separately

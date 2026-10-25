@@ -315,6 +315,29 @@ therefore compiled only by the per-feature sweep, which runs weekly, not per PR.
   feature-gated tab that fails to compile for any other reason — is still the
   sweep's job, and remains a known limitation of the per-PR contract.
 
+### Shell-Portability Invariants (2026-10-25, guard Check 196)
+
+macOS ships bash 3.2 as `/bin/bash`, and that is the shell a maintainer on a Mac
+actually runs. A bash-4 construct in a script is therefore not a portability
+detail: it aborts the script outright.
+
+- The repository's shell scripts **run on a stock macOS bash** (Check 196): every
+  shell script under `scripts/` and at the repository root is scanned for the
+  bash-4 constructs — associative arrays (`declare -A`, `local -A`, `typeset -A`),
+  `mapfile`, `readarray`, `${var,,}` / `${var^^}` case conversion, `wait -n`,
+  `[[ -v ]]`, `coproc` — and the check fails on any of them. It ignores comments,
+  so a script is free to *mention* the construct it refuses to use, and it
+  exempts its own detection block, which necessarily names them. It fails
+  closed: a script it cannot read is a failure, not a pass.
+
+  The check exists because of a real trap. `scripts/check-features-individual.sh`
+  used `declare -A`, and on macOS it died with `db: unbound variable` before
+  compiling a single feature profile — so the repository's exhaustive oracle
+  could not be run locally at all. That is how the defect Check 195 describes
+  reached `main` unfixed: the one check that would have seen it was the one that
+  could not start. The mapping it held is now a `case` function, which behaves
+  identically under bash 3.2 and bash 5.
+
 ### Desktop-GUI Platform-Qualification Invariants (2026-10-23, guard Check 168)
 - The desktop GUI's platform qualification is machine-checked (Check 168): `docs/GUI_PLATFORM_QUALIFICATION.md` must carry a matrix with a row per platform and a cell per behaviour (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`, `Export`). Every cell must begin with one of the enumerated status tokens — `qualified`, `partially qualified`, `not qualified`, `out of scope` — and no cell may be blank or carry an unqualified support claim. The `windows` row must be `out of scope` in every column and must name `ADR-0010`, the decision that excludes it. `crates/eggsec-gui/tauri.conf.json` must keep `bundle.active` false, because the installers belong to the distribution workstream.
 

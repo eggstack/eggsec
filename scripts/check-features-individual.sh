@@ -15,6 +15,9 @@
 #   FAIL, and reported separately in the summary.
 # - Any Rust compile failure is a FAIL and sets a non-zero exit code.
 # - Newly declared features with no sweep entry fail loudly (orphan check).
+#
+# Portability: this script runs on bash 3.2 (the version macOS ships), so it
+# uses no bash-4 construct. Guard Check 196 keeps it that way.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -65,16 +68,28 @@ for name in sorted(feats):
         print(name)
 ")
 
-declare -A ENGINE_SETS=(
-  # backend drivers are meaningful with their base domain
-  ["db-pentest-mongodb"]="db-pentest,db-pentest-mongodb"
-  ["db-pentest-mssql-tiberius"]="db-pentest,db-pentest-mssql-tiberius"
-  ["db-pentest-redis"]="db-pentest,db-pentest-redis"
-  # exposure markers compile against their base domain + tool surface
-  ["db-pentest-mcp"]="db-pentest-mcp,tool-api,rest-api"
-  ["web-proxy-mcp"]="web-proxy-mcp,tool-api,rest-api"
-  ["c2-mcp"]="c2-mcp,tool-api,rest-api"
-)
+# Companion feature sets: the minimum set needed to activate a feature
+# meaningfully (base domain first where the marker alone is a no-op path).
+# Anything not listed compiles bare.
+#
+# A `case` function rather than an associative array, on purpose: `declare -A`
+# needs bash 4, and this script has to run on a stock macOS shell, where
+# /bin/bash is 3.2 and `declare -A` aborts the whole sweep before a single
+# profile is compiled. The mapping is identical either way.
+engine_feature_set() {
+  case "$1" in
+    # backend drivers are meaningful with their base domain
+    db-pentest-mongodb) echo "db-pentest,db-pentest-mongodb" ;;
+    db-pentest-mssql-tiberius) echo "db-pentest,db-pentest-mssql-tiberius" ;;
+    db-pentest-redis) echo "db-pentest,db-pentest-redis" ;;
+    # exposure markers compile against their base domain + tool surface
+    db-pentest-mcp) echo "db-pentest-mcp,tool-api,rest-api" ;;
+    web-proxy-mcp) echo "web-proxy-mcp,tool-api,rest-api" ;;
+    c2-mcp) echo "c2-mcp,tool-api,rest-api" ;;
+    # anything else compiles bare
+    *) echo "$1" ;;
+  esac
+}
 
 # System-prerequisite-gated engine features (SKIP when the prerequisite is
 # absent; FAIL on real compile errors when present).
@@ -95,12 +110,12 @@ while IFS= read -r feat; do
     nse-ssh2)
       if ! have_libssh2; then note_skip "eggsec/$feat" "$PREREQ_NSE_SSH2"; continue; fi ;;
   esac
-  feats="${ENGINE_SETS[$feat]:-$feat}"
+  feats="$(engine_feature_set "$feat")"
   run_check "eggsec/$feat" cargo check -p eggsec --features "$feats"
 done <<< "$ENGINE_FEATURES"
 
 # Orphan guard: every engine feature must have an explicit sweep entry above.
-# ENGINE_SETS documents intentional companion sets; the case statement
+# engine_feature_set documents intentional companion sets; the case statement
 # documents prerequisite-gated features. Anything else uses the bare name.
 echo ""
 echo "--- Orphan guard: sweep covers every engine feature ---"

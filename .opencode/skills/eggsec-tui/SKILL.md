@@ -335,7 +335,10 @@ cargo check -p eggsec-tui --features full
 `make check-feature-profiles` covers the broad `db-pentest,web-proxy,c2` builders;
 `make check-features-individual` mechanically sweeps every declared TUI feature
 plus `full` (orphan guard fails if a new Cargo feature escapes the sweep).
-Guard 98 pins these invariants. TUI profiles need no system prerequisites.
+Guard 98 pins these invariants. TUI profiles need no system prerequisites. The
+sweep runs on bash 3.2, so it works from a stock macOS shell too — do not add a
+bash-4 construct to it (guard Check 196), because such a construct aborts the
+script rather than degrading it.
 
 A tab must not redefine a method the input macro it invokes already emits —
 that is a duplicate definition (E0201) and the gated feature stops compiling.
