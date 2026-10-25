@@ -799,11 +799,13 @@ history. It is negative-tested — `fetch-depth: 1` and a missing
 
 ### Evidence
 
-- The validator's self-test grew **five** cases that build a real shallow
+- The validator's self-test grew **six** cases that build a real shallow
   clone (`git clone --depth 1 file://…`) and prove the three answers are
   kept apart: a full checkout says the run descends, a shallow checkout
   says it cannot tell, a shallow checkout is recognised as shallow, a
-  shallow checkout does not accuse the attestation of another run, and a
-  full checkout accepts it. **21 cases pass.**
+  shallow checkout does not accuse the attestation of another run, a full
+  checkout accepts it, and a **record** whose own commit is missing is not
+  blamed on the attestation — `git merge-base` fails when *either* commit is
+  absent, so the message has to look at which one it was. **22 cases pass.**
 - Guard 192 is negative-tested against two injected violations.
 - `make check` is green on the branch.

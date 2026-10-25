@@ -117,9 +117,15 @@ def commit_binding_problem(
             "shallow and does not carry the commit's history; fetch it "
             "(`git fetch --unshallow`) and check again"
         )
+    if not commit_in_repository(named, repo):
+        return (
+            f"{prefix}names the commit `{named}`, which this repository does "
+            "not contain; an attestation must name a commit in this repository"
+        )
     return (
-        f"{prefix}names the commit `{named}`, which this repository does not "
-        "contain; an attestation must name a commit in this repository"
+        f"{prefix}names the commit `{named}`, but the run's own commit "
+        f"(`{recorded}`) is not one this repository contains either, so the "
+        "two cannot be compared"
     )
 
 
@@ -446,6 +452,29 @@ def history_is_shallow(repo: Optional[str] = None) -> bool:
     if completed.returncode != 0:
         return False
     return completed.stdout.decode("utf-8", "replace").strip() == "true"
+
+
+def commit_in_repository(sha: str, repo: Optional[str] = None) -> bool:
+    """Whether this repository carries the commit object.
+
+    `git merge-base` fails when *either* commit is missing, so a message that
+    names the missing one has to look: blaming the attestation for a record
+    whose own commit is absent would be the same false accusation, one step
+    sideways.
+    """
+    if not sha:
+        return False
+    try:
+        completed = subprocess.run(
+            ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+            cwd=repo or REPO_ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
 
 
 # ── The attestation ──────────────────────────────────────────────────────────
@@ -1705,6 +1734,15 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
         check_fact(
             "a full checkout accepts the attestation",
             commit_binding_problem(first, second, "the attestation ", source) is None,
+        )
+        missing_run_commit = commit_binding_problem(
+            second, "1a2b3c4d5e6f7890abcdef1234567890abcdef12", "the attestation ", source
+        )
+        check_fact(
+            "a missing run commit is not blamed on the attestation",
+            missing_run_commit is not None
+            and "run's own commit" in missing_run_commit
+            and "this repository does not contain" not in missing_run_commit,
         )
 
     if failures:
