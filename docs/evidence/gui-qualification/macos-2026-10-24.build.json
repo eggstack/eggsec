@@ -1,10 +1,10 @@
 {
   "allow_dirty": true,
   "binary": "eggsec-gui",
-  "binary_path": "/var/folders/2j/dlwhrpps66scv9bw8f7vdfg40000gq/T//eggsec-gui-qualification-42689/build/eggsec-gui",
-  "binary_sha256": "479e6c6d9814d6d7d3014ab038f0f2d83f310635e4a48d128cda73b8a72b5a6f",
-  "binary_size_bytes": 6210736,
-  "built_at_utc": "2026-10-24T20:44:06Z",
+  "binary_path": "/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T//eggsec-gui-qualification-33802/build/eggsec-gui",
+  "binary_sha256": "2a870c617c2597d3f5948aaab0dc7be79f9376fbad6b8429590c5726c00222ce",
+  "binary_size_bytes": 6210720,
+  "built_at_utc": "2026-10-24T23:52:22Z",
   "bundle_active": false,
   "bundled": false,
   "cargo_features_requested": "shell",
@@ -14,9 +14,9 @@
   ],
   "cargo_lock_sha256": "7ae228c9ce7cba21995c2b02ed64a06525be60d4e4f71582240e2628d54bf6e1",
   "cargo_version": "cargo 1.99.1 (5f94df478 2026-08-27)",
-  "commit_sha": "0f5dbb26e7ab215613e5b6e2295d9c124374bf9f",
+  "commit_sha": "d0cf5bc3b71ce4d575a3888cce390cbbc310d12b",
   "credential_env_vars_present": [],
-  "dirty": true,
+  "dirty": false,
   "notarized": false,
   "published": false,
   "rustc_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
@@ -24,5 +24,5 @@
   "schema": "eggsec-gui-build-metadata/v1",
   "signed": false,
   "target_triple": "aarch64-apple-darwin",
-  "tree_state": "dirty"
+  "tree_state": "clean"
 }
