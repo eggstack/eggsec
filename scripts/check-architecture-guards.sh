@@ -7108,6 +7108,91 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 193. The CI's dependency-policy tool is one version, and not a stalled one.
+# Milestone 015 (the dependency advisory backlog).
+#
+# `make check-deps` IS the dependency policy, and it is run by whichever
+# cargo-deny the machine happens to have. Two versions of that tool must not
+# decide the same policy: milestone 015's closure recorded the skew as
+# finding F4 -- local 0.20.2, CI 0.19.0 -- with the note that "a local green
+# is not proof of a CI green".
+#
+# The skew had teeth. cargo-deny 0.19.0's `bans` check can stop making
+# forward progress on a runner's small thread pool -- this workspace has 194
+# duplicated crates, each with an inclusion graph to print -- and the job
+# then hangs with no output and no error. Upstream fixed it in 0.19.9 by
+# spawning scoped threads directly (EmbarkStudios/cargo-deny#868, PR#870).
+#
+# So the pin must be one version across both workflows, and it must not be a
+# version that stalls. This guard names both facts, because the second one
+# is the kind of thing a version bump forgets.
+echo ""
+echo "--- Check 193: the CI's cargo-deny is one version, and not a stalled one ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import glob
+import re
+import sys
+
+#: The first cargo-deny release that cannot stall without forward progress.
+#: Upstream: EmbarkStudios/cargo-deny#868, fixed by PR#870 in 0.19.9.
+MINIMUM = (0, 19, 9)
+
+pins = []
+unpinned = []
+for path in sorted(glob.glob(".github/workflows/*.yml")):
+    with open(path, "r", encoding="utf-8") as handle:
+        for number, line in enumerate(handle.read().splitlines(), start=1):
+            if not re.search(r"tool:\s*cargo-deny\b", line):
+                continue
+            match = re.search(r"cargo-deny@(\d+)\.(\d+)\.(\d+)", line)
+            if match is None:
+                unpinned.append(f"{path}:{number}")
+                continue
+            pins.append((path, number, tuple(int(part) for part in match.groups())))
+
+if unpinned:
+    for where in unpinned:
+        print(f"FAIL: {where} installs cargo-deny without an exact version.")
+    print(
+        "FAIL: a floating cargo-deny decides the dependency policy by "
+        "whatever the day brought."
+    )
+    sys.exit(1)
+
+if not pins:
+    print("FAIL: no cargo-deny pin was found in the workflows.")
+    sys.exit(1)
+
+distinct = {version for _, _, version in pins}
+if len(distinct) > 1:
+    print(
+        "FAIL: the workflows install more than one cargo-deny ("
+        + ", ".join(sorted(".".join(str(part) for part in version) for version in distinct))
+        + "); the same tool must decide the same policy everywhere."
+    )
+    sys.exit(1)
+
+version = distinct.pop()
+if version < MINIMUM:
+    print(
+        f"FAIL: cargo-deny {'.'.join(str(part) for part in version)} can stall "
+        "without forward progress on a constrained thread pool "
+        "(EmbarkStudios/cargo-deny#868, fixed in 0.19.9)."
+    )
+    sys.exit(1)
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CI's cargo-deny is one version, and it is not a stalled one."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

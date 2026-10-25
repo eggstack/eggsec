@@ -35,7 +35,11 @@ jobs:
       - name: Install cargo-deny (SHA-pinned)
         uses: taiki-e/install-action@c02248eec042a8a90b2335f60bb37dc287b54068 # cargo-deny
         with:
-          tool: cargo-deny@0.19.0
+          # 0.20.2, and the version the local contract runs: 0.19.0's `bans`
+          # check can stall without forward progress on a runner's small
+          # thread pool (cargo-deny #868, fixed in 0.19.9), and the two
+          # versions must not decide the same policy differently.
+          tool: cargo-deny@0.20.2
       - name: Optional broad validation
         run: make check-full
       - name: Exhaustive per-feature compilation sweep
