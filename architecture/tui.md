@@ -489,7 +489,8 @@ Counts below are `#[test]` / `#[tokio::test]` attributes in source (no cargo run
 - `tabs/tab_entry_focus.rs`: per-tab entry-focus invariant
 - `app/task_management.rs`: 37 tests over feature-gated runtime request builders (db-pentest, intercept, C2, NSE) plus canonical-conversion round trips
 - `app/action_hints.rs`: 20 tests covering hint priority levels
-- Total TUI crate `src/`: **1,128** test attributes across 121 `.rs` files
+- `tabs/intercept/tests.rs`: 45 tests over the `web-proxy`-gated Intercept tab — the session lifecycle, the flow list, the detail panes and the correlation views. **This file is only compiled under the `web-proxy` feature**, so the crate's *default* build never runs it: a defect in the tab is invisible to `cargo test -p eggsec-tui --lib` and shows up only in the `db-pentest,web-proxy,c2` profile that `make check-full` exercises.
+- Total TUI crate `src/`: **1,132** test attributes across 118 `.rs` files
 
 ### Runtime Request Builders (`app/task_management.rs`)
 
@@ -601,4 +602,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-10-23 (the daemon connect now passes the TUI's own `ClientIdentity` — `ClientKind::Tui` / `eggsec-tui` / `tui-` — over the frontend-client seam; observable behaviour unchanged); earlier pass 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*
+*Last verified against source: 2026-10-25 (the §Test Counts totals were re-measured against source after the Intercept tab's session-stamp and focus-contract repair added one test attribute — the total was already stale at 1,128 / 121 files against a tree that carried 1,131 / 118, and now reads 1,132 / 118; the seven per-file counts listed above were re-measured and remain correct, and `tabs/intercept/tests.rs` is now listed, with the note that the `web-proxy`-gated tab's tests are invisible to the default build); earlier pass 2026-10-23 (the daemon connect now passes the TUI's own `ClientIdentity` — `ClientKind::Tui` / `eggsec-tui` / `tui-` — over the frontend-client seam; observable behaviour unchanged); earlier pass 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*
