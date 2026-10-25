@@ -1134,3 +1134,114 @@ first sentence taught: the mechanism was inferred rather than measured. A
 control that isolates one variable at a time — the shallow-control branch, in
 this case — is what turns a plausible story into a proven one. The version
 bump was the right repair for F4, and it was tested against the wrong variable.
+
+## Addendum 2026-10-25 — the sweep ran, and found a defect that had been on `main` since before this branch
+
+With the cargo-deny stall fixed, Deep Checks run `40174833849` (head
+`a0bc32b3`) got **past** `make check-full` — step 7 completed successfully,
+guards and all — and failed at step 8, `make check-features-individual`, with
+two failing profiles:
+
+```
+FAIL: eggsec-tui/vuln-management
+FAIL: eggsec-tui/full
+PASS: 90   SKIP: 0   FAIL: 2
+```
+
+### The defect
+
+```
+error[E0201]: duplicate definition
+  --> crates/eggsec-tui/src/tabs/vuln.rs:477:5
+   |
+477 |     fn ensure_input_focus(&mut self) {
+   |  _____^
+   |  |
+   |  previous definition here
+   |  |
+   |  in this macro invocation
+   |  ::: crates/eggsec-tui/src/tabs/mod.rs:663:5
+   |  item in trait
+   |
+   = note: this error originates in the macro `tab_input_custom`
+```
+
+`crates/eggsec-tui/src/tabs/vuln.rs` wrote `ensure_input_focus` out by hand
+**and** invoked `tab_input_custom!`, which emits `ensure_input_focus`. Two
+definitions of one method in one `impl` block is E0201, so the
+`vuln-management` feature did not compile **at all**.
+
+### It was not introduced by this branch
+
+`crates/eggsec-tui/src/tabs/{mod.rs, macros.rs, vuln.rs}` are byte-identical
+between `main` and this branch's head (`git diff --stat main HEAD` over those
+three files is empty), and `main`'s copy has the same duplicate. The defect
+entered with commit `c66f0943` ("fix(tui): kill two dead-input paths that made
+tabs look frozen"), which is on `main` — that commit added
+`ensure_input_focus` to the `tab_input_custom!` macro and left `vuln.rs`'s
+hand-written copy in place. `main` has not compiled `--features
+vuln-management` since.
+
+### Why no fast check saw it
+
+`make check` builds `eggsec-tui` with **default features**, and `eggsec-tui`'s
+`default` is `[]`. `tabs/vuln.rs` is behind `#[cfg(feature =
+"vuln-management")]`, so no tab module is compiled by the per-PR contract at
+all. The per-feature sweep is the oracle that does compile them, and it runs
+weekly or on demand — and it could not run, because the deep-check job hung
+in `cargo deny` before it ever reached the sweep.
+
+So the stall was not only a stall: it was a stall **hiding a compile failure
+that had been on `main` the whole time**.
+
+### The fix
+
+The hand-written `ensure_input_focus` is removed from `tabs/vuln.rs`; the
+macro's stands. The two were behaviourally identical, so nothing changes:
+`core::ensure_first_field_focused(&mut core)` is exactly
+`core::ensure_group_field_focused(&mut core.inputs)`, and `TabCore` owns
+precisely one input group (`inputs`). The comment left in `vuln.rs` records
+why.
+
+Verified: `cargo check -p eggsec-tui --features vuln-management` (16 s) and
+`cargo check -p eggsec-tui --features full` (1 m 57 s) both compile clean.
+
+**A note on running the sweep locally.** `scripts/check-features-individual.sh`
+declares its companion feature sets with `declare -A`, which needs **bash 4**;
+macOS ships `/bin/bash` 3.2, where that line aborts the script with
+`db: unbound variable` before a single profile is compiled. The script is
+correct as written and CI runs it on Linux (bash 5), but it cannot be run
+locally on a stock macOS shell. The local verification quoted above was done
+with a temporary copy of the script in which the associative array was
+replaced by an equivalent `case` function — the repository's own script was
+**not** modified. (The sibling guard script has the same `declare -A`, but it
+sits inside a block that is skipped when `crates/eggsec-nse` is absent, so
+the guard script itself does run under bash 3.2.)
+
+### Guard Check 195 — the class, not the instance
+
+The check compares each `impl TabInput for ...` block's hand-written methods
+against the methods the macros that block invokes actually emit, and fails on
+the intersection. It parses `tabs/macros.rs` for each `macro_rules!` body's
+`fn` names, so it tracks the macros rather than a hand-kept list of them. A
+tab that invokes no macro cannot collide, and a tab that defines a method no
+invoked macro emits is fine — only the overlap is a defect.
+
+It is negative-tested against four collisions (the real one in `vuln.rs`; a
+second method of the same macro; `hunt.rs` redefining a method
+`tab_input_boilerplate!` emits; `fingerprint.rs` redefining one
+`tab_escape!` emits) and against three cases that must **not** trip it (a tab
+that invokes no macro at all; a tab keeping a method its macro does not emit;
+a tab defining a method no macro emits). The embedded guard was negative-tested
+on the real tree with `cp` backups, never `git checkout --`.
+
+### What this does not close
+
+The wider gap is unchanged and is recorded rather than papered over: **a
+feature-gated TUI tab that fails to compile for any other reason is still only
+seen by the weekly sweep**, because `make check` builds the TUI with default
+features. Check 195 narrows the gap to the class that actually bit; it does
+not close it. Closing it properly means compiling the TUI under its feature
+aggregates inside the per-PR contract, which costs the engine a full-feature
+build on every push — a cost worth deciding deliberately, not paying by
+accident in a deep check that runs weekly.
