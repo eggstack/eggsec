@@ -883,3 +883,109 @@ coverage-set correction in `crates/eggsec-tui/src/parity.rs`, which adds
 tab's focus or session timing. The defect is therefore **pre-existing on
 `main`** and is not caused by this milestone; this milestone's effect on it is
 that the repository's CI can now reach the step that sees it.
+
+## Addendum 2026-10-25 — the Intercept defect is repaired
+
+The addendum above recorded the exposure: the dependency-policy job's red
+status on `main` had been hiding a latent defect in the TUI's Intercept tab,
+and once the advisory backlog was cleared the deep-check job reached the
+`db-pentest,web-proxy,c2` TUI profile and failed it. CI run **40143483040**
+is that run — every job green except **Deep Checks**, which failed at
+`crates/eggsec-tui/src/tabs/intercept/tests.rs:23`,
+`crates/eggsec-tui/src/tabs/mid_run_navigation.rs:76` and
+`crates/eggsec-tui/src/tabs/tab_entry_focus.rs:70`. That run is the exposure
+made concrete.
+
+**The defect is now fixed.** The branch that exposed it repairs it, so the
+exposure does not become a hand-off to someone else.
+
+### What was actually wrong
+
+Two independent root causes, not one.
+
+**The session timestamp.** `InterceptSession::new` pre-fills `ended_at` with
+the *same* stamp as `started_at`, and `finalize` re-stamps `ended_at` from
+`chrono::Utc::now()`. `InterceptTab::start_session` and `stop_session` call
+those back to back, and this host's wall clock ticks far coarser than that
+gap: 2000 consecutive `CLOCK_REALTIME` reads produced only **122 distinct
+values** (94% of consecutive reads identical), while the monotonic clock
+produced 1952. Both stamps therefore land on the same tick and render as the
+same RFC 3339 string, so a session that ran reported a zero-length interval.
+This is why the failure is timing-dependent and why CI run 40143483040
+showed `test_intercept_tab_start_stop ... ok` where the same profile fails
+locally — the defect is real on both, the clock only decides whether the
+collision is visible.
+
+**The focus contract.** `InterceptTab::is_input_focused()` was a hard-coded
+`false` and the tab never implemented `ensure_input_focus()`, so it fell
+through to the trait's default no-op (`crates/eggsec-tui/src/tabs/mod.rs:663`).
+The app therefore held the tab in Normal mode, where the *global* shortcuts
+own the printable keys: `r` reset the tab, `p` jumped to the previous tab and
+the digits jumped tabs, while the tab's own bindings (`r` toggles the rule
+view, `p` toggles performance mode, `/` opens the filter) and the edit
+modal's text entry were unreachable. The tab also lacked the
+`#[cfg(test)] fn set_state` hook every other tab has
+(`crates/eggsec-tui/src/tabs/cluster.rs:205`), so the mid-run guard could not
+even establish its `Running` precondition.
+
+Why the siblings differ: commit `c66f0943` ("kill two dead-input paths")
+gave eighteen tabs `ensure_input_focus` plus a selector-aware
+`is_input_focused`. The Intercept tab was skipped because it is
+`web-proxy`-gated and the guard suite only ran in the default build — the
+same blind spot that let the audit commit `8ecd17a9` miss it.
+
+### What changed
+
+`crates/eggsec-tui/src/tabs/intercept/mod.rs` only, plus one test:
+
+- `start_session` records a monotonic `std::time::Instant`; `stop_session`
+  keeps the wall-clock end when it is strictly later and otherwise re-stamps
+  the end from the monotonic measurement, with a one-millisecond floor. A
+  session that ran can no longer record an equal start and end.
+- `ensure_input_focus()` focuses the flow list — this tab's selector — unless
+  a text surface owns the focus, and `is_input_focused()` reports the flow
+  list, plus the filter prompt and the edit modal while they are open. This
+  is the shape the selector-first siblings (Proxy, Cluster, Report, Packet)
+  already use.
+- `handle_char` passes `j`/`k` through to the flow list while it is focused,
+  so the list stays drivable now that the tab owns the focus (the arrows
+  already worked in both modes).
+- `impl TabState` gains the `#[cfg(test)] fn set_state` hook.
+
+`crates/eggsec-tui/src/tabs/intercept/tests.rs` gains **one** test,
+`test_stop_session_keeps_the_end_stamp_after_the_start_stamp`, which drives
+the clock collision directly and so proves the guarantee deterministically
+rather than waiting for the wall clock to collide.
+
+**No existing test was changed, weakened or deleted.** The two shared guard
+files (`crates/eggsec-tui/src/tabs/mid_run_navigation.rs`,
+`crates/eggsec-tui/src/tabs/tab_entry_focus.rs`) and
+`crates/eggsec-tui/src/tabs/mod.rs` are untouched — zero lines — because the
+defect was in the tab, not in the contract.
+
+### Evidence
+
+- `cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast`
+  → **1074 passed; 0 failed** (1073 tests before, plus the new one; the run
+  that failed here before the fix reported 1070 passed and 3 failed).
+- `make check` → **exit 0** — 4315 tests across 77 test binaries with no
+  failures, `cargo deny --workspace --all-features check` green on all five
+  sub-checks, clippy clean, `cargo fmt --all --check` clean, and
+  `scripts/check-architecture-guards.sh` reporting **191 guards** with
+  "ALL PASSED: No architecture drift detected".
+
+### Residuals, stated rather than left implicit
+
+- The engine carries pre-existing clippy debt that surfaces only when the
+  TUI is linted under a feature profile — `crates/eggsec/src/dispatch/db_pentest.rs:5`
+  (`too_many_arguments`) and
+  `crates/eggsec/src/dispatch/canonical_execution.rs:1119` (`useless_format`),
+  both behind `#[cfg(feature = "db-pentest")]`. `make check`'s lint
+  invocation (`cargo clippy -p eggsec-tui -- -D warnings`, default features)
+  is clean, and `make check-full` runs `cargo check`, not `cargo clippy`, for
+  that profile — so the contract is unaffected. The debt is tracked
+  separately and is not this milestone's to clear.
+- `crates/eggsec-tui/src/utils/clipboard.rs:103` performs a real macOS
+  clipboard round-trip and was observed failing once across a twelve-run
+  sweep. It is pre-existing, unrelated to the Intercept tab, and outside the
+  change recorded here.
