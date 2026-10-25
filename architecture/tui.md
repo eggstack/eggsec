@@ -524,6 +524,24 @@ extension allowlist → canonical root containment), not a TUI filesystem read.
 - `make check-feature-profiles` includes the broad dependency-light TUI profile (`db-pentest,web-proxy,c2` check + lib tests) for fast cross-feature compile-drift detection between weekly deep sweeps. `eggsec-tui/full` remains a Deep Checks gate.
 - Guard 98 (`scripts/check-architecture-guards.sh`) pins these three invariants; DTO field-level contracts belong to Rust compilation and the builder semantic tests, not to grep guards.
 
+**The tab modules are feature-gated, and the mandatory contract does not build
+them.** `make check` builds `eggsec-tui` with default features, which is
+`[]` — so a tab module behind `#[cfg(feature = "...")]` is compiled only by the
+per-feature sweep, which runs weekly (or on demand), not per PR. That gap is
+real and it is why a defect could sit on `main` undetected: `tabs/vuln.rs`
+defined `ensure_input_focus` by hand *and* invoked `tab_input_custom!`, which
+emits `ensure_input_focus`. That is a duplicate definition (E0201), so the
+`vuln-management` feature did not compile at all — and no fast check built it.
+
+**Guard Check 195** narrows that gap to the class that actually bit. It
+compares each `impl TabInput for ...` block's hand-written methods against the
+methods the macros that block invokes really emit, and fails when the two
+overlap. A tab that invokes no macro cannot collide; a tab that defines a
+method no invoked macro emits is fine; only the intersection is a defect. The
+rest of the gap — a feature-gated tab that fails to compile for any other
+reason — is still the sweep's job, and that remains a known limitation of the
+per-PR contract rather than something this check closes.
+
 ### Regression Test Harness (`tabs/handle_enter_regression.rs`)
 
 40 tests validate `handle_enter()` across all focus areas for 12 tabs: focused input blurs without starting, unfocused input with valid target starts, options toggle without starting, results area is no-op. They are written per tab rather than table-driven, because each tab has its own focus-area enum.

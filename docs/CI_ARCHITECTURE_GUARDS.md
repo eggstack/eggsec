@@ -286,6 +286,35 @@ and keep it finishing:
 > guarded separately, by Check 194. Milestone 015's closure record carries the same
 > correction as a dated addendum.
 
+### TUI Feature-Gate Invariants (2026-10-25, guard Check 195)
+
+The TUI's tab modules are feature-gated and `make check` builds `eggsec-tui` with
+default features — which is `[]`. A tab module behind `#[cfg(feature = "...")]` is
+therefore compiled only by the per-feature sweep, which runs weekly, not per PR.
+
+- A TUI tab **does not redefine a method its own input macro emits** (Check 195): for
+  every `impl TabInput for ...` block under `crates/eggsec-tui/src/tabs/`, the
+  hand-written method names are compared against the methods the macros that block
+  invokes actually emit, and the check fails on the intersection. It parses
+  `tabs/macros.rs` for each `macro_rules!` body's `fn` names, so it tracks the
+  macros rather than a hand-kept list of them. A tab that invokes no macro cannot
+  collide, and a tab that defines a method no invoked macro emits is fine — only
+  the overlap is a defect. It fails closed: if the macros file cannot be read or no
+  macro is found in it, the check reports the failure rather than passing because
+  it found nothing.
+
+  The check exists because of a real defect that survived on `main`:
+  `crates/eggsec-tui/src/tabs/vuln.rs` defined `ensure_input_focus` by hand *and*
+  invoked `tab_input_custom!`, which emits `ensure_input_focus`. That is a duplicate
+  definition (E0201), so the `vuln-management` feature did not compile at all — and
+  no fast check built it. The defect had been present since commit `c66f0943`; the
+  weekly sweep was the only thing that could see it, and it could not run until the
+  cargo-deny stall was fixed (Check 194).
+
+  The check narrows the gap to the class that actually bit. The wider gap — a
+  feature-gated tab that fails to compile for any other reason — is still the
+  sweep's job, and remains a known limitation of the per-PR contract.
+
 ### Desktop-GUI Platform-Qualification Invariants (2026-10-23, guard Check 168)
 - The desktop GUI's platform qualification is machine-checked (Check 168): `docs/GUI_PLATFORM_QUALIFICATION.md` must carry a matrix with a row per platform and a cell per behaviour (`Build`, `Launch`, `Connect`, `Submit`, `Cancel`, `Render`, `Export`). Every cell must begin with one of the enumerated status tokens — `qualified`, `partially qualified`, `not qualified`, `out of scope` — and no cell may be blank or carry an unqualified support claim. The `windows` row must be `out of scope` in every column and must name `ADR-0010`, the decision that excludes it. `crates/eggsec-gui/tauri.conf.json` must keep `bundle.active` false, because the installers belong to the distribution workstream.
 

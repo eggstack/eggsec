@@ -7267,6 +7267,222 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 195. A TUI tab does not redefine a method its own input macro already emits.
+# Milestone 015 (the dependency advisory backlog), correction addendum.
+#
+# The TUI's tab modules are feature-gated, and `make check` builds the TUI
+# with default features -- so no feature-gated tab module is compiled by the
+# per-PR contract. The weekly per-feature sweep is the oracle that does
+# compile them, and when the sweep finally ran past the cargo-deny stall it
+# found this: `crates/eggsec-tui/src/tabs/vuln.rs` defined
+# `ensure_input_focus` by hand *and* invoked `tab_input_custom!`, which emits
+# `ensure_input_focus`. That is a duplicate definition (E0201), so the
+# `vuln-management` feature did not compile at all -- a defect that had been
+# on `main` since commit c66f0943 and had never been built by any fast check.
+#
+# This check makes the collision statically visible, so it cannot survive
+# another sweep cycle. It compares each `impl TabInput for ...` block's
+# hand-written methods against the methods the macros that block invokes
+# actually emit. A tab that invokes no macro cannot collide, and a tab that
+# defines a method no invoked macro emits is fine -- only the intersection
+# is a defect.
+#
+# It fails closed: if the macros file cannot be read or parsed, the check
+# reports the failure rather than passing because it found nothing.
+echo ""
+echo "--- Check 195: a TUI tab does not redefine a method its input macro emits ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import os
+import re
+import sys
+
+TABS_DIR = "crates/eggsec-tui/src/tabs"
+MACROS = os.path.join(TABS_DIR, "macros.rs")
+
+#: A Rust char literal. Rust lifetimes ('a) are not char literals, so a `'`
+#: only opens one when this shape actually matches.
+CHAR_LITERAL = re.compile(r"'(\\.|[^\\'])'")
+
+
+def strip_noise(text):
+    """Blank out comments and string/char literals, preserving offsets."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                out[i] = " "
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            depth = 1
+            out[i] = out[i + 1] = " "
+            i += 2
+            while i < n and depth:
+                if text[i] == "/" and i + 1 < n and text[i + 1] == "*":
+                    depth += 1
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                elif text[i] == "*" and i + 1 < n and text[i + 1] == "/":
+                    depth -= 1
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                else:
+                    if text[i] != "\n":
+                        out[i] = " "
+                    i += 1
+            continue
+        if ch == '"':
+            i += 1
+            while i < n:
+                if text[i] == "\\":
+                    out[i] = " "
+                    i += 1
+                    if i < n:
+                        out[i] = " "
+                        i += 1
+                    continue
+                if text[i] == '"':
+                    out[i] = " "
+                    i += 1
+                    break
+                if text[i] != "\n":
+                    out[i] = " "
+                i += 1
+            continue
+        if ch == "'":
+            match = CHAR_LITERAL.match(text, i)
+            if match is not None:
+                for j in range(match.start(), match.end()):
+                    out[j] = " "
+                i = match.end()
+                continue
+            i += 1
+            continue
+        i += 1
+    return "".join(out)
+
+
+def match_brace(text, start):
+    """Index of the `}` closing the `{` at `start`."""
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def read(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return strip_noise(handle.read())
+
+
+def macro_methods(path):
+    """Map macro name -> the set of method names its body emits."""
+    text = read(path)
+    emitted = {}
+    for match in re.finditer(r"macro_rules!\s+(\w+)\s*\{", text):
+        end = match_brace(text, match.end() - 1)
+        if end < 0:
+            continue
+        emitted[match.group(1)] = set(
+            re.findall(r"\bfn\s+(\w+)\s*\(", text[match.end():end])
+        )
+    return emitted
+
+
+def impl_blocks(text):
+    """Yield (type name, body) for each `impl TabInput for X { ... }`."""
+    for match in re.finditer(r"impl\s+TabInput\s+for\s+(\w+)\s*\{", text):
+        end = match_brace(text, match.end() - 1)
+        if end < 0:
+            continue
+        yield match.group(1), text[match.end():end]
+
+
+def top_level_items(body):
+    """(hand-written fn names, invoked macro names) at the impl block's level."""
+    depth = 0
+    fns, macros = set(), set()
+    pattern = r"[{}]|\bfn\s+(\w+)\s*\(|\b(\w+)!\s*[({]"
+    for match in re.finditer(pattern, body):
+        token = match.group(0)
+        if token == "{":
+            depth += 1
+            continue
+        if token == "}":
+            depth -= 1
+            continue
+        if depth != 0:
+            continue
+        if match.group(1):
+            fns.add(match.group(1))
+        elif match.group(2):
+            macros.add(match.group(2))
+    return fns, macros
+
+
+try:
+    emitted = macro_methods(MACROS)
+except OSError as error:
+    print(f"FAIL: {MACROS} could not be read: {error}")
+    sys.exit(1)
+
+if not emitted:
+    print(f"FAIL: no macro was found in {MACROS}; the comparison cannot be made.")
+    sys.exit(1)
+
+collisions = []
+for root, _dirs, files in os.walk(TABS_DIR):
+    for name in sorted(files):
+        if not name.endswith(".rs"):
+            continue
+        path = os.path.join(root, name)
+        try:
+            text = read(path)
+        except OSError as error:
+            print(f"FAIL: {path} could not be read: {error}")
+            sys.exit(1)
+        for type_name, body in impl_blocks(text):
+            fns, macros = top_level_items(body)
+            for macro in sorted(macros):
+                if macro not in emitted:
+                    continue
+                for method in sorted(fns & emitted[macro]):
+                    collisions.append((path, type_name, macro, method))
+
+for path, type_name, macro, method in collisions:
+    print(
+        f"FAIL: {path}: `impl TabInput for {type_name}` defines `{method}` and "
+        f"also invokes `{macro}!`, which emits it."
+    )
+if collisions:
+    print(
+        "FAIL: a tab that redefines a method its own input macro emits is a "
+        "duplicate definition (E0201). The feature-gated tab module does not "
+        "compile, and `make check` does not build the TUI with that feature, "
+        "so only the per-feature sweep sees it."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: a TUI tab does not redefine a method its input macro emits."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

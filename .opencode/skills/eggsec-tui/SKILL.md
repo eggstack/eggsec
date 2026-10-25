@@ -337,6 +337,13 @@ cargo check -p eggsec-tui --features full
 plus `full` (orphan guard fails if a new Cargo feature escapes the sweep).
 Guard 98 pins these invariants. TUI profiles need no system prerequisites.
 
+A tab must not redefine a method the input macro it invokes already emits —
+that is a duplicate definition (E0201) and the gated feature stops compiling.
+The tab modules are feature-gated and `make check` builds the TUI with default
+features (`[]`), so only the sweep compiles them; guard Check 195 now catches
+this class statically. Prefer the macro's method over a hand-written copy, or
+drop the macro.
+
 ### Visual Regression Tests
 ```rust
 // Tests only: TestBackend never touches the real terminal, so it is exempt
