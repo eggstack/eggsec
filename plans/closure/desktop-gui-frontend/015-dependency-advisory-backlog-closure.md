@@ -838,3 +838,48 @@ owner applies these):
 - Optionally carry the §11 refinement that 3 of the "7 policy-blocked"
   entries were in fact upgradable (`zip`), so the amended arithmetic reads
   9 refreshed + 3 upgraded + 11 excepted = 23.
+
+## Addendum 2026-10-24 — finding F3 discharged, and what clearing the advisories exposed
+
+**F3 is discharged.** The session owner ran the integration contract over the
+tree with all four milestones landed: `make check` exits **0** — 4315 tests
+across 77 test binaries with no failures, `cargo deny --workspace
+--all-features check` green on all five sub-checks, clippy clean, `cargo fmt
+--all --check` clean, and `scripts/check-architecture-guards.sh` reporting
+**191 guards** with "ALL PASSED: No architecture drift detected". `make
+check-msrv` also exits 0 on Rust 1.89. The finding said the contract was the
+owner's step and was not proven by this record; it is proven now.
+
+**What clearing the advisory backlog exposed.** The dependency-policy CI job
+was red on `main` for exactly the backlog this milestone cleared, so `main`'s
+scheduled runs never got past `cargo deny` and never reached the later steps
+of the deep-check job. With the backlog cleared, the CI run gets further — and
+finds a latent defect that had been sitting behind it.
+
+The defect is in the **TUI's Intercept tab**, the tab gated on the `web-proxy`
+cargo feature. The crate's *default* feature build never compiles that tab, so
+the default-build test suite is green; the
+`db-pentest,web-proxy,c2` profile that `make check-full` exercises
+(`Makefile:273`) compiles it, and three tests fail:
+
+- `tabs::intercept::tests::test_intercept_tab_start_stop` — the session's
+  `ended_at` equals its `started_at`;
+- `tabs::mid_run_navigation::navigation_never_focuses_an_input_while_a_task_is_running`
+  — the Intercept tab's focus ring does not start on an input field;
+- `tabs::tab_entry_focus::entering_a_tab_leaves_a_drivable_control_focused`
+  — entering the Intercept tab leaves no control focused, so a keystroke
+  typed there is discarded.
+
+The second and third are usability defects rather than test bugs, and they
+are the exact defect class the Intercept tab's own audit commit
+(`8ecd17a9`, "resolve usability audit — crash, stuck state, dead affordances,
+discarded input") was meant to close: the audit's tests ran without the
+`web-proxy` feature, so the tab was never in the set they checked.
+
+**Attribution.** `8ecd17a9` is an ancestor of `origin/main`, and no commit on
+this branch touched the Intercept tab — the branch's only TUI change is the
+coverage-set correction in `crates/eggsec-tui/src/parity.rs`, which adds
+`packet-capture` to the set of operations a tab drives and cannot affect a
+tab's focus or session timing. The defect is therefore **pre-existing on
+`main`** and is not caused by this milestone; this milestone's effect on it is
+that the repository's CI can now reach the step that sees it.
