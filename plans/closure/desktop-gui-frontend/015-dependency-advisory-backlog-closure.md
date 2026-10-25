@@ -1056,3 +1056,81 @@ reorder diagnostics. The skew did reorder diagnostics — and it also left
 CI unable to finish the dependency check at all, silently, with a green log
 and a hung job. **A tool that decides policy must be one tool at one
 version**, and the guard now says so where a version bump cannot forget it.
+
+## Addendum 2026-10-25 — correction: the stall is in the inclusion graph, not in the thread pool
+
+The addendum above attributed the CI stall to cargo-deny 0.19.0's thread-pool
+starvation ([#868](https://github.com/EmbarkStudios/cargo-deny/issues/868)).
+**That attribution was wrong, and it is corrected here.** The version pin it
+introduced stands; the reason it was given does not.
+
+### What was wrong
+
+The mechanism was inferred, not measured. The reasoning ran: the runner has a
+small core count, the workspace duplicates many crates, cargo-deny 0.19.0 had a
+known thread-pool bug, therefore 0.19.0 stalls on the runner. Each step was
+individually reasonable and the conclusion was wrong, because the version bump
+was tested against a **shallow checkout** and the two variables were never
+separated. Three pieces of evidence now contradict it:
+
+- **The bump did not fix the stall.** Run `40171863049`, on head `baff6b83` —
+  the head that carries the `cargo-deny@0.20.2` pin — stalled in exactly the
+  same place, inside `check bans`, printing the inclusion graph for `r-efi`.
+- **A control branch separated the variables.** Branch `diag/shallow-control`
+  (head `0444ee30`) reverted *only* `fetch-depth: 0`, keeping the 0.20.2 pin,
+  and run `40173075883` stalled at the same crate. The checkout depth is not
+  the cause; the version is not the cause.
+- **The stall site is the graph, not the pool.** `cargo deny --workspace
+  --all-features check` prints 15,254 lines, of which 14,539 are
+  inclusion-graph trees. With `--hide-inclusion-graph` the same command prints
+  715 lines and finishes. The warnings and the verdicts are identical either
+  way: the same **98** crates flagged as duplicated, and the same four
+  verdicts (`advisories ok, bans ok, licenses ok, sources ok`). The stall was
+  in the rendering of those trees, in a cyclic subtree; it was never in the
+  thread pool.
+
+  (The earlier addendum's "194 duplicated crates" was itself imprecise. The
+  reproducible figure is **98** crates that `bans` flags as duplicated; the
+  CI logs show a larger *line* count only because the `Makefile` runs both
+  `check` and `check bans`, so each warning is printed twice.)
+
+### What changed
+
+- **All five `cargo deny` invocations in the `Makefile` now pass
+  `--hide-inclusion-graph`.** The flag removes the rendering path that
+  stalled; it changes no warning and no verdict, so the policy result is
+  untouched. `deny.toml` is **unchanged**: the policy did not move, and
+  neither did what the policy says.
+- **Guard 194** names the flag: every `cargo deny` invocation in the `Makefile`
+  must pass `--hide-inclusion-graph`, as an exact token. It is negative-tested
+  against six violations — the flag dropped from the first, a middle and the
+  last invocation, the flag misspelled two ways (`--hide-inclusion-graphs`,
+  `--hide-inclusiongraph`), and the invocation removed altogether. The token
+  test matters: a substring test waves `--hide-inclusion-graphs` through.
+- **Guard 193's floor is re-grounded**, from 0.19.9 to **0.20.2**. The floor no
+  longer claims to prevent a stall — no version prevents it — it now says what
+  it actually enforces: CI must not fall behind the version the local contract
+  runs, so the same tool decides the same policy everywhere. That is finding
+  **F4**'s own content, and it is unchanged by this correction.
+
+### What did not change
+
+The **version pin stays at `cargo-deny@0.20.2`**, on F4's own terms and not as a
+stall fix. The skew was real: the local tool was 0.20.2 while CI ran 0.19.0,
+so "a local green is not proof of a CI green" was true before this work and is
+false now. The version bump discharges F4; the flag ends the stall. They are
+two different repairs, and the earlier addendum conflated them.
+
+### What this says about F4's severity
+
+F4 was filed at `low`, on the theory that a version difference could only
+reorder diagnostics. The skew did reorder diagnostics — and it also left CI
+unable to finish the dependency check at all, silently, with a green log and a
+hung job. **A tool that decides policy must be one tool at one version**, and
+the guard now says so where a version bump cannot forget it.
+
+The correction carries its own lesson, and it is the one this record's own
+first sentence taught: the mechanism was inferred rather than measured. A
+control that isolates one variable at a time — the shallow-control branch, in
+this case — is what turns a plausible story into a proven one. The version
+bump was the right repair for F4, and it was tested against the wrong variable.
