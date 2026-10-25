@@ -1245,3 +1245,64 @@ not close it. Closing it properly means compiling the TUI under its feature
 aggregates inside the per-PR contract, which costs the engine a full-feature
 build on every push — a cost worth deciding deliberately, not paying by
 accident in a deep check that runs weekly.
+
+## Addendum 2026-10-25 — the sweep is now runnable on a stock macOS shell
+
+The addendum above recorded that `scripts/check-features-individual.sh` could
+not be run locally: it declares its companion feature sets with `declare -A`,
+which needs **bash 4**, and macOS ships `/bin/bash` 3.2, where that line
+aborts the script with `db: unbound variable` before a single profile is
+compiled. It also recorded that the local verification had been done with a
+temporary copy of the script rather than the repository's own.
+
+**That temporary transformation is now the repository's own.** The associative
+array is replaced by a `case` function, `engine_feature_set`, with the same six
+mappings and the same default (the bare feature name). The sweep runs
+unchanged on bash 3.2 and on bash 5 — verified locally on 3.2 with **92 passed,
+0 skipped, 0 failed**, the same result CI produced on bash 5. So the statement
+that "the repository's own script was not modified" describes how the
+verification was done at the time; the script now carries that transformation
+itself.
+
+### The sibling script had the same trap
+
+`scripts/check-architecture-guards.sh` also used `declare -A` — for
+`NSE_NAME_MAP`, the Nmap-library-to-Rust-module mapping. There it sat inside a
+block that only runs when `crates/eggsec-nse` is present, which is why the
+guard script itself never aborted on macOS in this tree. But that block exists
+precisely so that "branches that still carry the local crate" keep the
+historical checks — and on such a branch, on a Mac, the guard script would
+abort at the declaration. It is now a `case` function too (`nse_rust_modules`),
+with the same two mappings and the same empty default that
+`${NSE_NAME_MAP[$NAME]:-}` produced for an unmapped name.
+
+### Guard Check 196 — the trap cannot come back
+
+The check scans every shell script under `scripts/` and at the repository root
+for the bash-4 constructs — associative arrays, `mapfile`, `readarray`,
+`${var,,}` / `${var^^}`, `wait -n`, `[[ -v ]]`, `coproc` — and fails on any of
+them. It ignores comments, so a script may *mention* the construct it refuses
+to use (two do, in the comments above), and it exempts its own detection
+block, which necessarily names them. It fails closed: a script it cannot read
+is a failure, not a pass.
+
+Negative-tested against nine real violations (each construct, plus the
+repository-root script being in scope) and against four cases that must not
+trip it (a full-line comment mentioning the construct, a trailing comment
+mentioning it, a `#` inside quotes, and the exemption block). The embedded
+guard was negative-tested on the real tree with `cp` backups, never
+`git checkout --`.
+
+### What this is worth
+
+The trap was not a papercut. It was the reason the repository's exhaustive
+oracle could not be started on a Mac — and the exhaustive oracle is the only
+thing that compiles the feature-gated TUI tab modules, which is where the
+`vuln-management` defect of the previous addendum was living. A check that
+cannot start is a check that never sees anything, and the defect it would have
+seen sat on `main` from `c66f0943`. The wider gap — that the per-PR contract
+still does not compile the feature-gated tabs — remains open by decision: the
+maintainer's instruction on 2026-10-25 was that compiling the TUI under its
+feature aggregates is not to be added to `make check` for now. Guard 195 narrows
+that gap to the class that actually bit; Check 196 stops the oracle itself
+from being unable to run.
