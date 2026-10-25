@@ -7108,7 +7108,8 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 193. The CI's dependency-policy tool is one version, and not a stalled one.
+# 193. The CI's dependency-policy tool is one version, and it is the version
+# the local contract runs.
 # Milestone 015 (the dependency advisory backlog).
 #
 # `make check-deps` IS the dependency policy, and it is run by whichever
@@ -7117,26 +7118,26 @@ fi
 # finding F4 -- local 0.20.2, CI 0.19.0 -- with the note that "a local green
 # is not proof of a CI green".
 #
-# The skew had teeth. cargo-deny 0.19.0's `bans` check can stop making
-# forward progress on a runner's small thread pool -- this workspace has 194
-# duplicated crates, each with an inclusion graph to print -- and the job
-# then hangs with no output and no error. Upstream fixed it in 0.19.9 by
-# spawning scoped threads directly (EmbarkStudios/cargo-deny#868, PR#870).
+# The floor is that same finding, made enforceable: CI must not run a
+# cargo-deny older than the one the local contract runs, or the two would
+# again decide the same policy with different tools.
 #
-# So the pin must be one version across both workflows, and it must not be a
-# version that stalls. This guard names both facts, because the second one
-# is the kind of thing a version bump forgets.
+# (An earlier version of this guard carried a floor of 0.19.9 and justified it
+# by cargo-deny's thread-pool bug, #868. That justification was wrong: the
+# runner's stall reproduces on 0.20.2 as well, and it is in the inclusion
+# graph's rendering, not in the thread pool. The version pin stands on F4's
+# own terms; the stall is guarded separately, by Check 194.)
 echo ""
-echo "--- Check 193: the CI's cargo-deny is one version, and not a stalled one ---"
+echo "--- Check 193: the CI's cargo-deny is one version, and it is the local one ---"
 SECTION_FAIL=0
 if ! python3 - <<'PY'
 import glob
 import re
 import sys
 
-#: The first cargo-deny release that cannot stall without forward progress.
-#: Upstream: EmbarkStudios/cargo-deny#868, fixed by PR#870 in 0.19.9.
-MINIMUM = (0, 19, 9)
+#: The cargo-deny the local contract runs. CI must not fall behind it, or the
+#: two would decide the same policy with different tools again (finding F4).
+MINIMUM = (0, 20, 2)
 
 pins = []
 unpinned = []
@@ -7176,9 +7177,10 @@ if len(distinct) > 1:
 version = distinct.pop()
 if version < MINIMUM:
     print(
-        f"FAIL: cargo-deny {'.'.join(str(part) for part in version)} can stall "
-        "without forward progress on a constrained thread pool "
-        "(EmbarkStudios/cargo-deny#868, fixed in 0.19.9)."
+        f"FAIL: cargo-deny {'.'.join(str(part) for part in version)} is older "
+        "than the version the local contract runs ("
+        + ".".join(str(part) for part in MINIMUM)
+        + "); a local green would not be proof of a CI green (finding F4)."
     )
     sys.exit(1)
 sys.exit(0)
@@ -7188,7 +7190,79 @@ then
 fi
 
 if [[ $SECTION_FAIL -eq 0 ]]; then
-  echo "PASS: the CI's cargo-deny is one version, and it is not a stalled one."
+  echo "PASS: the CI's cargo-deny is one version, and it is the local one."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 194. The dependency policy is decided without the inclusion graph.
+# Milestone 015 (the dependency advisory backlog), correction addendum.
+#
+# cargo-deny prints an inclusion graph for every duplicated crate. This
+# workspace duplicates 98 of them, and rendering that graph is where the CI
+# runner stalls: the Deep Checks job hangs inside `check bans`, mid-graph, with
+# no output and no error. The stall is reproducible on cargo-deny 0.19.0 and on
+# 0.20.2, and a control branch proved a shallow checkout does not cause it.
+#
+# `--hide-inclusion-graph` removes the rendering path and changes nothing
+# else: the same 98 duplicate warnings are printed and the same four verdicts
+# are reached. So the flag is what keeps the job alive, and it is the kind of
+# thing a version bump, a refactor, or a new sub-command can silently drop.
+#
+# This guard names the flag, so the fix cannot regress into a hang.
+echo ""
+echo "--- Check 194: the dependency policy is decided without the inclusion graph ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import re
+import sys
+
+FLAG = "--hide-inclusion-graph"
+
+try:
+    with open("Makefile", "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+except OSError as error:
+    print(f"FAIL: the Makefile could not be read: {error}")
+    sys.exit(1)
+
+invocations = []
+for number, line in enumerate(lines, start=1):
+    stripped = line.strip()
+    if not stripped.startswith("cargo deny"):
+        continue
+    invocations.append((number, stripped))
+
+if not invocations:
+    print("FAIL: no `cargo deny` invocation was found in the Makefile.")
+    sys.exit(1)
+
+# Exact token, not a substring: `--hide-inclusion-graphs` is not the flag,
+# and a substring test would wave it through.
+missing = [
+    number
+    for number, text in invocations
+    if FLAG not in text.split()
+]
+if missing:
+    for number in missing:
+        print(f"FAIL: Makefile:{number} runs cargo-deny without {FLAG}.")
+    print(
+        "FAIL: the inclusion graph is where the CI runner stalls (the Deep "
+        "Checks job hangs in `check bans`, mid-graph, with no output and no "
+        "error); hiding the graph changes no warning and no verdict, and its "
+        "absence brings the hang back."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the dependency policy is decided without the inclusion graph."
 else
   FAIL=$((FAIL + 1))
 fi

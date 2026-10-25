@@ -149,13 +149,22 @@ check-msrv:
 # Fails closed when cargo-deny is absent — install with
 # `cargo install cargo-deny` (CI installs a SHA-pinned version). Never silently
 # skip: a missing tool is a failed check, not a pass.
+#
+# `--hide-inclusion-graph` is not cosmetic. cargo-deny prints an inclusion
+# graph for every duplicated crate, and this workspace duplicates 98 of them;
+# rendering that graph is where the CI runner stalls (the Deep Checks job hangs
+# inside `check bans`, mid-graph, with no output and no error — the stall is
+# reproducible on 0.19.0 and 0.20.2, and a shallow checkout does not cause it).
+# Hiding the graph removes the stall site and changes nothing else: the same
+# 98 duplicate warnings and the same four verdicts are still printed and still
+# decide the policy. Guard Check 194 keeps the flag on every invocation.
 check-deps:
 	@command -v cargo-deny >/dev/null 2>&1 || (echo "FAIL: cargo-deny not found. Install with 'cargo install cargo-deny' (CI uses a SHA-pinned install-action)." >&2; exit 1)
-	cargo deny --workspace --all-features check
-	cargo deny --workspace --all-features check advisories
-	cargo deny --workspace --all-features check bans
-	cargo deny --workspace --all-features check licenses
-	cargo deny --workspace --all-features check sources
+	cargo deny --workspace --all-features check --hide-inclusion-graph
+	cargo deny --workspace --all-features check advisories --hide-inclusion-graph
+	cargo deny --workspace --all-features check bans --hide-inclusion-graph
+	cargo deny --workspace --all-features check licenses --hide-inclusion-graph
+	cargo deny --workspace --all-features check sources --hide-inclusion-graph
 
 # Full mandatory Rust CI contract (no cargo-nextest required)
 check:

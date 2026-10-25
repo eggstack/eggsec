@@ -379,6 +379,32 @@ non-empty `| Owner |` and a dated `| Review-by |`, and no `RESOLVED` record
 may keep a live ignore. The check fails closed — an unparseable policy file
 is a failure, not a pass.
 
+**The tool that measures the policy is itself pinned (2026-10-25).** Two
+properties are enforced, because the policy is only as trustworthy as the tool
+that decides it:
+
+- **One tool at one version** (guard Check 193): every `tool: cargo-deny` in
+  `.github/workflows/*.yml` must name an exact `x.y.z`, every workflow's
+  version must be the same, and it must be no older than **0.20.2** — the
+  version the local contract runs. This is milestone 015's finding **F4** made
+  enforceable: "a local green is not proof of a CI green" stops being true only
+  when both sides run the same tool.
+- **The policy is decided without the inclusion graph** (guard Check 194):
+  every `cargo deny` invocation in the `Makefile` must pass
+  `--hide-inclusion-graph`. cargo-deny prints an inclusion graph for every
+  duplicated crate, and this workspace duplicates 98 of them; rendering those
+  graphs is where the CI runner stalls — the deep-check job hangs inside
+  `check bans`, mid-graph, with no output and no error. The stall reproduces
+  on cargo-deny 0.19.0 and 0.20.2 alike, and a control branch proved a shallow
+  checkout does not cause it, so the flag — not a version — is the fix. The
+  flag removes only the rendering path: the same 98 duplicate warnings are
+  printed and the same four verdicts are reached, so what the policy says is
+  unchanged.
+
+Neither check changes `deny.toml`. They change *how* the policy is decided,
+which was the point: the measurement had stopped being reproducible, and now
+it is.
+
 Nothing in this milestone changed the ring-only TLS rule, the MSRV floor, the
 `[advisories]` `unmaintained`/`unsound` settings, the `[licenses]` allow list,
 or the `[bans]` deny list.
