@@ -7038,6 +7038,76 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 192. Every CI checkout carries the repository's history.
+# Milestone 014 (the qualification driver's promotion path).
+#
+# The architecture guard and the qualification validator both decide whether
+# one commit descends from another, and `git merge-base` can only answer that
+# when the checkout carries the history. `actions/checkout` gives you the tip
+# alone unless it is told otherwise, so a shallow checkout cannot answer the
+# question at all -- and the validator reported that "cannot tell" as a
+# contradiction. That is how CI read the macOS operator's attestation as an
+# attestation of another run: a false accusation, caused by the checkout
+# rather than by the evidence.
+#
+# `fetch-depth: 0` is the fix, and this guard pins it. A job that checks out
+# the tip alone again fails here -- in the workflow, where the cause is
+# visible -- rather than in the validator's judgement of somebody's work.
+echo ""
+echo "--- Check 192: every CI checkout carries the repository's history ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import glob
+import re
+import sys
+
+problems = []
+checkouts = 0
+
+for path in sorted(glob.glob(".github/workflows/*.yml")):
+    with open(path, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(\s*)- uses:\s*actions/checkout@", line)
+        if match is None:
+            continue
+        checkouts += 1
+        indent = len(match.group(1))
+        step = []
+        for following in lines[index + 1 :]:
+            stripped = following.strip()
+            if stripped:
+                if not following.startswith(" " * (indent + 1)):
+                    break
+                if re.match(r"^\s*- ", following) and (
+                    len(following) - len(following.lstrip())
+                ) <= indent:
+                    break
+            step.append(following)
+        if not any(re.search(r"fetch-depth:\s*0\s*$", entry) for entry in step):
+            problems.append(
+                f"{path}:{index + 1}: the checkout does not ask for the full "
+                "history (`fetch-depth: 0`); the guards decide commit ancestry, "
+                "and a shallow checkout cannot answer that question"
+            )
+
+if checkouts == 0:
+    print("FAIL: no checkout step was found to check.")
+    sys.exit(1)
+for problem in problems:
+    print(f"FAIL: {problem}")
+sys.exit(1 if problems else 0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every CI checkout fetches the full history."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

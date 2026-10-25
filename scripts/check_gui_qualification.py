@@ -64,7 +64,9 @@ ATTESTATION_SCHEMA = "eggsec-gui-operator-attestation/v1"
 COMMIT_PATTERN = re.compile(r"^[0-9a-f]{7,40}$")
 
 
-def attestation_binds_to_run(named: Any, recorded: Any) -> bool:
+def attestation_binding(
+    named: Any, recorded: Any, repo: Optional[str] = None
+) -> Optional[bool]:
     """Whether an attestation's commit is bound to the run that carries it.
 
     An attestation names the commit the behaviours were *observed against*. The
@@ -72,6 +74,9 @@ def attestation_binds_to_run(named: Any, recorded: Any) -> bool:
     at a commit that descends from the observed commit is the same code the
     operator looked at, plus whatever came after. An attestation of a commit
     the run does not descend from is an attestation of something else.
+
+    `True` when the run descends from the named commit, `False` when it does
+    not, and `None` when this checkout cannot tell -- see `is_ancestor`.
     """
     if not isinstance(named, str) or not isinstance(recorded, str):
         return False
@@ -84,7 +89,38 @@ def attestation_binds_to_run(named: Any, recorded: Any) -> bool:
         # other. `git merge-base` would say the same, but this answer does not
         # need a repository to give it.
         return True
-    return is_ancestor(named, recorded) is True
+    return is_ancestor(named, recorded, repo)
+
+
+def commit_binding_problem(
+    named: Any, recorded: Any, prefix: str, repo: Optional[str] = None
+) -> Optional[str]:
+    """The problem with an attestation's commit, or `None` when it binds.
+
+    `prefix` opens the sentence, so the matrix's cell check and the record
+    writer's own check say the same thing about the same commit; one place
+    decides, both places say it.
+    """
+    binding = attestation_binding(named, recorded, repo)
+    if binding is True:
+        return None
+    if binding is False:
+        return (
+            f"{prefix}names the commit `{named}`, which the run (`{recorded}`) "
+            "does not descend from; an attestation of one run cannot be read "
+            "as an attestation of another"
+        )
+    if history_is_shallow(repo):
+        return (
+            f"{prefix}names the commit `{named}`, and this checkout cannot say "
+            f"whether the run (`{recorded}`) descends from it: the checkout is "
+            "shallow and does not carry the commit's history; fetch it "
+            "(`git fetch --unshallow`) and check again"
+        )
+    return (
+        f"{prefix}names the commit `{named}`, which this repository does not "
+        "contain; an attestation must name a commit in this repository"
+    )
 
 
 
@@ -361,21 +397,55 @@ def file_digest(path: str) -> Optional[str]:
         return None
 
 
-def is_ancestor(older: str, newer: str) -> Optional[bool]:
-    """Whether `older` is an ancestor of `newer`, or `None` when unknown."""
+def is_ancestor(older: str, newer: str, repo: Optional[str] = None) -> Optional[bool]:
+    """Whether `older` is an ancestor of `newer`.
+
+    `True` when it is, `False` when it is not, and `None` when this checkout
+    cannot answer the question at all -- a shallow clone carries only the tip,
+    so the older commit is simply not there to be compared. "Not an ancestor"
+    and "cannot be told" are different answers, and a guard that confuses
+    them calls a good attestation bad.
+    """
     if not older or not newer:
         return None
     try:
         completed = subprocess.run(
             ["git", "merge-base", "--is-ancestor", older, newer],
-            cwd=REPO_ROOT,
+            cwd=repo or REPO_ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    return completed.returncode == 0
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    # git could not answer at all: the object is not in this checkout, or it
+    # is not a commit. That is "unknown", not "no".
+    return None
+
+
+def history_is_shallow(repo: Optional[str] = None) -> bool:
+    """Whether this checkout carries only part of the repository's history.
+
+    A shallow checkout is the ordinary reason a commit cannot be found: CI
+    checks out the tip alone unless it is told otherwise.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=repo or REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if completed.returncode != 0:
+        return False
+    return completed.stdout.decode("utf-8", "replace").strip() == "true"
 
 
 # ── The attestation ──────────────────────────────────────────────────────────
@@ -801,14 +871,13 @@ class Checker:
                 )
 
             attested_commit = attestation.get("commit")
-            if not attestation_binds_to_run(attested_commit, record.get("commit")):
-                self.fail(
-                    f"{where} says `qualified`, but `{name}`'s `attestation` "
-                    f"names the commit `{attested_commit}`, which the run "
-                    f"(`{record.get('commit')}`) does not descend from; an "
-                    "attestation of one run cannot be read as an attestation of "
-                    "another"
-                )
+            problem = commit_binding_problem(
+                attested_commit,
+                record.get("commit"),
+                f"{where} says `qualified`, but `{name}`'s `attestation` ",
+            )
+            if problem:
+                self.fail(problem)
 
         for candidate in record.get("columns") or []:
             if not isinstance(candidate, dict):
@@ -847,6 +916,12 @@ class Checker:
                 f"{where} cites `{name}`, whose record was made at "
                 f"`{record_commit}`, but the matrix was regenerated at "
                 f"`{matrix_commit}` and the relationship cannot be checked"
+                + (
+                    ": this checkout is shallow and does not carry the "
+                    "history; fetch it (`git fetch --unshallow`) and check again"
+                    if history_is_shallow()
+                    else ""
+                )
             )
         elif not ancestor:
             self.fail(
@@ -911,12 +986,11 @@ def attestation_problems_for_record(
             )
 
     attested_commit = attestation.get("commit")
-    if not attestation_binds_to_run(attested_commit, record.get("commit")):
-        problems.append(
-            f"the attestation names the commit `{attested_commit}`, which the "
-            f"run (`{record.get('commit')}`) does not descend from; an "
-            "attestation of one run cannot be read as an attestation of another"
-        )
+    problem = commit_binding_problem(
+        attested_commit, record.get("commit"), "the attestation "
+    )
+    if problem:
+        problems.append(problem)
 
     return problems
 
@@ -1553,13 +1627,94 @@ def self_test(matrix_path: str, evidence_dir: str) -> int:
         attest_connect(attestation=attestation_block()),
     )
 
+    # The commit binding has three answers, not two: the run descends from the
+    # named commit, it does not, or this checkout cannot tell. A shallow clone
+    # is the ordinary reason for the third, and a guard that reports it as the
+    # second accuses a good attestation of being bad. CI did exactly that: it
+    # checked out the tip alone, could not find the commit the operator had
+    # observed, and reported the macOS operator's attestation as an
+    # attestation of another run. These cases build a real shallow clone and
+    # prove the three answers are kept apart.
+    def check_fact(name: str, holds: bool) -> None:
+        if not holds:
+            failures.append(f"{name}: it does not hold")
+            return
+        print(f"ok: {name}")
+
+    def git(cwd: str, *arguments: str) -> str:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return completed.stdout.decode("utf-8", "replace").strip()
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as workspace:
+        source = os.path.join(workspace, "source")
+        os.makedirs(source)
+        git(source, "init", "--quiet")
+        git(source, "config", "user.email", "self-test@example.invalid")
+        git(source, "config", "user.name", "Self Test")
+        with open(os.path.join(source, "first.txt"), "w", encoding="utf-8") as handle:
+            handle.write("first\n")
+        git(source, "add", "first.txt")
+        git(source, "commit", "--quiet", "-m", "first")
+        first = git(source, "rev-parse", "HEAD")
+        with open(os.path.join(source, "second.txt"), "w", encoding="utf-8") as handle:
+            handle.write("second\n")
+        git(source, "add", "second.txt")
+        git(source, "commit", "--quiet", "-m", "second")
+        second = git(source, "rev-parse", "HEAD")
+
+        shallow = os.path.join(workspace, "shallow")
+        # The `file://` URL is what makes the clone honour `--depth`; a plain
+        # path clone carries the whole history however shallow it is asked to
+        # be.
+        subprocess.run(
+            ["git", "clone", "--quiet", "--depth", "1", f"file://{source}", shallow],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+
+        check_fact(
+            "a full checkout says the run descends from the observed commit",
+            is_ancestor(first, second, source) is True,
+        )
+        check_fact(
+            "a shallow checkout says it cannot tell",
+            is_ancestor(first, second, shallow) is None,
+        )
+        check_fact(
+            "a shallow checkout is recognised as shallow",
+            history_is_shallow(shallow) is True,
+        )
+        shallow_problem = commit_binding_problem(
+            first, second, "the attestation ", shallow
+        )
+        check_fact(
+            "a shallow checkout does not accuse the attestation of another run",
+            shallow_problem is not None
+            and "cannot say" in shallow_problem
+            and "does not descend from" not in shallow_problem,
+        )
+        check_fact(
+            "a full checkout accepts the attestation",
+            commit_binding_problem(first, second, "the attestation ", source) is None,
+        )
+
     if failures:
         for failure in failures:
             print(f"FAIL: {failure}")
         return 1
     print(
-        "ok: every deliberate corruption was rejected, and the attributed "
-        "record was accepted"
+        "ok: every deliberate corruption was rejected, the attributed "
+        "record was accepted, and the commit binding's three answers were "
+        "kept apart"
     )
     return 0
 
