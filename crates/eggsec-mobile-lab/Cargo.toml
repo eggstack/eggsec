@@ -43,7 +43,7 @@ tracing.workspace = true
 rustc-hash.workspace = true
 
 # ZIP parsing (APK/IPA)
-zip = "2"
+zip = "9"
 
 # iOS plist parsing
 plist = { version = "1.7", features = ["serde"] }
