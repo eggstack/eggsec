@@ -19,6 +19,7 @@
 //! - Public async entry point: analyze_apk(path: &Path) -> Result<MobileScanReport>
 //! - Unit tests that synthesize minimal valid APKs in-memory via the zip writer.
 
+use crate::zip_util::entry_name;
 use crate::{MobileError, MobileFinding, MobilePlatform, MobileScanReport, Result};
 use eggsec_core::types::Severity;
 use rustc_hash::FxHashMap;
@@ -60,7 +61,7 @@ fn analyze_apk_blocking(path: &Path) -> Result<MobileScanReport> {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| MobileError::Validation(format!("zip entry error: {}", e)))?;
-        let raw_name = entry.name().to_string();
+        let raw_name = entry_name(&entry)?;
 
         // ZipSlip / path traversal rejection (defense in depth, matches IPA)
         if raw_name.contains("..")
@@ -457,9 +458,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let tag = std::str::from_utf8(e.name().as_ref())
-                    .unwrap_or("")
-                    .to_string();
+                let tag = e.name().as_ref().to_string();
                 let attrs: FxHashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
@@ -469,9 +468,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         a.ok()
                     })
                     .map(|a| {
-                        let k = std::str::from_utf8(a.key.as_ref())
-                            .unwrap_or("")
-                            .to_string();
+                        let k = a.key.as_ref().to_string();
                         let v = a
                             .normalized_value(XmlVersion::Implicit1_0)
                             .unwrap_or_default()
@@ -524,9 +521,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
             Ok(Event::Empty(e)) => {
                 // Self-closing component tags (e.g. <provider .../>) never produce an End event.
                 // We must handle them immediately.
-                let tag = std::str::from_utf8(e.name().as_ref())
-                    .unwrap_or("")
-                    .to_string();
+                let tag = e.name().as_ref().to_string();
                 let attrs: FxHashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| {
@@ -536,9 +531,7 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                         a.ok()
                     })
                     .map(|a| {
-                        let k = std::str::from_utf8(a.key.as_ref())
-                            .unwrap_or("")
-                            .to_string();
+                        let k = a.key.as_ref().to_string();
                         let v = a
                             .normalized_value(XmlVersion::Implicit1_0)
                             .unwrap_or_default()
@@ -583,12 +576,14 @@ fn parse_text_manifest(data: &[u8], report: &mut MobileScanReport) -> Result<()>
                 // Other self-closing tags are ignored for our purposes.
             }
             Ok(Event::End(e)) => {
-                let tag_name = e.name();
-                let tag = std::str::from_utf8(tag_name.as_ref()).unwrap_or("");
+                let tag = e.name().as_ref().to_string();
                 if tag == "application" {
                     _in_application = false;
                 }
-                if matches!(tag, "activity" | "service" | "receiver" | "provider") {
+                if matches!(
+                    tag.as_str(),
+                    "activity" | "service" | "receiver" | "provider"
+                ) {
                     if let Some(c) = current_component.take() {
                         handle_component_end(c, report);
                     }

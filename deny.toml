@@ -34,6 +34,12 @@ ignore = [
     { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL panic; transitive via rustls 0.21->tokio-rustls 0.24->tiberius (mssql marker only, lab-only TLS to authorized servers). tiberius 0.13.0 upgrades to rustls 0.23/webpki 0.103 but pulls tokio-rustls with default features, enabling the aws-lc-rs provider that [bans] deny forbids (ring-only TLS). Blocked by policy, not by upstream. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2026-0099", reason = "rustls-webpki wildcard name-constraint bypass; same tiberius path as RUSTSEC-2026-0104. Requires misissued certs; lab-only. tiberius 0.13.0 upgrades to rustls 0.23/webpki 0.103 but pulls tokio-rustls with default features, enabling the aws-lc-rs provider that [bans] deny forbids (ring-only TLS). Blocked by policy, not by upstream. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2026-0098", reason = "rustls-webpki URI name-constraint bypass; same tiberius path as RUSTSEC-2026-0104. Library has no URI-name API; lab-only. tiberius 0.13.0 upgrades to rustls 0.23/webpki 0.103 but pulls tokio-rustls with default features, enabling the aws-lc-rs provider that [bans] deny forbids (ring-only TLS). Blocked by policy, not by upstream. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0346", reason = "rustls 0.21 Debug session secrets via tiberius (db-pentest-mssql marker). Custom ClientSessionStore Debug not used; lab-only TLS to authorized MSSQL. Same tiberius/aws-lc-rs upgrade blocker as RUSTSEC-2026-0104. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0349", reason = "rustls 0.21 unauthenticated ServerHello key-share downgrade via tiberius (db-pentest-mssql marker). Lab-only operator connections; same tiberius upgrade blocker. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0382", reason = "rustls-webpki 0.101.7 distrusted emSign intermediates on tiberius rustls 0.21 path (db-pentest-mssql marker). Patched in 0.103.16+ on rustls 0.23 only; tiberius upgrade blocked by ring-only TLS policy. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0385", reason = "ctutils non-constant-time Choice masks via curve25519-dalek 5 -> ed25519-dalek 3 (template signature verify). Verification-only, no local secret generation on attacker-controlled timing paths. Await ctutils/curve25519 fix. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys bundled SQLite <3.54 via rusqlite 0.32 (daemon session store). Local crafted WAL/page-size attack; daemon DB is operator-local. rusqlite 0.41/libsqlite3-sys 0.39 blocked by sqlx linking policy until coordinated upgrade. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml unmaintained via serde_yaml_neo (web-proxy/engine YAML). Operator-supplied config only; no untrusted YAML ingestion. See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 
 [licenses]
@@ -53,6 +59,7 @@ allow = [
     "BSL-1.0",
     "0BSD",
     "CDLA-Permissive-2.0",
+    "bzip2-1.0.6",
 ]
 confidence-threshold = 0.8
 # Per-crate license exceptions (Phase F). Prefer allow-list additions for

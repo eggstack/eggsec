@@ -18,6 +18,7 @@
 //!
 //! Safety: no external tools, no shell, no dynamic execution. All work is offline on caller-supplied lab binaries.
 
+use crate::zip_util::entry_name_ok;
 use crate::{MobileError, MobileFinding, MobilePlatform, MobileScanReport, Result};
 use eggsec_core::types::Severity;
 use plist::from_bytes;
@@ -74,8 +75,10 @@ fn read_entry_safe<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> R
 fn locate_info_plist<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Option<String> {
     for i in 0..archive.len() {
         if let Ok(entry) = archive.by_index(i) {
-            let name = entry.name();
-            if !is_safe_entry_name(name) {
+            let Some(name) = entry_name_ok(&entry) else {
+                continue;
+            };
+            if !is_safe_entry_name(&name) {
                 continue;
             }
             // Expect exactly Payload/NAME.app/Info.plist (two slashes after Payload)
@@ -83,7 +86,7 @@ fn locate_info_plist<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Option<Stri
                 && name.ends_with("/Info.plist")
                 && name.matches('/').count() == 2
             {
-                return Some(name.to_owned());
+                return Some(name);
             }
         }
     }
@@ -386,7 +389,10 @@ pub async fn analyze_ipa(path: &Path) -> Result<MobileScanReport> {
 
     for i in 0..archive.len() {
         let name = match archive.by_index(i) {
-            Ok(e) => e.name().to_string(),
+            Ok(e) => match entry_name_ok(&e) {
+                Some(n) => n,
+                None => continue,
+            },
             Err(_) => continue,
         };
         if !is_safe_entry_name(&name) {
