@@ -13,6 +13,8 @@
 //! - `to_scan_report_data(report)` for static report bridge.
 //! - `to_scan_report_data_dynamic(report)` for dynamic report bridge.
 
+mod zip_util;
+
 pub mod apk;
 pub mod ipa;
 

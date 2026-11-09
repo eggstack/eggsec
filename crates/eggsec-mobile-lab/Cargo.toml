@@ -43,13 +43,13 @@ tracing.workspace = true
 rustc-hash.workspace = true
 
 # ZIP parsing (APK/IPA)
-zip = "2"
+zip = "9"
 
 # iOS plist parsing
 plist = { version = "1.7", features = ["serde"] }
 
 # XML parsing (text AndroidManifest.xml fallback)
-quick-xml = { version = "0.41", features = ["serialize"] }
+quick-xml = { version = "0.42", features = ["serialize"] }
 
 # Regex (IPA secret pattern detection)
 regex = { workspace = true }

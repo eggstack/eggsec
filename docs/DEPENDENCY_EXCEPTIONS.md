@@ -203,6 +203,59 @@ ignore is recorded because yanked status calls for an upgrade
 if the current version is ever yanked, consider pinning or replacing the ssh2
 path.
 
+### RUSTSEC-2026-0346 / RUSTSEC-2026-0349 / RUSTSEC-2026-0382 — rustls 0.21 via tiberius (new 2026-11)
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2026-0346, RUSTSEC-2026-0349, RUSTSEC-2026-0382 |
+| Path | `rustls` 0.21.12 / `rustls-webpki` 0.101.7 → `tokio-rustls` 0.24 → `tiberius` (`db-pentest-mssql` marker) |
+| Feature | MSSQL lab probes only |
+| API used | Standard client TLS handshake; no custom `ClientSessionStore` Debug logging |
+| Exploitability | Low in lab-only, operator-authorized MSSQL TLS |
+| Owner | eggsec (db-pentest) |
+| Created | 2026-11-09 |
+| Review-by | 2026-12-12 |
+| Blocker | Same as RUSTSEC-2026-0104: tiberius 0.13 + rustls 0.23 pulls aws-lc-rs via default tokio-rustls features; ring-only TLS policy forbids |
+
+### RUSTSEC-2026-0385 — ctutils via ed25519-dalek 3
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2026-0385 |
+| Path | `ctutils` → `curve25519-dalek` 5 → `ed25519-dalek` 3 → `eggsec::scanner::templates::verify` |
+| Feature | Template signature verification (operator templates) |
+| Exploitability | Low — verify-only path, no secret material generation under attacker timing control |
+| Owner | eggsec (scanner) |
+| Created | 2026-11-09 |
+| Review-by | 2026-12-12 |
+| Blocker | Await upstream ctutils/curve25519 constant-time fix |
+
+### RUSTSEC-2026-0459 — libsqlite3-sys bundled SQLite (daemon)
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2026-0459 |
+| Path | `libsqlite3-sys` 0.30.1 → `rusqlite` 0.32 (`bundled`) → `eggsec-daemon` session store |
+| Feature | Daemon session persistence |
+| Exploitability | Low — local crafted DB/WAL pair; operator-local daemon database |
+| Owner | eggsec-daemon |
+| Created | 2026-11-09 |
+| Review-by | 2026-12-12 |
+| Blocker | `rusqlite` 0.41 + `libsqlite3-sys` 0.39 needs coordinated sqlx/daemon linking review |
+
+### RUSTSEC-2024-0449 — unsafe-libyaml via serde_yaml_neo
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2024-0449 |
+| Path | `unsafe-libyaml` → `serde_yaml_neo` → `eggsec`, `eggsec-web-proxy` |
+| Feature | YAML config / proxy rules (operator-supplied) |
+| Exploitability | Low — unmaintained, not a direct RCE in Eggsec usage |
+| Owner | eggsec / eggsec-web-proxy |
+| Created | 2026-11-09 |
+| Review-by | 2026-12-12 |
+| Blocker | serde_yaml ecosystem migration; no drop-in maintained replacement audited yet |
+
 ## Resolved in Corrective Closure Pass (2026-08-11)
 
 The following advisories were resolved by dependency upgrades in this pass:
