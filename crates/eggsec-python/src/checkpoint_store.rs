@@ -579,7 +579,7 @@ fn default_execution_profile() -> String {
 pub fn stable_digest(value: &str) -> String {
     let mut hasher = Md5::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Expected identity values for a pipeline resume.

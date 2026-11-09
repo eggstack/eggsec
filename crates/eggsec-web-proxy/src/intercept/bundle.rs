@@ -180,7 +180,7 @@ impl EvidenceBundle {
     /// * `key` - HMAC signing key (bytes)
     /// * `key_id` - Optional key identifier for tracking
     pub fn sign(&mut self, key: &[u8], key_id: Option<&str>) -> Result<()> {
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
 
         type HmacSha256 = Hmac<Sha256>;
@@ -203,7 +203,7 @@ impl EvidenceBundle {
     /// Returns `Ok(true)` if the signature is valid, `Ok(false)` if invalid,
     /// or `Err` if the bundle is unsigned or verification fails.
     pub fn verify(&self, key: &[u8]) -> Result<bool> {
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
 
         type HmacSha256 = Hmac<Sha256>;

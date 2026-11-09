@@ -288,7 +288,7 @@ impl StreamingReporterPy {
             .map(|t| t.elapsed().as_millis() as u64)
             .unwrap_or(0);
 
-        let content_hash = format!("{:x}", self.hasher.finalize_reset());
+        let content_hash = hex::encode(self.hasher.finalize_reset());
 
         // Close the file handle explicitly
         self.output_file = None;
@@ -831,5 +831,5 @@ pub fn compute_content_hash(values: &[String]) -> String {
         hasher.update(v.as_bytes());
         hasher.update(b"\n");
     }
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
