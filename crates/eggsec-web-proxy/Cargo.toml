@@ -99,8 +99,8 @@ flate2.workspace = true
 parking_lot = "0.12"
 
 # HMAC/SHA256 for bundle signing
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 
 # Hex encoding for signatures and protobuf
 hex = "0.4"

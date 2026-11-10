@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{WebhookConfig, WebhookEvent};
 use crate::utils::create_http_client;
 use anyhow::Result;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rustc_hash::FxHashMap;
 use sha2::Sha256;
 
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_hmac_signature_generation() {
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
 
         let secret = SensitiveString::new("test-secret-key");

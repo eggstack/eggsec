@@ -167,7 +167,7 @@ impl ResponseDiffer {
 
         let mut hasher = Sha256::new();
         hasher.update(body);
-        let body_hash = format!("{:x}", hasher.finalize());
+        let body_hash = hex::encode(hasher.finalize());
 
         let mut header_snaps = Vec::new();
         let mut etag = None;
