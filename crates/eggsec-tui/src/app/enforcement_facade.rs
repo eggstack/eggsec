@@ -229,34 +229,13 @@ impl EnforcementFacade {
         ),
         EnforcementError,
     > {
-        let mut mo = ManualOverride::default();
-        for c in required_classes {
-            match c {
-                ConfirmationClass::OutOfScope | ConfirmationClass::TargetExpansion => {
-                    mo.allow_out_of_scope = true;
-                }
-                ConfirmationClass::ExplicitExclusion => {
-                    mo.allow_explicit_exclusion = true;
-                }
-                ConfirmationClass::HighRisk => {
-                    mo.allow_high_risk = true;
-                }
-                ConfirmationClass::NonBaselineCapability => {
-                    mo.allow_nonbaseline_capability = true;
-                }
-                ConfirmationClass::PrivateResolution => {
-                    mo.allow_private_resolution = true;
-                }
-                ConfirmationClass::CrossHostRedirect => {
-                    mo.allow_cross_host_redirect = true;
-                }
-                ConfirmationClass::TrafficInterception => {
-                    mo.allow_web_proxy = true;
-                }
-            }
-        }
+        // The class→override mapping is the policy kernel's, not a local table:
+        // `permitting_classes` is the single place a confirmation class is
+        // mapped onto the override field that permits it.
+        let mut mo = ManualOverride::permitting_classes(required_classes);
         mo.reason = reason;
-        mo.assume_yes = false; // TUI confirm popup never sets broad assume_yes
+        // `permitting_classes` never sets `assume_yes`: the TUI confirm popup
+        // grants the classes the kernel demanded, not "yes" to everything.
 
         // Manual-override state is an evaluation input: drop any token cached
         // under the previous override generation before re-evaluating.

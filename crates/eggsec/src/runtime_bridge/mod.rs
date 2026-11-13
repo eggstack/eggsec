@@ -13,8 +13,8 @@
 //! # Invariants
 //!
 //! - [`RuntimeSurface::Unknown`](eggsec_runtime::RuntimeSurface::Unknown) is never executable.
-//! - Manual surfaces (`CliManual`, `TuiManual`) retain operator-directed semantics
-//!   whether embedded or daemon-backed.
+//! - Manual surfaces (`CliManual`, `TuiManual`, `DesktopGuiManual`) retain
+//!   operator-directed semantics whether embedded or daemon-backed.
 //! - Automated surfaces (`McpServer`, `RestApi`, `GrpcApi`, `SecurityAgent`, `Ci`)
 //!   never honor manual overrides.
 //! - Any new [`RuntimeSurface`](eggsec_runtime::RuntimeSurface) variant must update
@@ -25,6 +25,8 @@ mod bundle;
 mod descriptor;
 mod executor;
 mod manual;
+pub mod report;
+pub mod report_coverage;
 mod surface;
 
 pub use bundle::{
@@ -33,6 +35,7 @@ pub use bundle::{
 pub use descriptor::descriptor_for_run_request;
 pub use executor::EggsecRuntimeExecutor;
 pub use manual::{approve_run_request, approve_run_request_execution, preflight_run_request};
+pub use report_coverage::{ReportCoverageRow, ReportForm, REPORT_COVERAGE};
 pub use surface::{
     execution_surface_to_runtime_surface, runtime_surface_to_execution_surface, RuntimeBridgeError,
 };

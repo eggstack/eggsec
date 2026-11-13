@@ -111,7 +111,7 @@ platform.
 | `mobile-dynamic` | ADB + Android device | `cargo check -p eggsec --features mobile-dynamic` |
 | `wireless` | iwlist, CAP_NET_ADMIN | `cargo check -p eggsec --features wireless` |
 | `wireless-advanced` | wireless + root | `cargo check -p eggsec --features wireless-advanced` |
-| `packet-inspection` | libpcap-dev | `cargo check -p eggsec --features packet-inspection` |
+| `packet-inspection` | none (pure-Rust `pnet`) | `cargo check -p eggsec --features packet-inspection` |
 | `db-pentest` | database drivers | `cargo test -p eggsec-db-lab` |
 | `nse` | none (runtime OpenSSL is vendored) | `cargo test -p eggsec --features nse,cli --test nse_tests --test nse_integration_tests` (runtime tests: [eggsec-nse CI](https://github.com/eggstack/eggsec-nse/actions)) |
 

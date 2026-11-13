@@ -246,8 +246,9 @@ pub struct Cli {
         long,
         global = true,
         value_name = "PATH",
-        default_value = "/tmp/eggsec-daemon.sock",
-        help = "Unix socket path for daemon runtime mode"
+        default_value_t = eggsec_runtime::daemon_socket_path_from_env(),
+        help = "Unix socket path for daemon runtime mode (default: the daemon's socket \
+                environment variable, else the built-in default)"
     )]
     pub socket: String,
 
@@ -732,6 +733,62 @@ mod tests {
         assert!(
             parsed.yes,
             "global --yes must be set from a subcommand position"
+        );
+    }
+
+    /// The global `--socket` resolves through the canonical daemon endpoint.
+    #[test]
+    fn the_global_socket_default_is_the_canonical_constant() {
+        let parsed = Cli::try_parse_from(["eggsec", "scan-ports", "127.0.0.1"])
+            .expect("the command line must parse");
+        assert_eq!(
+            parsed.socket,
+            eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH,
+            "the global --socket default must be the canonical constant"
+        );
+    }
+
+    /// An explicit `--socket` wins over the default.
+    #[test]
+    fn an_explicit_socket_flag_overrides_the_default() {
+        let parsed = Cli::try_parse_from([
+            "eggsec",
+            "--socket",
+            "/tmp/x.sock",
+            "scan-ports",
+            "127.0.0.1",
+        ])
+        .expect("the command line must parse");
+        assert_eq!(parsed.socket, "/tmp/x.sock");
+    }
+
+    /// The per-subcommand `--socket` still wins over the global flag.
+    ///
+    /// The daemon subcommand exists only with the `daemon-client` feature,
+    /// so the test runs with the same feature set the CLI binary uses.
+    #[cfg(feature = "daemon-client")]
+    #[test]
+    fn the_per_subcommand_socket_overrides_the_global_flag() {
+        let parsed = Cli::try_parse_from([
+            "eggsec",
+            "--socket",
+            "/tmp/global.sock",
+            "daemon",
+            "start",
+            "--socket",
+            "/tmp/sub.sock",
+        ])
+        .expect("the command line must parse");
+        let Some(Commands::Daemon(daemon)) = parsed.command else {
+            panic!("the daemon subcommand must parse");
+        };
+        let DaemonSubcommand::Start { socket } = daemon.subcommand else {
+            panic!("the daemon start subcommand must parse");
+        };
+        assert_eq!(
+            socket.as_deref(),
+            Some("/tmp/sub.sock"),
+            "the per-subcommand --socket must win over the global flag"
         );
     }
 

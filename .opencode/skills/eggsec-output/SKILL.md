@@ -32,6 +32,7 @@ Key types: `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`
 `convert.rs` supports the format converters:
 - JSON (via `convert_to_json()`, pretty-printed with `serde_json::to_string_pretty`)
 - HTML (via `convert_to_html()`)
+- HTML, self-contained (via `convert_to_html_self_contained()` — the same document with the remote chart-library reference `<script src="https://cdn.jsdelivr.net/npm/chart.js">` omitted, so it carries no remote origin; use it when embedding or sharing a report where a remote fetch is not acceptable. The default `convert_to_html()` output is unchanged, byte-for-byte, and `HtmlReport::generate_self_contained()` (`html.rs:68`) is the underlying entry point)
 - SARIF (via `convert_to_sarif()`)
 - JUnit XML (via `convert_to_junit()`)
 - Markdown (via `convert_to_markdown()`)
@@ -72,7 +73,7 @@ let mut map: FxHashMap<String, usize> = FxHashMap::default();
 - `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
 - `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
 - `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
-- `convert_to_json()` / `convert_to_sarif()` / `convert_to_junit()` return `Result<String, String>`; `convert_to_html()` / `convert_to_csv()` return `String`
+- `convert_to_json()` / `convert_to_sarif()` / `convert_to_junit()` return `Result<String, String>`; `convert_to_html()` / `convert_to_html_self_contained()` / `convert_to_csv()` return `String`
 
 When using `CsvExporter` methods, handle errors appropriately:
 ```rust

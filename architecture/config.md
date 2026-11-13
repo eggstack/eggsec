@@ -109,7 +109,7 @@ All source files live under `crates/eggsec/src/config/`:
 | Type | File:Line | Variants | Purpose |
 |------|-----------|----------|---------|
 | `OperationRisk` | `policy.rs` | 15 | Risk tier ordering (Passive → AgentAutonomous) |
-| `ExecutionSurface` | `policy.rs` | 9 | Caller origin identity |
+| `ExecutionSurface` | `policy.rs` | 10 | Caller origin identity |
 | `ExecutionProfile` | `policy.rs` | 5 | Trust boundary for enforcement |
 | `OperationMode` | `policy.rs` | 3 | Session safety boundary |
 | `Capability` | `policy.rs` | 19 | Operation capability declarations |
@@ -172,22 +172,25 @@ tool calls). Growth in either registry without the other is drift — see the
 
 | Surface | Profile | Manual Override | File:Line |
 |---------|---------|:---:|-----------|
-| `CliManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:387` |
-| `TuiManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:387` |
-| `CliManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:388` |
-| `TuiManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:388` |
-| `McpServer` | `McpStrict` | No | `eggsec-policy/src/policy.rs:389` |
-| `SecurityAgent` | `AgentStrict` | No | `eggsec-policy/src/policy.rs:390` |
-| `Ci` | `CiStrict` | No | `eggsec-policy/src/policy.rs:391` |
-| `RestApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:392` |
-| `GrpcApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:393` |
+| `CliManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:393` |
+| `TuiManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:393` |
+| `DesktopGuiManual` | `ManualPermissive` | Yes | `eggsec-policy/src/policy.rs:393` |
+| `CliManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:396` |
+| `TuiManualStrict` | `ManualGuarded` | No | `eggsec-policy/src/policy.rs:396` |
+| `McpServer` | `McpStrict` | No | `eggsec-policy/src/policy.rs:397` |
+| `SecurityAgent` | `AgentStrict` | No | `eggsec-policy/src/policy.rs:398` |
+| `Ci` | `CiStrict` | No | `eggsec-policy/src/policy.rs:399` |
+| `RestApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:400` |
+| `GrpcApi` | `McpStrict` | No | `eggsec-policy/src/policy.rs:401` |
+
+The desktop GUI is a **frontend, not a new policy class**: `DesktopGuiManual` derives the same `ManualPermissive` profile as `CliManual` and `TuiManual`, honors manual overrides, and is never agent-controlled. There is no strict GUI variant, and the GUI reuses the existing `manual_exposable` exposure flag rather than introducing a second exposure flag — so it adds no new policy semantics to the catalog.
 
 ### Capability Classification
 
 Baseline capabilities allowed by default for strict profiles (no explicit allow needed):
 - `PassiveFingerprint`, `ActiveProbe`, `Crawl`, `WafDetect`
 
-Defined by `baseline_allowed_capability()` at `eggsec-policy/src/policy.rs:562`. All other capabilities require explicit listing in `ExecutionPolicy::allowed_capabilities` for strict automated profiles.
+Defined by `baseline_allowed_capability()` at `eggsec-policy/src/policy.rs:579`. All other capabilities require explicit listing in `ExecutionPolicy::allowed_capabilities` for strict automated profiles.
 
 ## Enforcement Flow
 

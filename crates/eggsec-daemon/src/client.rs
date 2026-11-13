@@ -59,6 +59,18 @@ impl DaemonClient {
         .await
     }
 
+    /// Read the daemon's advertised capabilities.
+    ///
+    /// `Capabilities` is a daemon-wide read that needs no client
+    /// declaration, so a liveness or readiness probe can use it without
+    /// declaring a client first.
+    pub async fn capabilities(&mut self) -> Result<ServerMessage> {
+        self.send_command(ClientCommand::Capabilities {
+            request_id: uuid::Uuid::new_v4().to_string(),
+        })
+        .await
+    }
+
     /// Declare the client type and label to the daemon.
     pub async fn declare_client(
         &mut self,

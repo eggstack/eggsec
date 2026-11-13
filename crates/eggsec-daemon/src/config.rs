@@ -17,9 +17,17 @@ pub struct DaemonConfig {
 }
 
 impl Default for DaemonConfig {
+    /// The library default.
+    ///
+    /// This is **pure**: it does not read the environment. The environment
+    /// override (`eggsec_runtime::DAEMON_SOCKET_ENV_VAR`) is applied by the
+    /// surfaces that parse the operator's flags — the daemon binary's
+    /// `--socket-path` and the engine's global `--socket`. A third-party
+    /// embedder that constructs `DaemonConfig::default()` directly gets the
+    /// built-in default.
     fn default() -> Self {
         Self {
-            socket_path: "/tmp/eggsec-daemon.sock".into(),
+            socket_path: eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH.to_owned(),
             max_clients: 10,
             default_surface: RuntimeSurface::Unknown,
             data_dir: None,
@@ -35,7 +43,10 @@ mod tests {
     #[test]
     fn default_config_socket_path() {
         let config = DaemonConfig::default();
-        assert_eq!(config.socket_path, "/tmp/eggsec-daemon.sock");
+        assert_eq!(
+            config.socket_path,
+            eggsec_runtime::DEFAULT_DAEMON_SOCKET_PATH
+        );
     }
 
     #[test]

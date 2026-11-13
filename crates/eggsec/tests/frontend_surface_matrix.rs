@@ -837,6 +837,10 @@ fn runtime_surface_conversion_is_explicit_and_round_trippable() {
             RuntimeSurface::TuiManualStrict,
             ExecutionSurface::TuiManualStrict,
         ),
+        (
+            RuntimeSurface::DesktopGuiManual,
+            ExecutionSurface::DesktopGuiManual,
+        ),
         (RuntimeSurface::Ci, ExecutionSurface::Ci),
         (RuntimeSurface::McpServer, ExecutionSurface::McpServer),
         (RuntimeSurface::RestApi, ExecutionSurface::RestApi),
@@ -854,6 +858,39 @@ fn runtime_surface_conversion_is_explicit_and_round_trippable() {
         assert_eq!(mapped.profile(), expected.profile());
     }
     assert!(runtime_surface_to_execution_surface(RuntimeSurface::Unknown).is_err());
+}
+
+/// The desktop GUI is a manual surface: it derives the same permissive
+/// profile as the CLI and TUI manual surfaces, and it never lands on the
+/// strict side of the manual/strict split.
+#[test]
+fn desktop_gui_surface_is_manual_and_distinct() {
+    use eggsec::config::ExecutionSurface;
+    use eggsec::runtime_bridge::runtime_surface_to_execution_surface;
+    use eggsec_runtime::RuntimeSurface;
+
+    let gui = runtime_surface_to_execution_surface(RuntimeSurface::DesktopGuiManual)
+        .expect("the desktop GUI surface must map");
+    assert_eq!(gui, ExecutionSurface::DesktopGuiManual);
+    assert_eq!(gui.profile(), ExecutionSurface::CliManual.profile());
+    assert_eq!(gui.profile(), ExecutionSurface::TuiManual.profile());
+    assert!(gui.is_manual());
+    assert!(gui.honors_manual_override());
+    assert!(!gui.is_agent_controlled());
+    assert!(!gui.requires_explicit_manifest_for_networked());
+    // The GUI label must not collide with the CLI or TUI label.
+    assert_ne!(gui.label(), ExecutionSurface::TuiManual.label());
+    assert_ne!(gui.label(), ExecutionSurface::CliManual.label());
+    assert_eq!(gui.label(), "Desktop GUI manual");
+    assert_eq!(format!("{gui}"), "desktop-gui-manual");
+    // A strict surface must still be strict.
+    for strict in [
+        ExecutionSurface::CliManualStrict,
+        ExecutionSurface::TuiManualStrict,
+    ] {
+        assert_ne!(gui.profile(), strict.profile());
+        assert!(!strict.honors_manual_override());
+    }
 }
 
 #[test]

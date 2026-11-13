@@ -5,7 +5,7 @@ use eggsec_runtime::{
     SessionId, SessionSnapshot, SessionSummary, TaskId,
 };
 
-use super::{RuntimeClientFuture, RuntimeEventReceiverHandle, TuiRuntimeClient};
+use crate::{RuntimeClient, RuntimeClientFuture, RuntimeEventReceiverHandle};
 
 /// Runtime client that wraps an in-process `Runtime` directly.
 pub struct EmbeddedRuntimeClient {
@@ -22,7 +22,7 @@ impl EmbeddedRuntimeClient {
     }
 }
 
-impl TuiRuntimeClient for EmbeddedRuntimeClient {
+impl RuntimeClient for EmbeddedRuntimeClient {
     fn capabilities(&self) -> RuntimeClientFuture<RuntimeCapabilities> {
         Box::pin(async move { Ok(RuntimeCapabilities::default()) })
     }
@@ -87,6 +87,21 @@ impl TuiRuntimeClient for EmbeddedRuntimeClient {
             runtime
                 .cancel_active(session_id)
                 .await
+                .map_err(|e| e.to_string())
+        })
+    }
+
+    fn approve_task(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> RuntimeClientFuture<()> {
+        let runtime = self.runtime.clone();
+        Box::pin(async move {
+            runtime
+                .resolve_approval(session_id, task_id, approved, reason)
                 .map_err(|e| e.to_string())
         })
     }

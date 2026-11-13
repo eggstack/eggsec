@@ -15,7 +15,7 @@
 
 use tokio::sync::broadcast;
 
-use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress};
+use crate::event::{PolicyPrompt, RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskProgress};
 use crate::ids::{SessionId, TaskId};
 
 /// Emit a runtime event best-effort. Logs at trace level if no subscribers
@@ -169,6 +169,25 @@ impl RuntimeEventSink {
                     code,
                     details: None,
                 },
+            },
+        );
+    }
+
+    /// Announce that the task is waiting for an operator's policy decision.
+    ///
+    /// The decision is already registered when this is called, so a client
+    /// that answers the instant it sees the prompt finds the pending
+    /// decision rather than racing it.
+    ///
+    /// The task is the sink's own: a caller cannot announce a prompt for
+    /// some other task.
+    pub fn policy_decision_required(&self, prompt: PolicyPrompt) {
+        emit_event_critical(
+            &self.event_tx,
+            RuntimeEvent::PolicyDecisionRequired {
+                session_id: self.session_id,
+                task_id: Some(self.task_id),
+                prompt,
             },
         );
     }

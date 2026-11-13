@@ -32,7 +32,9 @@ pub fn derive_operation_integration(
         required_features: metadata.required_features,
         requires_explicit_scope: matches!(
             metadata.target_policy,
-            TargetPolicyKind::ExplicitScopeRequired | TargetPolicyKind::PrivateOrLocalRequired
+            TargetPolicyKind::ExplicitScopeRequired
+                | TargetPolicyKind::PrivateOrLocalRequired
+                | TargetPolicyKind::InterfaceBound
         ),
         requires_private_or_local_target: matches!(
             metadata.target_policy,

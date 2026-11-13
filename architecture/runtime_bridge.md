@@ -67,7 +67,7 @@ RuntimeSurface + RunRequest
         │
         ▼
   runtime_surface_to_execution_surface()    [surface.rs:52]
-  (10 variants → ExecutionSurface; Unknown → Err)
+  (11 variants → ExecutionSurface; Unknown → Err)
         │
         ▼
   descriptor_for_run_request()              [descriptor.rs:15]
@@ -104,6 +104,7 @@ Maps each `RuntimeSurface` variant to its `ExecutionSurface` counterpart. This i
 | `CliManualStrict` | `CliManualStrict` | false |
 | `TuiManual` | `TuiManual` | **true** |
 | `TuiManualStrict` | `TuiManualStrict` | false |
+| `DesktopGuiManual` | `DesktopGuiManual` | **true** |
 | `Ci` | `Ci` | false |
 | `McpServer` | `McpServer` | false |
 | `RestApi` | `RestApi` | false |
@@ -111,7 +112,7 @@ Maps each `RuntimeSurface` variant to its `ExecutionSurface` counterpart. This i
 | `SecurityAgent` | `SecurityAgent` | false |
 | `Unknown` | **Error** (`UnknownSurface`) | — |
 
-Only `CliManual` and `TuiManual` honor manual overrides (`eggsec-policy/src/policy.rs:417`).
+Only `CliManual`, `TuiManual`, and `DesktopGuiManual` honor manual overrides (`eggsec-policy/src/policy.rs:429`). The desktop GUI is a peer of the CLI and TUI manual surfaces — same permissive profile, same override rule, no strict GUI variant — so it is a new row in this table rather than a new conversion path. The table remains the single exhaustive conversion: `surface.rs` converts in **both** directions (`RuntimeSurface` → `ExecutionSurface` and back), and `Unknown` is still rejected rather than silently mapped.
 
 ### TaskKind Resolution (`descriptor.rs`)
 
@@ -243,7 +244,7 @@ pub struct EggsecRuntimeExecutor {
 2. Reject `RuntimeSurface::Unknown`
 3. Resolve scope via `resolve_loaded_scope()`
    - Strict surfaces: require explicit `LoadedScope` from disk; fail closed if unavailable
-   - Permissive manual surfaces (`CliManual`/`TuiManual`): use `default_empty()`
+   - Permissive manual surfaces (`CliManual`/`TuiManual`/`DesktopGuiManual`): use `default_empty()`
 4. Call `approve_run_request_bundle()` for full enforcement
 5. Log approved operation for audit
 6. Spawn progress forwarder task
@@ -259,7 +260,7 @@ pub struct EggsecRuntimeExecutor {
 The `resolve_loaded_scope()` method (`executor.rs:65–118`) determines scope resolution strategy:
 - If session has explicit scope with a path → loads from disk via `crate::config::load_scope()`
 - If session has explicit scope but no path → returns `None` (caller fails closed)
-- If permissive surface (`CliManual`/`TuiManual`) → `LoadedScope::default_empty()`
+- If permissive surface (`CliManual`/`TuiManual`/`DesktopGuiManual`) → `LoadedScope::default_empty()`
 - If strict surface without explicit scope → `None` (fail closed)
 
 ## Trust Model
@@ -273,7 +274,7 @@ The `resolve_loaded_scope()` method (`executor.rs:65–118`) determines scope re
 ## Invariants
 
 1. **`RuntimeSurface::Unknown` is never executable** — always errors (`surface.rs:65`).
-2. **Manual surfaces retain operator-directed semantics** (even daemon-backed) — `CliManual` and `TuiManual` use `approve_manual()` (`manual.rs:60–65`).
+2. **Manual surfaces retain operator-directed semantics** (even daemon-backed) — `CliManual`, `TuiManual`, and `DesktopGuiManual` use `approve_manual()` (`manual.rs:60–65`).
 3. **Automated surfaces never honor manual overrides** — rejected with `ManualOverrideRejected` before enforcement evaluation (`manual.rs:66–71`).
 4. **Any new `RuntimeSurface` variant must update conversion tests** — `surface.rs` unit tests plus the `runtime_contract_closure` integration test (both fail until mapped).
 5. **`dispatch_approved_runtime_request` validates both operation ID and target** — mismatches are rejected with explicit errors (`bundle.rs:127–148`).
@@ -332,4 +333,4 @@ The bridge module has extensive test coverage across all files:
 - [overview.md](overview.md) — System-wide architecture, enforcement model
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Section 4.8 (Daemon / Runtime (`runtime_bridge`))
 
-*Last verified against source: 2026-09-11 (Phase 3 closure); cites re-verified 2026-09-22 (systematic review); file sizes and `ApprovedExecution` bundle shape re-verified 2026-09-25; full re-verification 2026-10-06 (1,900 lines; `TaskKind` 30 variants incl. `Resume`; dispatch path corrected to `execute_approved_execution`)*
+*Last verified against source: 2026-09-11 (Phase 3 closure); cites re-verified 2026-09-22 (systematic review); file sizes and `ApprovedExecution` bundle shape re-verified 2026-09-25; full re-verification 2026-10-06 (1,900 lines; `TaskKind` 30 variants incl. `Resume`; dispatch path corrected to `execute_approved_execution`); 2026-10-23 (`DesktopGuiManual` added to the single surface-conversion table in both directions)*

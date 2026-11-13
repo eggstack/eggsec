@@ -11,10 +11,13 @@
 # NOT part of the per-PR `make check` contract (too expensive for every push).
 #
 # Behavior:
-# - Missing system prerequisites (protoc, libpcap, libssh2) are recorded as
-#   SKIP, not FAIL, and reported separately in the summary.
+# - Missing system prerequisites (protoc, libssh2) are recorded as SKIP, not
+#   FAIL, and reported separately in the summary.
 # - Any Rust compile failure is a FAIL and sets a non-zero exit code.
 # - Newly declared features with no sweep entry fail loudly (orphan check).
+#
+# Portability: this script runs on bash 3.2 (the version macOS ships), so it
+# uses no bash-4 construct. Guard Check 196 keeps it that way.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,10 +36,6 @@ have_libssh2() {
   # libssh2 dev package provides ssh2.h; pkg-config entry is libssh2.
   [ -f /usr/include/libssh2.h ] || [ -f /usr/local/include/libssh2.h ] \
     || pkg-config --exists libssh2 2>/dev/null
-}
-have_libpcap() {
-  [ -f /usr/include/pcap.h ] || [ -f /usr/include/pcap/pcap.h ] \
-    || pkg-config --exists libpcap 2>/dev/null
 }
 
 run_check() {
@@ -69,23 +68,39 @@ for name in sorted(feats):
         print(name)
 ")
 
-declare -A ENGINE_SETS=(
-  # backend drivers are meaningful with their base domain
-  ["db-pentest-mongodb"]="db-pentest,db-pentest-mongodb"
-  ["db-pentest-mssql-tiberius"]="db-pentest,db-pentest-mssql-tiberius"
-  ["db-pentest-redis"]="db-pentest,db-pentest-redis"
-  # exposure markers compile against their base domain + tool surface
-  ["db-pentest-mcp"]="db-pentest-mcp,tool-api,rest-api"
-  ["web-proxy-mcp"]="web-proxy-mcp,tool-api,rest-api"
-  ["c2-mcp"]="c2-mcp,tool-api,rest-api"
-)
+# Companion feature sets: the minimum set needed to activate a feature
+# meaningfully (base domain first where the marker alone is a no-op path).
+# Anything not listed compiles bare.
+#
+# A `case` function rather than an associative array, on purpose: `declare -A`
+# needs bash 4, and this script has to run on a stock macOS shell, where
+# /bin/bash is 3.2 and `declare -A` aborts the whole sweep before a single
+# profile is compiled. The mapping is identical either way.
+engine_feature_set() {
+  case "$1" in
+    # backend drivers are meaningful with their base domain
+    db-pentest-mongodb) echo "db-pentest,db-pentest-mongodb" ;;
+    db-pentest-mssql-tiberius) echo "db-pentest,db-pentest-mssql-tiberius" ;;
+    db-pentest-redis) echo "db-pentest,db-pentest-redis" ;;
+    # exposure markers compile against their base domain + tool surface
+    db-pentest-mcp) echo "db-pentest-mcp,tool-api,rest-api" ;;
+    web-proxy-mcp) echo "web-proxy-mcp,tool-api,rest-api" ;;
+    c2-mcp) echo "c2-mcp,tool-api,rest-api" ;;
+    # anything else compiles bare
+    *) echo "$1" ;;
+  esac
+}
 
 # System-prerequisite-gated engine features (SKIP when the prerequisite is
 # absent; FAIL on real compile errors when present).
 PREREQ_GRPC_API="protobuf-compiler (protoc)"
 PREREQ_NSE_SSH2="libssh2-1-dev"
-PREREQ_PACKET="libpcap-dev"
-PREREQ_STRESS="libpcap-dev"
+# `packet-inspection` and `stress-testing` have NO build-time system
+# prerequisite: the engine uses pure-Rust `pnet`
+# (crates/eggsec/Cargo.toml:323, :326), not libpcap. They are compiled bare
+# here, so a compile failure is always FAIL and never a prerequisite SKIP.
+# Their *runtime* needs (Linux + CAP_NET_RAW) are reported by the engine's
+# own platform matrix, not by this sweep.
 
 while IFS= read -r feat; do
   [ -z "$feat" ] && continue
@@ -94,17 +109,13 @@ while IFS= read -r feat; do
       if ! have_protoc; then note_skip "eggsec/$feat" "$PREREQ_GRPC_API"; continue; fi ;;
     nse-ssh2)
       if ! have_libssh2; then note_skip "eggsec/$feat" "$PREREQ_NSE_SSH2"; continue; fi ;;
-    packet-inspection)
-      if ! have_libpcap; then note_skip "eggsec/$feat" "$PREREQ_PACKET"; continue; fi ;;
-    stress-testing)
-      if ! have_libpcap; then note_skip "eggsec/$feat" "$PREREQ_STRESS"; continue; fi ;;
   esac
-  feats="${ENGINE_SETS[$feat]:-$feat}"
+  feats="$(engine_feature_set "$feat")"
   run_check "eggsec/$feat" cargo check -p eggsec --features "$feats"
 done <<< "$ENGINE_FEATURES"
 
 # Orphan guard: every engine feature must have an explicit sweep entry above.
-# ENGINE_SETS documents intentional companion sets; the case statement
+# engine_feature_set documents intentional companion sets; the case statement
 # documents prerequisite-gated features. Anything else uses the bare name.
 echo ""
 echo "--- Orphan guard: sweep covers every engine feature ---"
@@ -213,6 +224,14 @@ run_check "eggsec-mobile-lab/mobile-dynamic" cargo check -p eggsec-mobile-lab --
 echo ""
 echo "--- Daemon / CLI ---"
 run_check "eggsec-daemon/http-api" cargo check -p eggsec-daemon --features http-api
+# The daemon's GUI-serving profile. Its only build-time system requirement
+# class is a C toolchain (cc, perl, make) for the *vendored* OpenSSL that
+# `nse` pulls in — not a system libssl-dev. A C toolchain is present on every
+# supported build host, so there is no SKIP gate here; a compile failure is
+# always FAIL.
+run_check "eggsec-daemon/service" cargo check -p eggsec-daemon --features service
+# `full-executor` is the deprecated alias for `service`; sweeping it keeps the
+# alias honest.
 run_check "eggsec-daemon/full-executor" cargo check -p eggsec-daemon --features full-executor
 run_check "eggsec-cli/default(tui)" cargo check -p eggsec-cli
 run_check "eggsec-cli/headless" cargo check -p eggsec-cli --no-default-features

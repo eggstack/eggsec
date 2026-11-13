@@ -1,6 +1,6 @@
 # Dependency Advisory Exceptions
 
-Reviewed: 2026-09-13 (Phase F supply-chain hardening)
+Reviewed: 2026-10-24 (milestone 015 — dependency advisory backlog)
 
 This document tracks active advisory exceptions that cannot yet be resolved
 by simple dependency upgrades.
@@ -79,37 +79,6 @@ Every retained advisory ignore must include:
 | Review-by | 2026-12-12 |
 | Blocker | notify v8+ or upstream must drop instant; no alternative available |
 
-### RUSTSEC-2025-0119 — number_prefix unmaintained — **RESOLVED 2026-10-06**
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2025-0119 |
-| Path | *(was)* `number_prefix` 0.4.0 -> `indicatif` v0.17.11 |
-| Feature | Progress bars (indicatif used in eggsec pipeline/scanner/loadtest) |
-| API used | No — number_prefix is an internal formatting crate, not exposed |
-| Exploitability | Low — unmaintained, not a vulnerability |
-| Compensating control | None needed; no known security impact |
-| Owner | eggsec-cli / eggsec-tui |
-| Created | 2025-07-01 |
-| Resolution | The documented blocker was "`indicatif` v0.18+ must drop `number_prefix`". `indicatif` has since advanced to **0.18.6**, which dropped the dependency: `number_prefix` no longer appears anywhere in `Cargo.lock`, so the advisory is no longer reachable. |
-| Review-by | — (closed) |
-
-> **Closed 2026-10-06:** the `deny.toml` ignore for `RUSTSEC-2025-0119` has now been
-> removed, following the `paste` precedent below rather than being left as a dead
-> entry. Verified: `cargo deny --workspace --all-features check advisories` → `advisories ok`.
-
-### RUSTSEC-2024-0436 — paste unmaintained — **RESOLVED 2026-10-06**
-
-| Field | Value |
-|-------|-------|
-| Advisory | RUSTSEC-2024-0436 |
-| Path | *(was)* `paste` 1.0.15 -> `sqlx-macros-core` -> `sqlx` 0.8.0 |
-| Feature | `db-pentest` (optional; `eggsec-db-lab` Postgres/MySQL probes) |
-| Resolution | Upgrading `sqlx` 0.8.0 → 0.8.6 for RUSTSEC-2024-0363 also dropped `paste` from the dependency graph entirely, so this advisory is no longer reachable. The `deny.toml` ignore was removed rather than left as a dead entry |
-| Owner | eggsec-db-lab |
-| Created | 2026-09-13 |
-| Review-by | — (closed) |
-
 ### RUSTSEC-2025-0134 — rustls-pemfile unmaintained
 
 | Field | Value |
@@ -184,6 +153,104 @@ Every retained advisory ignore must include:
 | Created | 2026-09-13 |
 | Review-by | 2026-12-12 |
 | Blocker | **Corrected 2026-10-06.** The previous note — "tiberius 0.12.3 is latest; requires tiberius upstream to upgrade its rustls stack" — is no longer accurate: upstream has since released **tiberius 0.13.0**, which does move to `tokio-rustls` 0.26 / rustls 0.23 / rustls-webpki 0.103. It was trialled and **reverted**: 0.13.0 depends on `tokio-rustls ^0.26.4` with default features, which enables rustls' `aws-lc-rs` crypto provider, and `[bans] deny = ["aws-lc-rs"]` forbids it under the repo's ring-only TLS policy. Feature unification would apply that provider to the whole build, not just MSSQL. So this is now blocked by **policy**, not by upstream. Clearing it requires either tiberius exposing a ring-only path or a maintainer decision to relax the ring-only rule |
+
+### RUSTSEC-2024-0429 — glib 0.18.5 unsound
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2024-0429 (unsound), RUSTSEC-2024-0370 (unmaintained `proc-macro-error` 1.0.4) |
+| Path | `glib` 0.18.5 -> `gtk` 0.18.2 -> `tauri` 2.11.6 (also `wry` 0.55.1 -> `gtk`, `tao` 0.35.3 -> `gtk`); `proc-macro-error` 1.0.4 -> `gtk3-macros` 0.18.2 and `glib-macros` 0.18.5 |
+| Feature | `desktop-gui` (Tauri shell closure in `eggsec-gui`; the gtk-rs stack is Linux-only) |
+| API used | Transitively — GTK/glib bindings behind the Tauri shell. Eggsec never calls glib or proc-macro-error directly; `proc-macro-error` is a build-time macro dependency only |
+| Exploitability | Low for Eggsec — RUSTSEC-2024-0429 is an unsoundness advisory in glib's RefCell/borrowing internals reachable only through GTK's own C boundary, and the GUI surface is a local operator-driven desktop shell that links no engine, daemon, CLI or TUI crate. RUSTSEC-2024-0370 is `unmaintained`, not a vulnerability |
+| Compensating control | The affected crate is Linux-only and reached only through the Tauri shell closure; the GUI is daemon-only and makes no outbound HTTP of its own, so no untrusted input reaches the GTK boundary. RUSTSEC-2024-0370 is a build-time-only dependency and is not linked into the shipped binary |
+| Owner | eggsec-gui |
+| Created | 2026-10-24 |
+| Review-by | 2026-12-12 |
+| Blocker | gtk-rs 0.20 is unreachable: no published `muda`/`tao`/`wry` version uses gtk-rs 0.20+ (measured across 66 `muda`, 125 `tao`, and 30 `wry` published versions — only `gtk`/`glib` requirements `^0.9`, `^0.10`, `^0.14`, `^0.15`, `^0.16`, `^0.18` exist), and `tauri` 2.12.5 still declares `gtk ^0.18`. Clearing requires the upstream Tauri closure to move to gtk-rs 0.20+, which is **not** reachable by moving the Tauri line, by raising MSRV, or by any lockfile operation. `proc-macro-error` 1.0.4 is the latest published version and clears together with this entry |
+
+### RUSTSEC-2026-0346 / RUSTSEC-2026-0349 / RUSTSEC-2026-0382 — rustls 0.21.12 / rustls-webpki 0.101.7
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2026-0346 (rustls CRL/OCSP handling), RUSTSEC-2026-0349 (rustls 0.21.12), RUSTSEC-2026-0382 (rustls-webpki 0.101.7) |
+| Path | `rustls` 0.21.12 -> `tokio-rustls` 0.24.1 -> `tiberius` 0.12.3; `rustls-webpki` 0.101.7 -> `rustls` 0.21.12 -> `tokio-rustls` 0.24.1 -> `tiberius` 0.12.3 |
+| Feature | `db-pentest-mssql-tiberius` marker (optional MSSQL via tiberius, in `eggsec-db-lab`) |
+| API used | Transitively — TLS certificate verification for lab MSSQL connections; Eggsec never calls rustls or rustls-webpki directly on this path |
+| Exploitability | Low for Eggsec — the affected rustls 0.21-line code is reachable only behind operator-initiated, scope-enforced MSSQL connections to explicitly authorized lab targets; the lab threat model does not include a misissuing CA constraining Eggsec's own lab servers |
+| Compensating control | Scope-enforced lab connections; TLS verification left enabled (no `danger_accept_invalid_certs` bypass in this path). The ring-only provider rule (`[bans] deny = ["aws-lc-rs"]`) is unchanged |
+| Owner | eggsec-db-lab |
+| Created | 2026-10-24 |
+| Review-by | 2026-12-12 |
+| Blocker | `tiberius` 0.13.0 moves to `tokio-rustls` 0.26 / rustls 0.23 / rustls-webpki 0.103, but it depends on `tokio-rustls` with default features, which enables the `aws-lc-rs` crypto provider that `[bans] deny = ["aws-lc-rs"]` forbids under the ring-only TLS policy. Blocked by **policy**, not by upstream: clearing requires either `tiberius` exposing a ring-only path or a maintainer decision to relax the ring-only rule (which would need an ADR). The `rustls` 0.23 line used by `reqwest` is unaffected — that instance cleared by the 0.23.46 lockfile refresh |
+
+### RUSTSEC-2024-0449 — unsafe-libyaml 0.2.11 unmaintained
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2024-0449 (unmaintained) |
+| Path | `unsafe-libyaml` 0.2.11 -> `serde_yaml_neo` 0.11.0 (in `eggsec` config/policy/skills/templates/api-schema and `eggsec-web-proxy` config/rules) |
+| Feature | Always compiled (`serde_yaml_neo` is a non-optional dependency of the engine and the web proxy) |
+| API used | Transitively — YAML parsing of engine configuration (`crates/eggsec/src/config/loader.rs`), policy resolution (`crates/eggsec/src/policy_bridge/resolver.rs`), agent skill front-matter (`crates/eggsec/src/agent/skills.rs`), scanner and marketplace template loading (`crates/eggsec/src/scanner/templates/`), API-schema fuzzing (`crates/eggsec/src/fuzzer/api_schema/`, `crates/eggsec/src/api_schema/`), auth-context loading, OpenAPI export, and the web proxy's config and intercept rules |
+| Exploitability | Moderate for Eggsec — the parsed content is **partly operator-supplied and partly downloaded**: the scanner marketplace loader (`crates/eggsec/src/scanner/templates/marketplace.rs`) parses downloaded template content. The advisory kind is `unmaintained`, not a vulnerability, and `unsafe-libyaml` 0.2.11 has no fixed release; the parser is not unused and is not claimed to be unexposed |
+| Compensating control | Downloaded template content is fetched over the workspace transport with its own scope/authority checks, and operator-supplied configuration is trusted input by definition; no YAML parse result is used to construct shell commands or paths without validation. The mitigating factor is the absence of a fix upstream, not a claim of non-exposure |
+| Owner | eggsec (config) / eggsec-web-proxy |
+| Created | 2026-10-24 |
+| Review-by | 2026-12-12 |
+| Blocker | `unsafe-libyaml` 0.2.11 is the latest published version and `serde_yaml_neo` 0.11.0 (also the latest) hard-depends on it; clearing requires `serde_yaml_neo` upstream to migrate to a maintained YAML backend, or a workspace-wide replacement of the YAML parser |
+
+### RUSTSEC-2025-0075 / -0080 / -0081 / -0098 / -0100 — unic-* 0.9.0 unmaintained
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2025-0075 (`unic-char-range`), RUSTSEC-2025-0080 (`unic-common`), RUSTSEC-2025-0081 (`unic-char-property`), RUSTSEC-2025-0098 (`unic-ucd-version`), RUSTSEC-2025-0100 (`unic-ucd-ident`) |
+| Path | `unic-*` 0.9.0 -> `unic-ucd-ident` 0.9.0 -> `urlpattern` 0.3.0 -> `tauri-utils` 2.9.3 -> `tauri` 2.11.6 (in the `eggsec-gui` shell closure) |
+| Feature | `desktop-gui` (Tauri shell closure in `eggsec-gui`) |
+| API used | Transitively — Unicode property lookup inside `urlpattern` pattern matching behind the Tauri shell. Eggsec never calls the `unic-*` crates directly |
+| Exploitability | Low for Eggsec — all five advisories are `unmaintained`, not vulnerabilities; the crates are reached only through the GUI's URL-pattern validation inside the Tauri shell closure, and the GUI is a local operator-driven daemon-only client |
+| Compensating control | The `unic-*` set is reached only through the Tauri shell closure; no untrusted network input from the GUI reaches URL-pattern evaluation, and the crates are pure data tables with no unsafe code or I/O |
+| Owner | eggsec-gui |
+| Created | 2026-10-24 |
+| Review-by | 2026-12-12 |
+| Blocker | **MSRV-gated, not upgrade-less.** `urlpattern` 0.6.0 drops the whole `unic-*` set (its dependencies become `icu_properties`, `regex`, `serde`, `url`), but `tauri-utils` 2.10.0+ is the first line requiring `urlpattern ^0.6`, and `tauri-utils` 2.10.0/2.10.1/2.10.2 all declare `rust-version = "1.90"`, above this workspace's `rust-version = "1.89"` floor (`Cargo.toml:39`). **Removal recipe:** (1) raise the workspace `rust-version` to 1.90 in a separate, workspace-wide decision; (2) move the Tauri closure to the 2.12 line (`tauri` 2.12.5, `tauri-utils` 2.10.2, `tauri-macros` 2.7.4, `tauri-runtime` 2.12.2, `tauri-runtime-wry` 2.12.3, `tauri-build` 2.7.4); (3) re-run `make check-msrv`; the five `unic-*` entries then disappear because `urlpattern` resolves to 0.6.x. Note that `tauri` 2.12.5 still declares `gtk ^0.18`, so this recipe clears this entry and **not** the glib / proc-macro-error entry above |
+
+## Resolved Exceptions
+
+These records are retained for history only. Their `deny.toml` ignore entries were
+removed when the underlying dependency left the graph, so no live ignore backs
+them — architecture guard Check 190 enforces that a RESOLVED advisory ID never
+reappears in `deny.toml`'s `ignore` list.
+
+### RUSTSEC-2025-0119 — number_prefix unmaintained — **RESOLVED 2026-10-06**
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2025-0119 |
+| Path | *(was)* `number_prefix` 0.4.0 -> `indicatif` v0.17.11 |
+| Feature | Progress bars (indicatif used in eggsec pipeline/scanner/loadtest) |
+| API used | No — number_prefix is an internal formatting crate, not exposed |
+| Exploitability | Low — unmaintained, not a vulnerability |
+| Compensating control | None needed; no known security impact |
+| Owner | eggsec-cli / eggsec-tui |
+| Created | 2025-07-01 |
+| Resolution | The documented blocker was "`indicatif` v0.18+ must drop `number_prefix`". `indicatif` has since advanced to **0.18.6**, which dropped the dependency: `number_prefix` no longer appears anywhere in `Cargo.lock`, so the advisory is no longer reachable. |
+| Review-by | — (closed) |
+
+> **Closed 2026-10-06:** the `deny.toml` ignore for `RUSTSEC-2025-0119` has now been
+> removed, following the `paste` precedent below rather than being left as a dead
+> entry. Verified: `cargo deny --workspace --all-features check advisories` → `advisories ok`.
+
+### RUSTSEC-2024-0436 — paste unmaintained — **RESOLVED 2026-10-06**
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2024-0436 |
+| Path | *(was)* `paste` 1.0.15 -> `sqlx-macros-core` -> `sqlx` 0.8.0 |
+| Feature | `db-pentest` (optional; `eggsec-db-lab` Postgres/MySQL probes) |
+| Resolution | Upgrading `sqlx` 0.8.0 → 0.8.6 for RUSTSEC-2024-0363 also dropped `paste` from the dependency graph entirely, so this advisory is no longer reachable. The `deny.toml` ignore was removed rather than left as a dead entry |
+| Owner | eggsec-db-lab |
+| Created | 2026-09-13 |
+| Review-by | — (closed) |
 
 ## License exception
 

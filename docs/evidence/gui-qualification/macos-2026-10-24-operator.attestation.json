@@ -1,0 +1,33 @@
+{
+  "schema": "eggsec-gui-operator-attestation/v1",
+  "attested_by": "David Bowman",
+  "attested_at": "2026-10-24",
+  "platform": "macos",
+  "commit": "309d77d1362fef645927117efe78e9c19e53cbe2",
+  "columns": {
+    "launch": {
+      "outcome": "pass",
+      "observed": "the eggsec-gui window was painted on the macOS WindowServer and titled Eggsec; the accessibility query returned exactly one window, and the capture shows the window's own contents rather than a blank frame or a photograph of the desktop"
+    },
+    "connect": {
+      "outcome": "pass",
+      "observed": "the badge beside the title read CONNECTED; the header line reported OPERATIONS 35, TASK KINDS 30 and CAPABILITIES 30; the session line carried a session id; and the OPERATIONS sidebar listed the operations the daemon had published"
+    },
+    "submit": {
+      "outcome": "pass",
+      "observed": "selecting an operation in the sidebar rendered the schema-driven form from the daemon's advertised catalogue (Port Scan showed target, concurrency, ports and scan_type); running it produced a task card carrying a task id and a non-terminal status"
+    },
+    "cancel": {
+      "outcome": "pass",
+      "observed": "the Cancel active task control reached the daemon and the daemon's answer was surfaced verbatim in the GUI (CANCELLATION FAILED - task already completed: task:8f886498-af9e-48ef-8819-90d8fa40705f); the card's status is read from the daemon's event stream, which showed QUEUED, then RUNNING with the daemon's live 'dispatching scan-ports' event line and a progress bar. The daemon's cancellation of a live task, and its 'cancelled' terminal state, are measured by the harness against the same daemon"
+    },
+    "render": {
+      "outcome": "pass",
+      "observed": "Show report on the completed task filled the REPORT panel with the daemon's report as data - TARGET 127.0.0.1, SCAN port-scan, DURATION 28 ms - rather than an empty dashboard"
+    },
+    "export": {
+      "outcome": "pass",
+      "observed": "the EXPORT A REPORT panel wrote the daemon's report to the destination chosen and the GUI reported REPORT EXPORTED with that path; the written file held the report, with four open ports (22/SSH, 53/DNS, 88, 445/SMB)"
+    }
+  }
+}

@@ -8,7 +8,11 @@ rust-version.workspace = true
 description = "Daemon IPC protocol types and client registry for Eggsec"
 
 [dependencies]
-eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0" }
+eggsec-runtime = { path = "../eggsec-runtime", version = "0.1.0", features = ["schema"] }
+# The canonical operation catalog (ADR-0008). The published description is read
+# from it, never transcribed, so the wire shape and the policy source cannot
+# drift apart. `eggsec-policy` is a pure semantic kernel: no Tokio, no I/O.
+eggsec-policy = { path = "../eggsec-policy", version = "0.1.0" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

@@ -549,10 +549,18 @@ echo "--- Check 28: NSE registry entries have corresponding Rust modules ---"
 SECTION_FAIL=0
 # Nmap Lua library names that map to different Rust module names.
 # Format: "nmap_name:rust_module1,rust_module2"
-declare -A NSE_NAME_MAP=(
-  ["ssl"]="sslcert,openssl"
-  ["lfs"]="lfs"
-)
+#
+# A `case` function rather than an associative array: `declare -A` needs
+# bash 4, and this script must run on a stock macOS shell, where /bin/bash is
+# 3.2 and the declaration aborts the whole guard run. Guard Check 196 keeps
+# the repository's scripts free of bash-4 constructs.
+nse_rust_modules() {
+  case "$1" in
+    ssl) echo "sslcert,openssl" ;;
+    lfs) echo "lfs" ;;
+    *) echo "" ;;
+  esac
+}
 REGISTRY_NAMES=$(rg -o 'name: "[^"]*"' crates/eggsec-nse/src/resolver/registry.rs \
   | sed 's/.*name: "\([^"]*\)".*/\1/' | sort -u)
 for NAME in $REGISTRY_NAMES; do
@@ -561,7 +569,7 @@ for NAME in $REGISTRY_NAMES; do
     continue
   fi
   # Check name mapping
-  MAPPED="${NSE_NAME_MAP[$NAME]:-}"
+  MAPPED="$(nse_rust_modules "$NAME")"
   FOUND=0
   if [[ -n "$MAPPED" ]]; then
     IFS=',' read -ra MODULES <<< "$MAPPED"
@@ -2674,8 +2682,51 @@ if ! rg -q 'eggsec = \{ path = "\.\./eggsec", version = "0\.1\.0", features = \[
   echo "FAIL: eggsec-tui must depend on eggsec with explicit version + features=[\"cli\"]."
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
-if ! rg -q 'full-executor = \["dep:eggsec", "eggsec/cli"\]' crates/eggsec-daemon/Cargo.toml 2>/dev/null; then
-  echo "FAIL: daemon full-executor must enable eggsec/cli explicitly (engine default is empty)."
+if [[ ! -f crates/eggsec-daemon/Cargo.toml ]]; then
+  echo "FAIL: crates/eggsec-daemon/Cargo.toml is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! python3 - crates/eggsec-daemon/Cargo.toml <<'PYEOF' 2>&1; then
+import sys, pathlib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    print("FAIL: python3 with tomllib (3.11+) is required to parse the daemon manifest.")
+    sys.exit(1)
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = tomllib.loads(path.read_text())
+except Exception as exc:
+    print(f"FAIL: {path} is not valid TOML: {exc}")
+    sys.exit(1)
+
+features = (data.get("features") or {})
+problems = []
+
+service = features.get("service")
+if not isinstance(service, list):
+    problems.append("the daemon must declare a `service` feature (the GUI-serving daemon profile)")
+else:
+    # `cli` is a HOST GATE, not a CLI surface: it gates the engine's
+    # `runtime_bridge`, `commands`, and `dispatch` modules, which is where
+    # `EggsecRuntimeExecutor` lives. The daemon cannot host the executor it
+    # is built around without it.
+    for required in ("dep:eggsec", "eggsec/cli"):
+        if required not in service:
+            problems.append(f"the daemon's `service` feature must enable `{required}`")
+
+if features.get("full-executor") != ["service"]:
+    problems.append(
+        "the daemon's `full-executor` feature must be exactly [\"service\"] (a deprecated alias)"
+    )
+
+if problems:
+    print("FAIL: the daemon must opt into the engine explicitly, through its profile:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
   SECTION_FAIL=$((SECTION_FAIL + 1))
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
@@ -4360,6 +4411,3215 @@ if [[ -f "$ENGINE_MOD" ]]; then
 fi
 if [[ $SECTION_FAIL -eq 0 ]]; then
   echo "PASS: corpus owns all 40 payload types (no panic, no silent empty); 6 probers stay engine-side behind the permanent facade."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 151. ADR-0008: the published operation schema is descriptive only. It must
+# never be imported by, or consulted by, an authorization, dispatch, scope,
+# or policy path -- if it were, the artifact would become a second policy
+# surface and `OperationMetadata` would stop being the single source of
+# truth. The engine and the policy kernel must not even gain the derivation
+# dependency, so the schema is unreachable from an enforcement path by
+# construction, not by convention.
+echo ""
+echo "--- Check 151: published schema stays off the authorization path ---"
+SECTION_FAIL=0
+SCHEMA_PATTERN='schemars|schema_for!|eggsec_runtime::schema|describe_operations|DescribeOperations'
+# The engine's execution and bridge halves.
+for dir in crates/eggsec/src/dispatch crates/eggsec/src/runtime_bridge crates/eggsec-policy/src; do
+  if code_search "$dir" "$SCHEMA_PATTERN" | grep -q .; then
+    echo "FAIL: $dir reaches for the published schema; the schema is descriptive and must stay off the authorization path."
+    code_search "$dir" "$SCHEMA_PATTERN" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The engine's policy and scope halves.
+for f in crates/eggsec/src/config/policy.rs crates/eggsec/src/config/policy_target.rs crates/eggsec/src/config/policy_catalog.rs crates/eggsec/src/config/policy_decision.rs crates/eggsec/src/config/policy_approval.rs crates/eggsec/src/config/scope.rs crates/eggsec/src/config/scope_address.rs; do
+  if [[ -f "$f" ]] && rg -q "$SCHEMA_PATTERN" "$f" 2>/dev/null; then
+    echo "FAIL: $f reaches for the published schema; the schema is descriptive and must stay off the authorization path."
+    rg -n "$SCHEMA_PATTERN" "$f" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The enforcement owners must not gain the derivation dependency.
+if rg -q '^schemars' crates/eggsec/Cargo.toml crates/eggsec-policy/Cargo.toml 2>/dev/null; then
+  echo "FAIL: the engine or the policy kernel gained a schemars dependency; the schema must be unreachable from an enforcement path."
+  rg -n '^schemars' crates/eggsec/Cargo.toml crates/eggsec-policy/Cargo.toml 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the published schema is unreachable from every authorization, dispatch, scope, and policy path."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 152. ADR-0008: no hand-written parameter table. A transcribed parameter
+# table is a second source of truth: it drifts silently the moment a request
+# struct gains, drops, or renames a field, and nothing fails. The canonical
+# request DTOs live in eggsec-runtime; no other frontend-neutral crate may
+# define a struct with a params name.
+#
+# The engine and the Python bindings are deliberately out of scope: the engine
+# owns REST-surface DTOs (e.g. PaginationParams) and the bindings own their
+# own argument structs. Neither publishes a request-parameter table.
+echo ""
+echo "--- Check 152: no hand-written parameter table ---"
+SECTION_FAIL=0
+for crate in eggsec-core eggsec-tool-core eggsec-runtime eggsec-output eggsec-ui-model eggsec-report-model eggsec-daemon-protocol eggsec-policy eggsec-frontend-client; do
+  dir="crates/${crate}/src"
+  [[ -d "$dir" ]] || continue
+  HITS="$(rg -n 'pub struct \w*Params\b' "$dir" 2>/dev/null | grep -v '^crates/eggsec-runtime/src/request.rs:' || true)"
+  if [[ -n "$HITS" ]]; then
+    echo "FAIL: $crate defines a params struct; only crates/eggsec-runtime/src/request.rs owns the canonical request DTOs."
+    echo "$HITS"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the canonical request DTOs are the only params structs in the frontend-neutral crates."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 153. The frontend-client crate is the shared runtime contract for every
+# interactive frontend. It must stay free of any frontend framework and of
+# the engine, so a second frontend can depend on it without inheriting a TUI
+# -- or the whole engine -- along with it.
+echo ""
+echo "--- Check 153: frontend-client crate stays framework-free ---"
+SECTION_FAIL=0
+FC_MANIFEST="crates/eggsec-frontend-client/Cargo.toml"
+if [[ ! -f "$FC_MANIFEST" ]]; then
+  echo "FAIL: $FC_MANIFEST is missing (the frontend-client crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for dep in 'eggsec =' 'eggsec-tui' 'ratatui' 'crossterm'; do
+    if rg -q "^${dep}" "$FC_MANIFEST" 2>/dev/null; then
+      echo "FAIL: $FC_MANIFEST references forbidden dep '$dep' (the frontend client carries no frontend framework)."
+      rg -n "^${dep}" "$FC_MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if code_search crates/eggsec-frontend-client/src 'ratatui|crossterm|eggsec_tui|eggsec::' | grep -q .; then
+    echo "FAIL: crates/eggsec-frontend-client/src reaches for a frontend framework or the engine."
+    code_search crates/eggsec-frontend-client/src 'ratatui|crossterm|eggsec_tui|eggsec::' || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the frontend-client crate depends on no frontend framework and not on the engine."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 154. The desktop GUI must remain a *manual* surface. A future edit could
+# silently demote it (drop it from honors_manual_override, move it onto an
+# agent-controlled arm, give it a strict profile) or drop the conversion
+# entirely, and the GUI would then be evaluated under the wrong rules. This
+# guard pins the variant's presence, its manual classification, and the one
+# conversion table that owns it.
+echo ""
+echo "--- Check 154: desktop GUI stays a manual surface ---"
+SECTION_FAIL=0
+GUI_RUNTIME="crates/eggsec-runtime/src/request.rs"
+GUI_POLICY="crates/eggsec-policy/src/policy.rs"
+GUI_BRIDGE="crates/eggsec/src/runtime_bridge/surface.rs"
+if ! rg -q '^\s+DesktopGuiManual,' "$GUI_RUNTIME" 2>/dev/null; then
+  echo "FAIL: $GUI_RUNTIME no longer declares RuntimeSurface::DesktopGuiManual."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q '^\s+DesktopGuiManual,' "$GUI_POLICY" 2>/dev/null; then
+  echo "FAIL: $GUI_POLICY no longer declares ExecutionSurface::DesktopGuiManual."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'RuntimeSurface::DesktopGuiManual => Ok\(ExecutionSurface::DesktopGuiManual\)' "$GUI_BRIDGE" 2>/dev/null; then
+  echo "FAIL: $GUI_BRIDGE no longer maps RuntimeSurface::DesktopGuiManual to the execution surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'ExecutionSurface::DesktopGuiManual => RuntimeSurface::DesktopGuiManual' "$GUI_BRIDGE" 2>/dev/null; then
+  echo "FAIL: $GUI_BRIDGE no longer maps ExecutionSurface::DesktopGuiManual back to the wire surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The manual/strict split is decided by honors_manual_override() and
+# is_agent_controlled(); the GUI must be on the manual side of both.
+GUI_MANUAL_ARM="$(sed -n '/pub fn honors_manual_override/,/^    }/p' "$GUI_POLICY")"
+if ! printf '%s' "$GUI_MANUAL_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: honors_manual_override() no longer includes the desktop GUI surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+GUI_AGENT_ARM="$(sed -n '/pub fn is_agent_controlled/,/^    }/p' "$GUI_POLICY")"
+if printf '%s' "$GUI_AGENT_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: is_agent_controlled() includes the desktop GUI surface; the GUI is a manual surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+GUI_PROFILE_ARM="$(sed -n '/pub fn profile/,/^    }/p' "$GUI_POLICY")"
+if ! printf '%s' "$GUI_PROFILE_ARM" | grep -q 'DesktopGuiManual'; then
+  echo "FAIL: profile() no longer derives a profile for the desktop GUI surface."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the desktop GUI surface is declared in both enums, converts in both directions, and stays manual."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 155. The desktop GUI is a daemon-only frontend: it reaches the engine
+# through the daemon's Unix socket, using the shared frontend-client
+# contract. A GUI that linked the engine (or the daemon, or another
+# frontend) directly would open a second path to the engine -- one with no
+# daemon session, no daemon audit trail, and no daemon-issued scope. The
+# dependency direction is one-way: engine -> transport, frontend -> daemon.
+#
+# `eggsec-frontend-client`, `eggsec-runtime`, and `eggsec-daemon-protocol`
+# ARE permitted: they are the frontend-neutral wire contract. The match is
+# on the EXACT dependency name, never a substring -- `eggsec` as a prefix
+# would false-positive on all three of them.
+echo ""
+echo "--- Check 155: GUI crate links no engine ---"
+SECTION_FAIL=0
+GUI_MANIFEST="crates/eggsec-gui/Cargo.toml"
+# The forbidden source-level shapes: a crate path (`eggsec::`) or an import
+# statement naming one of the four crates. The crate name must be followed
+# by `::` or end the `use` item, so `eggsec_frontend_client::`,
+# `eggsec_runtime::`, and `eggsec_daemon_protocol::` stay permitted.
+GUI_FORBIDDEN_PATH='(^|[^[:alnum:]_])(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)::|(^|[^[:alnum:]_])use[[:space:]]+(::)?(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)([[:space:]]|;)|(^|[^[:alnum:]_])extern[[:space:]]+crate[[:space:]]+(eggsec|eggsec_cli|eggsec_tui|eggsec_daemon)([[:space:]]|;)'
+if [[ ! -f "$GUI_MANIFEST" ]]; then
+  echo "FAIL: $GUI_MANIFEST is missing (the desktop GUI crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for dep in 'eggsec' 'eggsec-daemon' 'eggsec-cli' 'eggsec-tui'; do
+    if rg -q "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" "$GUI_MANIFEST" 2>/dev/null; then
+      echo "FAIL: $GUI_MANIFEST declares forbidden dep '${dep}' (the GUI reaches the engine only through the daemon socket)."
+      rg -n "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" "$GUI_MANIFEST" 2>/dev/null || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  if code_search crates/eggsec-gui/src "$GUI_FORBIDDEN_PATH" | grep -q .; then
+    echo "FAIL: crates/eggsec-gui/src imports or reaches the engine, the daemon, or another frontend crate."
+    code_search crates/eggsec-gui/src "$GUI_FORBIDDEN_PATH" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI crate depends on no engine, daemon, or other frontend crate."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 156. The shell framework stays inside the GUI crate. Tauri owns a window,
+# a webview, and an IPC bridge; a second crate depending on it would put a
+# second window/IPC owner in the workspace and the daemon-IPC contract
+# would stop having exactly one frontend implementation.
+#
+# The root manifest legitimately carries the shared version pins under
+# `[workspace.dependencies]` (tauri, tauri-build, tauri-runtime,
+# tauri-runtime-wry, tauri-macros, tauri-utils): that is the workspace's
+# single place to pin the MSRV-safe versions, and it is ALLOWED. What is
+# forbidden is any crate OTHER than crates/eggsec-gui declaring a
+# dependency on one of them, or mentioning `tauri` at all.
+echo ""
+echo "--- Check 156: shell framework stays inside the GUI crate ---"
+SECTION_FAIL=0
+GUI_CRATE_MANIFEST="crates/eggsec-gui/Cargo.toml"
+for manifest in crates/*/Cargo.toml; do
+  [[ "$manifest" == "$GUI_CRATE_MANIFEST" ]] && continue
+  if rg -q 'tauri' "$manifest" 2>/dev/null; then
+    echo "FAIL: $manifest mentions 'tauri'; the shell framework belongs to crates/eggsec-gui alone."
+    rg -n 'tauri' "$manifest" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+# The root manifest is a virtual manifest: it may PIN tauri for the
+# workspace, but it must never declare a tauri dependency of its own.
+ROOT_MANIFEST="Cargo.toml"
+ROOT_TAURI_ELSEWHERE=$(awk '
+  /^\[[^]]*\][[:space:]]*$/ { section = $0 }
+  section != "[workspace.dependencies]" && /tauri/ && $0 !~ /^[[:space:]]*#/ { print FILENAME ":" FNR ":" $0 }
+' "$ROOT_MANIFEST" 2>/dev/null || true)
+if [[ -n "$ROOT_TAURI_ELSEWHERE" ]]; then
+  echo "FAIL: $ROOT_MANIFEST references 'tauri' outside [workspace.dependencies]; only crates/eggsec-gui may depend on the shell framework."
+  echo "$ROOT_TAURI_ELSEWHERE"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no crate other than crates/eggsec-gui declares or mentions a tauri dependency."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 157. The GUI declares no second TLS stack. The GUI performs no outbound
+# HTTP of its own: every engine request travels over the daemon's Unix
+# socket. A TLS stack in the GUI's graph would be a second, unowned TLS
+# policy -- and the workspace's TLS invariant is ring-only, with no
+# `rustls-tls`/`native-tls` exception.
+#
+# The scope is the GUI crate's manifest, deliberately NOT the workspace: the
+# engine's transport stack and the daemon's SQLite stack legitimately carry
+# reqwest/rustls, so a workspace-wide scan would be a false positive. The
+# root manifest is consulted only to NAME the workspace pin in the failure
+# message, never to police it.
+echo ""
+echo "--- Check 157: GUI declares no second TLS stack ---"
+SECTION_FAIL=0
+if [[ ! -f "$GUI_MANIFEST" ]]; then
+  echo "FAIL: $GUI_MANIFEST is missing (the desktop GUI crate must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  # Comments are stripped FIRST: the manifest documents this ban in prose
+  # ("`rustls-tls` and `native-tls` are deliberately NOT enabled"), and a
+  # guard that trips on its own documentation is a guard nobody trusts.
+  GUI_MANIFEST_CODE=$(sed -e 's/#.*$//' "$GUI_MANIFEST")
+  # A. No direct TLS dependency -- neither a path dependency nor a
+  #    `workspace = true` pin.
+  for dep in 'reqwest' 'rustls' 'native-tls'; do
+    if printf '%s\n' "$GUI_MANIFEST_CODE" | rg -q "^${dep}([ =.]|$)|\[dependencies\.${dep}\]"; then
+      echo "FAIL: $GUI_MANIFEST declares forbidden TLS dep '${dep}' (the GUI talks to the daemon over a Unix socket and needs no TLS stack)."
+      printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n "^${dep}([ =.]|$)|\[dependencies\.${dep}\]" || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+  # B. No TLS feature enabled on any dependency: `rustls-tls` (reqwest) and
+  #    `native-tls` are the two ways a TLS stack enters through a feature.
+  if printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n '(^|[^[:alnum:]_-])(rustls-tls|native-tls)([^[:alnum:]_-]|$)'; then
+    echo "FAIL: $GUI_MANIFEST enables a TLS feature (rustls-tls / native-tls); the GUI must not add a second TLS stack."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # C. The workspace may pin reqwest/rustls/native-tls for OTHER crates; the
+  #    GUI must not inherit one through `workspace = true`. Report the root
+  #    pin by name so the fix is obvious.
+  for dep in 'reqwest' 'rustls' 'native-tls'; do
+    if rg -q "^${dep}([ =.]|$)" "$ROOT_MANIFEST" 2>/dev/null \
+      && printf '%s\n' "$GUI_MANIFEST_CODE" | rg -q "^${dep}([ =.]|$)"; then
+      echo "FAIL: $ROOT_MANIFEST pins workspace dep '${dep}' and $GUI_MANIFEST inherits it; the GUI must not add a second TLS stack."
+      rg -n "^${dep}([ =.]|$)" "$ROOT_MANIFEST" 2>/dev/null || true
+      printf '%s\n' "$GUI_MANIFEST_CODE" | rg -n "^${dep}([ =.]|$)" || true
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI crate declares no TLS dependency and enables no TLS feature."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 158. The GUI's CSP forbids remote origins. The webview loads local assets
+# and talks to the daemon over the Tauri IPC bridge only. A wildcard source
+# or a remote http(s) origin in the CSP would let an injected or compromised
+# asset reach the network -- the one capability the daemon-only GUI is
+# designed not to have.
+#
+# The Tauri IPC origin `http://ipc.localhost` is the single permitted
+# exception: it is the bridge to the Rust side, not a network origin.
+echo ""
+echo "--- Check 158: GUI CSP forbids remote origins ---"
+SECTION_FAIL=0
+GUI_CONF="crates/eggsec-gui/tauri.conf.json"
+if [[ ! -f "$GUI_CONF" ]]; then
+  echo "FAIL: $GUI_CONF is missing (the desktop GUI shell config must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to parse $GUI_CONF (the CSP check reads app.security.csp)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_CONF" <<'PYEOF' 2>&1; then
+import json, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text())
+except Exception as exc:
+    print(f"FAIL: {path} is not valid JSON: {exc}")
+    sys.exit(1)
+
+security = ((data.get("app") or {}).get("security") or {})
+csp = security.get("csp")
+if not isinstance(csp, str) or not csp.strip():
+    print(f"FAIL: {path} does not define app.security.csp; the GUI webview needs an explicit CSP.")
+    sys.exit(1)
+
+ALLOWED_REMOTE = {"http://ipc.localhost"}
+WILDCARD_DIRECTIVES = {"connect-src", "script-src", "default-src"}
+problems = []
+for directive in csp.split(";"):
+    directive = directive.strip()
+    if not directive:
+        continue
+    parts = directive.split()
+    name, sources = parts[0], parts[1:]
+    for source in sources:
+        if name in WILDCARD_DIRECTIVES and "*" in source:
+            problems.append(f"{name} allows the wildcard source '{source}'")
+        if source.startswith("http://") or source.startswith("https://"):
+            if source not in ALLOWED_REMOTE:
+                problems.append(f"{name} allows the remote origin '{source}'")
+        elif source.startswith("//"):
+            problems.append(f"{name} allows the protocol-relative origin '{source}'")
+if problems:
+    print(f"FAIL: {path} app.security.csp allows a wildcard source or a remote origin:")
+    for problem in problems:
+        print(f"      {problem}")
+    print(f"      offending CSP: {csp}")
+    print(f"      the only permitted remote origin is {sorted(ALLOWED_REMOTE)[0]}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI CSP allows no wildcard source and no remote origin."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 159. The desktop GUI's forms are generated from the schema the daemon
+# publishes. A GUI that named an operation, a task-kind variant, or a field
+# would carry a second, hand-maintained catalog: it would drift silently the
+# moment the engine published a new operation, and the drift would show up
+# as a missing button rather than as a failure.
+#
+# The list of task-kind variants is READ FROM THE RUNTIME, not transcribed
+# here: a guard that hardcoded the thirty names would itself be the
+# hand-written table this check exists to prevent, and it would go stale
+# the day the engine published a thirty-first variant.
+#
+# The Rust side is searched in its PRODUCTION half only. A test may use a
+# variant as a fixture -- there are fixtures like that today -- but
+# production code may not name one.
+echo ""
+echo "--- Check 159: the GUI carries no per-operation form code ---"
+SECTION_FAIL=0
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+TASK_KIND_SOURCE="crates/eggsec-runtime/src/request.rs"
+TASK_KIND_VARIANTS=""
+if [[ -f "$TASK_KIND_SOURCE" ]]; then
+  # The task-kind variants live in the canonical table (the `define_task_kinds!`
+  # invocation) when the enum is macro-generated, and in the enum body when it
+  # is written out. Read both shapes so the guard survives either.
+  TASK_KIND_VARIANTS="$(
+    {
+      sed -n '/^define_task_kinds! {/,/^}/p' "$TASK_KIND_SOURCE"
+      sed -n '/pub enum TaskKind/,/^}/p' "$TASK_KIND_SOURCE"
+    } | rg -o '^[[:space:]]+([A-Z][A-Za-z0-9]*)\(' -r '$1' | sort -u
+  )"
+fi
+if [[ -z "$TASK_KIND_VARIANTS" ]]; then
+  echo "FAIL: could not read the task-kind variants from $TASK_KIND_SOURCE; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for variant in $TASK_KIND_VARIANTS; do
+    # The frontend has no test half: search it whole.
+    if [[ -d "$GUI_FRONTEND_DIR" ]]; then
+      FRONTEND_HITS="$(rg -n "\b${variant}\b" "$GUI_FRONTEND_DIR" 2>/dev/null || true)"
+      if [[ -n "$FRONTEND_HITS" ]]; then
+        echo "FAIL: the frontend names the task-kind variant '$variant'; the form must be generated from the published schema."
+        echo "$FRONTEND_HITS"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    fi
+    # The Rust side: the production half only.
+    for gui_file in "$GUI_SRC_DIR"/*.rs; do
+      [[ -f "$gui_file" ]] || continue
+      GUI_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$gui_file")"
+      if printf '%s' "$GUI_PRODUCTION" | rg -q "\b${variant}\b"; then
+        echo "FAIL: $gui_file names the task-kind variant '$variant'; the form engine must be schema-driven."
+        printf '%s' "$GUI_PRODUCTION" | rg -n "\b${variant}\b" || true
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI names no task-kind variant; its forms come from the published schema."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 160. The GUI's task state is a BOUNDED view of the daemon's event stream.
+# `TaskLog` is the high-cardinality event type: a task that logs thousands of
+# lines must not be able to grow the GUI's memory without bound. The ring
+# keeps a capped number of lines per task and counts what it drops, so the
+# loss is reported rather than silent.
+#
+# Unbounded retention is a disqualifying defect, not a tuning problem, so
+# this check pins the cap's existence rather than its value: a later
+# milestone may move the number, but it may not remove the bound.
+echo ""
+echo "--- Check 160: the GUI retains no unbounded event log ---"
+SECTION_FAIL=0
+GUI_TASKS="crates/eggsec-gui/src/tasks.rs"
+if [[ ! -f "$GUI_TASKS" ]]; then
+  echo "FAIL: $GUI_TASKS is missing (the GUI's task state must exist)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! rg -q 'MAX_LOG_LINES_PER_TASK' "$GUI_TASKS" 2>/dev/null; then
+    echo "FAIL: $GUI_TASKS declares no log-line cap; the GUI's task state must bound its retention."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'MAX_LOG_LINES_PER_FLUSH' "$GUI_TASKS" 2>/dev/null; then
+    echo "FAIL: $GUI_TASKS declares no forward-flush cap; the GUI must not queue log lines without bound."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  # The retained lines live in a capped ring, not in a Vec that grows. The
+  # check is scoped to the ring struct itself: `Vec<LogLine>` elsewhere in
+  # the module is fine -- a serialized snapshot of the ring and a single
+  # event's batch are both bounded by the ring -- but the ring itself must
+  # never be an unbounded accumulator.
+  if ! python3 - "$GUI_TASKS" <<'PYEOF'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+
+match = re.search(r"(?:pub\s+)?struct\s+LogRing\s*\{", text)
+if not match:
+    print(f"FAIL: {path} declares no LogRing struct; the GUI's retained log lines must live in a bounded ring.")
+    sys.exit(1)
+
+depth = 0
+end = match.end()
+for index in range(match.end() - 1, len(text)):
+    if text[index] == "{":
+        depth += 1
+    elif text[index] == "}":
+        depth -= 1
+        if depth == 0:
+            end = index
+            break
+body = text[match.start():end]
+
+problems = []
+if "VecDeque<LogLine>" not in body:
+    problems.append("the ring does not hold its lines in a VecDeque")
+if "Vec<LogLine>" in body:
+    problems.append("the ring holds its lines in an unbounded Vec")
+if not re.search(r"\bcapacity\b", body):
+    problems.append("the ring declares no capacity")
+if re.search(r"(?<!_)\.push\(", body):
+    problems.append("the ring pushes with push() rather than push_back()")
+
+if problems:
+    print(f"FAIL: {path} does not bound its retained log lines:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+  then
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's task state bounds its log retention and reports what it drops."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 161. The desktop GUI's coverage model is DERIVED, not transcribed. Milestone
+# 006. The GUI tells the operator which of the daemon's published task kinds it
+# can reach, and why. That answer is computed from what the daemon publishes --
+# the task kinds, the operations, their required features, the advertised
+# capabilities, and the enabled-feature set -- so an operation the engine
+# publishes tomorrow is covered the day it is published.
+#
+# A transcribed table would be a second, hand-maintained catalog. It would
+# drift silently the moment the engine published a new operation, and the
+# drift would show up as a missing row rather than as a failure.
+#
+# Guard 159 already pins the TASK-KIND VARIANTS: the GUI may not name one.
+# This check pins the other two halves of the same table -- the operation ids
+# and the capability names -- because a coverage model that names an operation
+# is just as hand-maintained as one that names a variant.
+#
+# The names are READ FROM THEIR OWNERS, not transcribed here: a guard that
+# hardcoded the operation ids would itself be the second source of truth this
+# check exists to prevent.
+echo ""
+echo "--- Check 161: the GUI's coverage model is derived, not transcribed ---"
+SECTION_FAIL=0
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+CATALOG_SOURCE="crates/eggsec-policy/src/catalog.rs"
+CAPABILITY_SOURCE="crates/eggsec-runtime/src/capabilities.rs"
+
+OPERATION_IDS=""
+CAPABILITY_NAMES=""
+if [[ -f "$CATALOG_SOURCE" ]]; then
+  OPERATION_IDS="$(sed -n 's/^[[:space:]]*id: "\([^"]*\)",$/\1/p' "$CATALOG_SOURCE" | sort -u)"
+fi
+if [[ -f "$CAPABILITY_SOURCE" ]]; then
+  CAPABILITY_NAMES="$(sed -n 's/^[[:space:]]*TaskCapability::new("\([^"]*\)".*$/\1/p' "$CAPABILITY_SOURCE" | sort -u)"
+fi
+if [[ -z "$OPERATION_IDS" && -z "$CAPABILITY_NAMES" ]]; then
+  echo "FAIL: could not read the operation ids or the capability names from their owners; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  for name in $OPERATION_IDS $CAPABILITY_NAMES; do
+    # The Rust side: the PRODUCTION half only. A test may use a name as a
+    # fixture -- there are fixtures like that today -- but production code
+    # may not name one.
+    for gui_file in "$GUI_SRC_DIR"/*.rs; do
+      [[ -f "$gui_file" ]] || continue
+      GUI_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$gui_file")"
+      if printf '%s' "$GUI_PRODUCTION" | rg -q "[\"']${name}[\"']"; then
+        echo "FAIL: $gui_file names the operation id or capability '$name'; the coverage model must be derived from what the daemon publishes."
+        printf '%s' "$GUI_PRODUCTION" | rg -n "[\"']${name}[\"']" || true
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    done
+    # The frontend has no test half: search it whole.
+    if [[ -d "$GUI_FRONTEND_DIR" ]]; then
+      FRONTEND_HITS="$(rg -n "[\"']${name}[\"']" "$GUI_FRONTEND_DIR" 2>/dev/null || true)"
+      if [[ -n "$FRONTEND_HITS" ]]; then
+        echo "FAIL: the frontend names the operation id or capability '$name'; the coverage table must be rendered from the data the daemon publishes."
+        echo "$FRONTEND_HITS"
+        SECTION_FAIL=$((SECTION_FAIL + 1))
+      fi
+    fi
+  done
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's coverage model is derived, not transcribed."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 162. The GUI's report display carries no remote origin and no executable
+# content. Milestone 006.
+#
+# The report the daemon serves is ATTACKER-INFLUENCED: service banners,
+# finding text, and host names come from the target. The GUI therefore never
+# injects the engine's HTML document into the webview -- it renders the
+# report's structured content as text in its own DOM. The Content Security
+# Policy is the control that makes that safe, and this check pins it:
+#
+#   * the policy must not be relaxed to 'unsafe-inline', which would let
+#     injected content execute;
+#   * the policy must keep framing forbidden, so no report can be embedded
+#     as a document;
+#   * no GUI production source and no frontend file may reference a remote
+#     origin;
+#   * the frontend must not gain a markup-injection sink (`innerHTML` and
+#     friends), because the report content is rendered as text;
+#   * the GUI must not consume an engine-produced HTML document at all, so
+#     the export path (the CLI's artifact, written to the operator's chosen
+#     file) stays the only place the engine's HTML is used.
+echo ""
+echo "--- Check 162: the GUI's report display carries no remote origin ---"
+SECTION_FAIL=0
+GUI_CONF="crates/eggsec-gui/tauri.conf.json"
+GUI_SRC_DIR="crates/eggsec-gui/src"
+GUI_FRONTEND_DIR="crates/eggsec-gui/frontend"
+if [[ ! -f "$GUI_CONF" ]]; then
+  echo "FAIL: $GUI_CONF is missing; the GUI webview needs an explicit CSP."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to parse $GUI_CONF (the CSP check reads app.security.csp)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_CONF" "$GUI_SRC_DIR" "$GUI_FRONTEND_DIR" <<'PYEOF' 2>&1; then
+import json, pathlib, re, sys
+
+conf_path = pathlib.Path(sys.argv[1])
+src_dir = pathlib.Path(sys.argv[2])
+frontend_dir = pathlib.Path(sys.argv[3])
+problems = []
+
+try:
+    conf = json.loads(conf_path.read_text())
+except Exception as exc:
+    print(f"FAIL: {conf_path} is not valid JSON: {exc}")
+    sys.exit(1)
+
+csp = (((conf.get("app") or {}).get("security") or {}).get("csp")) or ""
+
+# The policy must not be relaxed into permitting inline execution.
+if "'unsafe-inline'" in csp:
+    problems.append(
+        "the CSP allows 'unsafe-inline'; the report content is attacker-influenced "
+        "and the GUI renders it as text, so inline execution must stay forbidden"
+    )
+
+# Framing must stay forbidden: a report document is never embedded as a frame.
+frame_src = None
+for directive in csp.split(";"):
+    directive = directive.strip()
+    if directive.lower().startswith("frame-src"):
+        frame_src = directive.split(None, 1)[1].strip() if " " in directive else ""
+if frame_src is None:
+    problems.append("the CSP does not state frame-src; a report could be embedded as a frame")
+elif "'none'" not in frame_src:
+    problems.append(
+        f"the CSP's frame-src is {frame_src!r}; the GUI must keep framing forbidden"
+    )
+
+# No remote origin in the GUI's production sources or its frontend. The Tauri
+# IPC origin is the single permitted exception: it is the bridge to the Rust
+# side, not a network origin.
+ALLOWED = "http://ipc.localhost"
+REMOTE = re.compile(r"https?://[^\s\"'()<>]+")
+
+
+def scan(label: str, text: str) -> None:
+    for number, line in enumerate(text.splitlines(), start=1):
+        for match in REMOTE.finditer(line):
+            url = match.group(0)
+            if url.startswith(ALLOWED):
+                continue
+            problems.append(
+                f"{label}:{number} references the remote origin {url!r}"
+            )
+
+
+for path in sorted(src_dir.glob("*.rs")):
+    production = path.read_text().split("#[cfg(test)]")[0]
+    scan(str(path), production)
+
+if frontend_dir.is_dir():
+    for path in sorted(frontend_dir.rglob("*")):
+        if path.is_file() and path.suffix in {".js", ".html", ".css", ".json"}:
+            scan(str(path), path.read_text())
+
+# The frontend renders the report's content as text. A markup-injection sink
+# would defeat that.
+SINKS = ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write")
+if frontend_dir.is_dir():
+    for path in sorted(frontend_dir.rglob("*.js")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            for sink in SINKS:
+                if sink in line:
+                    problems.append(
+                        f"{path}:{number} uses the markup sink {sink}; the report content is rendered as text"
+                    )
+
+# The GUI must not consume an engine-produced HTML document. The HTML format
+# is export-only: the exported file is the CLI's artifact, and the webview
+# shows the report's structured content.
+export_module = src_dir / "export.rs"
+if not export_module.is_file():
+    problems.append(f"{export_module} is missing; the export module is the GUI's report path")
+else:
+    export_production = export_module.read_text().split("#[cfg(test)]")[0]
+    if "convert_to_html_self_contained" in export_production:
+        problems.append(
+            "the export module consumes convert_to_html_self_contained; the GUI must not embed an engine-produced HTML document"
+        )
+    if "NoDisplayRendering" not in export_production:
+        problems.append(
+            "the export module does not refuse an HTML display rendering; the HTML format is export-only"
+        )
+
+if problems:
+    print("FAIL: the GUI's report display is not remote-origin-free:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the GUI's report display carries no remote origin and no executable content."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 163. The daemon's GUI-serving profile is pinned to the engine's contract.
+# Milestone 008. The engine owns the feature list -- it is the single source
+# of truth -- and the daemon's manifest consumes it. Drift between the two
+# would silently ship a daemon with a different dependency closure than the
+# one the documentation and the conformance tests describe.
+#
+# Checks 161 and 162 are reserved for milestone 006, which owns the wire-side
+# publication of the enabled-feature set. They are deliberately absent here.
+echo ""
+echo "--- Check 163: the daemon's service profile matches the engine's contract ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-daemon/Cargo.toml ]]; then
+  echo "FAIL: crates/eggsec-daemon/Cargo.toml is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to compare the daemon manifest with the engine's profile."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-daemon/Cargo.toml crates/eggsec/src/config/daemon_profile.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    print("FAIL: python3 with tomllib (3.11+) is required to parse the daemon manifest.")
+    sys.exit(1)
+
+manifest_path, module_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+problems = []
+
+try:
+    manifest = tomllib.loads(manifest_path.read_text())
+except Exception as exc:
+    print(f"FAIL: {manifest_path} is not valid TOML: {exc}")
+    sys.exit(1)
+
+try:
+    module = module_path.read_text()
+except OSError as exc:
+    print(f"FAIL: cannot read {module_path}: {exc}")
+    sys.exit(1)
+
+match = re.search(
+    r"pub static DAEMON_SERVICE_PROFILE[^=]*=\s*&\[(.*?)\];",
+    module,
+    re.S,
+)
+if not match:
+    print(f"FAIL: {module_path} declares no DAEMON_SERVICE_PROFILE list.")
+    sys.exit(1)
+
+declared = set(re.findall(r'"([a-z0-9\-]+)"', match.group(1)))
+if not declared:
+    print(f"FAIL: {module_path} declares an empty DAEMON_SERVICE_PROFILE list.")
+    sys.exit(1)
+
+features = manifest.get("features") or {}
+service = features.get("service")
+if not isinstance(service, list):
+    problems.append("the daemon manifest declares no `service` feature list")
+else:
+    enabled = {
+        item.split("/", 1)[1]
+        for item in service
+        if isinstance(item, str) and item.startswith("eggsec/")
+    }
+    missing = sorted(declared - enabled)
+    extra = sorted(enabled - declared)
+    if missing:
+        problems.append(
+            "the daemon's `service` feature omits engine features the contract lists: "
+            + ", ".join(missing)
+        )
+    if extra:
+        problems.append(
+            "the daemon's `service` feature enables engine features the contract does "
+            "not list: " + ", ".join(extra)
+        )
+
+if features.get("full-executor") != ["service"]:
+    problems.append(
+        "the daemon's `full-executor` feature must be exactly [\"service\"] (a deprecated alias)"
+    )
+
+if problems:
+    print("FAIL: the daemon's service profile drifted from the engine's contract:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon's service profile matches the engine's DAEMON_SERVICE_PROFILE."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 164. The CLI hosts no rejecting daemon executor. Milestone 009.
+#
+# The CLI's `daemon start` used to host an executor that rejected every task,
+# so the daemon it started advertised capabilities it could not execute. The
+# lie was the defect; the fix makes it unrepresentable by removing the
+# rejecting executor from the CLI entirely.
+echo ""
+echo "--- Check 164: the CLI carries no rejecting daemon executor ---"
+SECTION_FAIL=0
+if [[ ! -d crates/eggsec-cli/src ]]; then
+  echo "FAIL: crates/eggsec-cli/src is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-cli/src <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+root = pathlib.Path(sys.argv[1])
+problems = []
+
+for path in sorted(root.rglob("*.rs")):
+    text = path.read_text()
+    # The production half of the file is everything before the first
+    # `#[cfg(test)]` block; a test may name the rejected shape to prove it
+    # is gone.
+    production = text.split("#[cfg(test)]", 1)[0]
+    if re.search(r"struct\s+NoopExecutor\b", production):
+        problems.append(f"{path} declares a `NoopExecutor` in its production code")
+    if "RuntimeError::UnsupportedTaskKind" in production:
+        problems.append(
+            f"{path} rejects tasks with `RuntimeError::UnsupportedTaskKind` in its production code"
+        )
+
+if problems:
+    print("FAIL: the CLI carries a rejecting daemon executor:")
+    for problem in problems:
+        print(f"      {problem}")
+    print("      the CLI's daemon start path must host the engine executor, not a stub")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CLI carries no rejecting daemon executor."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 165. The daemon host derives its published capabilities. Milestone 009.
+#
+# The `Capabilities` reply used to publish a hardcoded capability constant.
+# It must publish the host's DERIVED list -- the executor's declaration
+# intersected with the daemon's conservative policy -- so a host can never
+# advertise a capability its executor rejects outright.
+echo ""
+echo "--- Check 165: the daemon host derives its published capabilities ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-daemon/src/host.rs ]]; then
+  echo "FAIL: crates/eggsec-daemon/src/host.rs is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-daemon/src/host.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+production = text.split("#[cfg(test)]", 1)[0]
+
+marker = "ClientCommand::Capabilities {"
+index = production.find(marker)
+if index < 0:
+    print(f"FAIL: {path} has no `ClientCommand::Capabilities` arm.")
+    sys.exit(1)
+
+# Brace-match the arm so the check covers the arm and nothing else.
+start = production.find("{", index)
+depth = 0
+end = -1
+for position in range(start, len(production)):
+    char = production[position]
+    if char == "{":
+        depth += 1
+    elif char == "}":
+        depth -= 1
+        if depth == 0:
+            end = position
+            break
+if end < 0:
+    print(f"FAIL: {path} has an unterminated `ClientCommand::Capabilities` arm.")
+    sys.exit(1)
+
+arm = production[index:end]
+FORBIDDEN = (
+    "RuntimeCapabilities::default()",
+    "daemon_conservative()",
+    "full_lab()",
+)
+problems = [f"the arm publishes `{token}`" for token in FORBIDDEN if token in arm]
+if problems:
+    print(f"FAIL: {path} publishes a capability constant instead of a derived list:")
+    for problem in problems:
+        print(f"      {problem}")
+    print("      the arm must publish the host's derived task-kind list")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon host derives its published capabilities."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 166. The CLI's daemon start path waits for a real readiness signal.
+# Milestone 009.
+#
+# The old path slept for a fixed fraction of a second and then printed
+# "Daemon started" whether or not the daemon had bound the socket. The
+# readiness decision must be a bounded probe, not a fixed sleep, and it must
+# never scrape the server's stdout.
+echo ""
+echo "--- Check 166: the CLI's daemon start path waits for a real readiness signal ---"
+SECTION_FAIL=0
+if [[ ! -f crates/eggsec-cli/src/daemon_cli.rs ]]; then
+  echo "FAIL: crates/eggsec-cli/src/daemon_cli.rs is missing."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - crates/eggsec-cli/src/daemon_cli.rs <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+production = text.split("#[cfg(test)]", 1)[0]
+problems = []
+
+if "Daemon listening on" in production:
+    problems.append(
+        "the start path scrapes the server's stdout (`Daemon listening on`) for readiness"
+    )
+
+if re.search(r"sleep\(\s*Duration::from_millis", production):
+    problems.append(
+        "the start path uses a sub-second literal sleep for readiness"
+    )
+
+if re.search(r"sleep\(\s*Duration::from_secs\(0\)", production):
+    problems.append("the start path uses a zero-second sleep for readiness")
+
+# A named bound must exist, and it must be at least a second.
+bounds = re.findall(
+    r"(?:pub\s+)?const\s+([A-Z0-9_]+)\s*:\s*Duration\s*=\s*Duration::from_(secs|millis)\((\d+)\)",
+    production,
+)
+readiness_bounds = [
+    (name, unit, amount)
+    for name, unit, amount in bounds
+    if "READINESS" in name or "TIMEOUT" in name
+]
+if not readiness_bounds:
+    problems.append(
+        "the start path declares no named readiness timeout constant"
+    )
+for name, unit, amount in readiness_bounds:
+    seconds = int(amount) if unit == "secs" else int(amount) / 1000
+    if seconds < 1:
+        problems.append(
+            f"the readiness bound `{name}` is {amount} {unit} -- below the one-second floor"
+        )
+
+if problems:
+    print(f"FAIL: {path} does not wait for a real readiness signal:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CLI's daemon start path waits for a real readiness signal."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 167. The daemon's obtainability recipe is documented. Milestone 009.
+#
+# Nothing in the workspace installs the daemon, so the recipe is the only way
+# an operator obtains it. A recipe that omits the cargo feature produces a
+# binary that accepts `--full-executor` and silently falls back to a no-op
+# executor.
+echo ""
+echo "--- Check 167: the daemon's obtainability recipe names the cargo feature ---"
+SECTION_FAIL=0
+DAEMON_DOC="docs/DAEMON.md"
+if [[ ! -f "$DAEMON_DOC" ]]; then
+  echo "FAIL: $DAEMON_DOC is missing (the daemon's obtainability recipe must be documented)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$DAEMON_DOC" <<'PYEOF' 2>&1; then
+import re, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+problems = []
+
+recipes = [
+    line
+    for line in text.splitlines()
+    if "cargo install" in line and "crates/eggsec-daemon" in line
+]
+if not recipes:
+    problems.append(f"{path} documents no `cargo install` recipe for the daemon")
+else:
+    if not any(
+        re.search(r"--features\s+(service|full-executor)\b", line) for line in recipes
+    ):
+        problems.append(
+            f"{path}'s daemon install recipe names no cargo feature -- a build without one "
+            "accepts `--full-executor` and falls back to a no-op executor"
+        )
+
+if problems:
+    print(f"FAIL: the daemon's obtainability recipe is incomplete:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon's obtainability recipe names the cargo feature."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 168. The desktop GUI's platform qualification is machine-checked.
+# Milestone 007.
+#
+# "It compiles on my machine" is not a qualification. The matrix must state,
+# per platform and per behaviour, whether the behaviour was observed and on
+# what evidence -- and a platform that is out of scope must say so with the
+# decision that excludes it. A cell that carries a status but no explanation
+# is not a qualification either; the explanation is the evidence or the root
+# cause.
+#
+# The bundler stays off because the installers belong to the distribution
+# workstream -- unless an accepted ADR supersedes that decision.
+echo ""
+echo "--- Check 168: the desktop GUI's platform qualification is machine-checked ---"
+SECTION_FAIL=0
+GUI_QUAL="docs/GUI_PLATFORM_QUALIFICATION.md"
+if [[ ! -f "$GUI_QUAL" ]]; then
+  echo "FAIL: $GUI_QUAL is missing (the GUI's platform qualification must be recorded)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  if ! python3 - "$GUI_QUAL" crates/eggsec-gui/tauri.conf.json <<'PYEOF' 2>&1; then
+import json, re, sys, pathlib
+
+doc_path, conf_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+problems = []
+
+# The status vocabulary is closed. A cell that invents a status is not a
+# qualification.
+#
+# `pending M6` was retired by milestone 014: the token described a block that
+# no longer exists, and Check 182 forbids it outright now that the export
+# affordance exists. It is dropped here so this guard's vocabulary is the
+# matrix's vocabulary, not a superset of it.
+ALLOWED = {
+    "qualified",
+    "partially qualified",
+    "not qualified",
+    "out of scope",
+}
+
+# The schema is fixed: one platform per row, one behaviour per column. A
+# matrix that drifts from the schema is not checkable.
+EXPECTED_HEADER = "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |"
+COLUMNS = ("Build", "Launch", "Connect", "Submit", "Cancel", "Render", "Export")
+REQUIRED_PLATFORMS = ("linux", "macos", "windows")
+
+try:
+    lines = doc_path.read_text().splitlines()
+except OSError as exc:
+    print(f"FAIL: cannot read {doc_path}: {exc}")
+    sys.exit(1)
+
+header_index = None
+for index, line in enumerate(lines):
+    if line.strip().startswith("| Platform |"):
+        header_index = index
+        break
+
+if header_index is None:
+    print(f"FAIL: {doc_path} has no platform matrix.")
+    sys.exit(1)
+
+if lines[header_index].strip() != EXPECTED_HEADER:
+    print(f"FAIL: {doc_path} matrix header must be exactly:")
+    print(f"      {EXPECTED_HEADER}")
+    sys.exit(1)
+
+rows = {}
+for line in lines[header_index + 2:]:
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        break
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    if len(cells) != len(COLUMNS) + 1:
+        problems.append(
+            f"a matrix row has {len(cells)} cells, not {len(COLUMNS) + 1}: {stripped[:80]}"
+        )
+        continue
+    platform = cells[0].strip("`").strip()
+    rows[platform] = cells[1:]
+
+for platform in REQUIRED_PLATFORMS:
+    if platform not in rows:
+        problems.append(f"the matrix has no `{platform}` row")
+
+for platform, cells in rows.items():
+    for column, cell in zip(COLUMNS, cells):
+        match = re.match(r"^\*\*(.+?)\*\*\s*—\s*(.+)$", cell)
+        if not match:
+            problems.append(
+                f"the `{platform}` / {column} cell is not `**status** — explanation`"
+            )
+            continue
+        status = match.group(1).strip()
+        if status not in ALLOWED:
+            problems.append(
+                f"the `{platform}` / {column} cell has the unknown status `{status}`"
+            )
+
+if "windows" in rows:
+    for column, cell in zip(COLUMNS, rows["windows"]):
+        match = re.match(r"^\*\*(.+?)\*\*\s*—\s*(.+)$", cell)
+        if not match:
+            continue
+        if match.group(1).strip() != "out of scope":
+            problems.append(f"the `windows` / {column} cell is not `out of scope`")
+        elif not re.search(r"ADR-\d+", cell):
+            problems.append(
+                f"the `windows` / {column} cell does not cite the decision (ADR-nnn) that excludes it"
+            )
+
+# The bundler stays off: the installers belong to the distribution
+# workstream. An accepted ADR may supersede that decision, but the ADR must
+# exist -- naming one that does not is not a supersession.
+try:
+    conf = json.loads(conf_path.read_text())
+    bundle_active = ((conf.get("bundle") or {}).get("active"))
+except Exception as exc:
+    problems.append(f"{conf_path} could not be parsed: {exc}")
+    bundle_active = None
+
+if bundle_active is not False:
+    cited = set(re.findall(r"ADR-\d+", "\n".join(lines)))
+    superseding = [
+        adr for adr in cited if (pathlib.Path("plans/adrs") / f"{adr}.md").is_file()
+    ]
+    if not superseding:
+        problems.append(
+            f"{conf_path} enables the Tauri bundler (`bundle.active` is {bundle_active!r}) and "
+            "no existing ADR under plans/adrs/ supersedes the decision; the installers belong "
+            "to the distribution workstream"
+        )
+
+if problems:
+    print("FAIL: the desktop GUI's platform qualification is not machine-checked:")
+    for problem in problems:
+        print(f"      {problem}")
+    sys.exit(1)
+PYEOF
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the desktop GUI's platform qualification is machine-checked."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 169. The daemon's published capability list is derived, never transcribed.
+# Milestone 010 (ADR-0011).
+#
+# A hand-written capability list is the defect this milestone exists to
+# remove. The list must come from the canonical task-kind set, there must be
+# exactly one capability-name table, and the retired constructors must stay
+# retired. The task-kind table and the operation-identity match must cover
+# the same set of kinds, so a new kind that reaches one but not the other
+# fails the check.
+echo ""
+echo "--- Check 169: the capability list is derived from the task-kind set ---"
+SECTION_FAIL=0
+if rg -q '\bdaemon_conservative\b|\bfull_lab\b' crates 2>/dev/null; then
+  echo "FAIL: a retired capability constructor (daemon_conservative/full_lab) is back."
+  rg -n '\bdaemon_conservative\b|\bfull_lab\b' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'fn task_kind_name' crates 2>/dev/null; then
+  echo "FAIL: the private duplicate capability-name table (task_kind_name) is back."
+  rg -n 'fn task_kind_name' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+NAME_TABLE_COUNT=$(rg --no-filename -o 'pub fn capability_name' crates 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$NAME_TABLE_COUNT" -ne 1 ]]; then
+  echo "FAIL: expected exactly one capability-name table (pub fn capability_name), found $NAME_TABLE_COUNT."
+  rg -n 'pub fn capability_name' crates || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+CAPS_RS="crates/eggsec-runtime/src/capabilities.rs"
+if ! rg -q 'TaskKind::all_variants\(\)' "$CAPS_RS" 2>/dev/null; then
+  echo "FAIL: $CAPS_RS does not derive the capability list from TaskKind::all_variants()."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if sed '/^#\[cfg(test)\]/,$d' "$CAPS_RS" | rg -q 'TaskCapability::new\("'; then
+  echo "FAIL: $CAPS_RS carries a hand-written capability list in its non-test body."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+REQUEST_RS="crates/eggsec-runtime/src/request.rs"
+if ! rg -q 'macro_rules! define_task_kinds' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: $REQUEST_RS does not declare the canonical task-kind table."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+TABLE_COUNT=$(rg -o '^\s*[A-Za-z0-9_]+\([A-Za-z0-9_]+\) => "' "$REQUEST_RS" 2>/dev/null | wc -l | tr -d ' ')
+KIND_COUNT=$(rg -o 'TaskKind::[A-Za-z0-9_]+\(' "$REQUEST_RS" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+if [[ "$TABLE_COUNT" -ne "$KIND_COUNT" ]]; then
+  echo "FAIL: the task-kind table declares $TABLE_COUNT kinds but the enum exposes $KIND_COUNT."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the capability list is derived from the task-kind set."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 170. Publication and admission are the same object.
+# Milestone 010 (ADR-0011).
+#
+# The daemon publishes a capability list and admits submissions against a
+# capability list. If they are two lists, the daemon can advertise a
+# capability it will refuse, or refuse one it advertised. The host therefore
+# hands the published list to the runtime as its enforced set, and every
+# rejecting executor declares the empty set explicitly rather than relying
+# on the trait default.
+echo ""
+echo "--- Check 170: the published and admitted capability sets are one object ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -q 'with_task_kinds\(published\.clone\(\)\)' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: $HOST_RS does not hand the published list to the runtime as its enforced set."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# The runtime's *enforced* set must come from the published list, not from a
+# constant: a runtime configured with a different set would refuse a
+# capability the host advertises.
+if rg -Uq 'RuntimeConfig \{[\s\S]{0,200}?capabilities: (eggsec_runtime::)?RuntimeCapabilities::(default|canonical)\(\)' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: $HOST_RS builds the runtime's enforced set from a constant instead of the published list."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for REJECTOR in "crates/eggsec-daemon/src/host.rs" "crates/eggsec-frontend-client/src/lib.rs"; do
+  if ! rg -Uq 'fn supported_task_kinds\([^)]*\) -> Vec<[^>]*> \{\s*Vec::new\(\)' "$REJECTOR" 2>/dev/null; then
+    echo "FAIL: $REJECTOR has a rejecting executor that does not declare the empty set explicitly."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the published and admitted capability sets are one object."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 171. The wireless-active wire kind resolves to the wireless-deauth operation.
+# Milestone 010 (ADR-0011).
+#
+# A deauth is an intrusive operation. While the wire kind resolved to the
+# passive `wireless` operation, a daemon-submitted deauth was authorised
+# under the passive operation's risk level. The wire-side table, the engine's
+# canonical table, and the executor routing table must all agree.
+echo ""
+echo "--- Check 171: wireless-active resolves to the wireless-deauth operation ---"
+SECTION_FAIL=0
+REQUEST_RS="crates/eggsec-runtime/src/request.rs"
+CANON_RS="crates/eggsec/src/dispatch/canonical_execution.rs"
+if ! rg -q 'TaskKind::WirelessActive\(_\) => "wireless-deauth"' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: the wire-side table does not map WirelessActive to wireless-deauth."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'TaskKind::WirelessActive\(_\) => "wireless"' "$REQUEST_RS" 2>/dev/null; then
+  echo "FAIL: the wire-side table still maps WirelessActive to the passive wireless operation."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'Self::WirelessActive\(_\) => "wireless-deauth"' "$CANON_RS" 2>/dev/null; then
+  echo "FAIL: the engine's canonical table does not map WirelessActive to wireless-deauth."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'fn executor_route_for[\s\S]{0,1200}?"wireless-deauth"' "$CANON_RS" 2>/dev/null; then
+  echo "FAIL: the executor routing table has no wireless-deauth arm."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: wireless-active resolves to the wireless-deauth operation."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 172. The interface-bound target policy is coherent, and no shared operation
+# was relaxed to accommodate it.
+# Milestone 010 (ADR-0011).
+#
+# The interface-bound value exists so that a local binding does not have to
+# pretend to be a network target. It must not become a licence to relax a
+# shared operation: `packet` still serves `packet-send`, which writes raw
+# frames to a destination, and `pipeline` still serves `resume`, which
+# addresses a real host.
+echo ""
+echo "--- Check 172: the interface-bound target policy is coherent ---"
+SECTION_FAIL=0
+CATALOG_RS="crates/eggsec-policy/src/catalog.rs"
+for BOUND_OP in packet-capture wireless wireless-deauth; do
+  if ! rg -Uq "id: \"$BOUND_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::InterfaceBound" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $BOUND_OP operation is not interface-bound."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+for SHARED_OP in packet pipeline; do
+  if ! rg -Uq "id: \"$SHARED_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::ExplicitScopeRequired" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $SHARED_OP operation lost its explicit-scope target policy."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if rg -Uq "id: \"$SHARED_OP\",[\\s\\S]{0,600}?target_policy: TargetPolicyKind::OptionalTarget" "$CATALOG_RS" 2>/dev/null; then
+    echo "FAIL: the catalog's $SHARED_OP operation was relaxed to OptionalTarget."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! rg -q 'InterfaceBound|is_interface_bound' crates/eggsec-policy/src/decision.rs 2>/dev/null; then
+  echo "FAIL: the enforcement kernel does not handle the interface-bound target policy."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the interface-bound target policy is coherent."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 173. The daemon's policy approval is wired to the runtime's hold.
+# Milestone 011 (ADR-0012).
+#
+# The daemon used to answer every approval with "not wired yet". A refusal
+# that is always the same refusal tells the operator nothing: it does not
+# distinguish "there is no decision pending" from "this daemon cannot answer".
+# The handler must resolve the runtime's pending approval, and it must report
+# the two states truthfully -- answered, or nothing pending.
+echo ""
+echo "--- Check 173: the daemon answers a pending policy decision ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -q 'resolve_approval' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not resolve the runtime's pending approval."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'not wired yet' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon still refuses policy approval as unwired."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?ErrorCode::InvalidState' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon does not report an answer for a task with nothing pending as invalid state."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon answers a pending policy decision."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 174. The runtime stays policy-neutral.
+# Milestone 011 (ADR-0012).
+#
+# The runtime's approval registry holds a prompt and returns an answer. It
+# must not learn the policy crate's vocabulary: a `ConfirmationClass` in the
+# runtime would make the runtime's answer mean something the policy kernel
+# defines, and the runtime would then have to know the kernel to be useful.
+# The kernel owns authorisation semantics; the runtime owns task lifecycle.
+echo ""
+echo "--- Check 174: the runtime stays policy-neutral ---"
+SECTION_FAIL=0
+RT_MANIFEST="crates/eggsec-runtime/Cargo.toml"
+if rg -q '^eggsec-policy' "$RT_MANIFEST" 2>/dev/null; then
+  echo "FAIL: the runtime depends on the policy crate."
+  rg -n '^eggsec-policy' "$RT_MANIFEST" 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if code_search crates/eggsec-runtime/src 'ConfirmationClass|EnforcementContext|EnforcementError|EnforcementOutcome|ManualOverride' | grep -q .; then
+  echo "FAIL: the runtime names the policy crate's vocabulary."
+  code_search crates/eggsec-runtime/src 'ConfirmationClass|EnforcementContext|EnforcementError|EnforcementOutcome|ManualOverride' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the runtime stays policy-neutral."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 175. The confirmation-class -> override mapping exists in exactly one
+# place. Milestone 011 (ADR-0012).
+#
+# `ManualOverride::permitting_classes` is the inverse of `permits`. A second
+# copy of the table -- in the TUI or in the engine's runtime bridge -- would
+# let the two drift, and the drift would surface as an operator whose answer
+# grants a class the kernel never demanded. Both callers must use the shared
+# helper, and neither may name a confirmation class variant itself.
+echo ""
+echo "--- Check 175: the confirmation-class mapping exists once ---"
+SECTION_FAIL=0
+POLICY_RS="crates/eggsec-policy/src/decision.rs"
+if ! rg -q 'pub fn permitting_classes' "$POLICY_RS" 2>/dev/null; then
+  echo "FAIL: the policy kernel does not own the confirmation-class mapping."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for MAPPER in "crates/eggsec-tui/src/app/enforcement_facade.rs" "crates/eggsec/src/runtime_bridge/executor.rs"; do
+  if [[ ! -f "$MAPPER" ]]; then
+    echo "FAIL: $MAPPER is missing; the mapping's callers cannot be checked."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  # The eight fields that let a `ManualOverride` permit a class. A caller
+  # that ASSIGNS one of them is restating the mapping. A caller that only
+  # READS one (a test asserting what the shared helper produced) is not.
+  #
+  # The names are disjoint from `ExecutionPolicy`'s own `allow_*` fields,
+  # which is what makes this pattern safe.
+  if rg -q 'allow_(out_of_scope|explicit_exclusion|high_risk|nonbaseline_capability|private_resolution|cross_host_redirect|web_proxy|db_pentest) = true' "$MAPPER" 2>/dev/null; then
+    echo "FAIL: $MAPPER maps a confirmation class onto an override field itself."
+    rg -n 'allow_(out_of_scope|explicit_exclusion|high_risk|nonbaseline_capability|private_resolution|cross_host_redirect|web_proxy|db_pentest) = true' "$MAPPER" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+  if ! rg -q 'permitting_classes' "$MAPPER" 2>/dev/null; then
+    echo "FAIL: $MAPPER does not use the shared confirmation-class mapping."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the confirmation-class mapping exists once."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 176. The daemon records the answer it accepts.
+# Milestone 011 (ADR-0012).
+#
+# An approval is an authorisation an operator gave. Who gave it, for which
+# session, on which surface, and with what outcome must survive the process:
+# an approval that leaves no trace is indistinguishable from one that was
+# never asked for.
+echo ""
+echo "--- Check 176: the daemon audits the answer it accepts ---"
+SECTION_FAIL=0
+HOST_RS="crates/eggsec-daemon/src/host.rs"
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?record_audit_event' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not record an audit event."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -Uq 'ApprovePolicy \{[\s\S]{0,6000}?action: "approve-policy"' "$HOST_RS" 2>/dev/null; then
+  echo "FAIL: the daemon's ApprovePolicy handler does not record the approval under its own action."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the daemon audits the answer it accepts."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 177. The daemon's default socket path exists in exactly one place.
+# Milestone 012 (ADR-0013).
+#
+# The default socket path was transcribed in six places: the daemon binary's
+# flag default, the daemon's config default, the engine's global flag, the
+# GUI's Rust options, the GUI's webview (a JS constant and an HTML attribute)
+# and the daemon profile build script. A change to one copy would silently
+# fail to change the others, and the webview's copy could drift away from the
+# Rust one entirely.
+#
+# The canonical crate owns the literal. Documentation, skills and plan history
+# legitimately quote the operator-facing default, so the scan is scoped to
+# `crates/` and `scripts/` -- the same discipline `check_doc_references.py`
+# uses when it skips `plans/`.
+#
+# `code_search` is NOT used here: it strips string literals before matching
+# (`sed -e 's/"[^"]*"/""/g'`), so it would blank the very literal this guard
+# looks for and pass vacuously.
+echo ""
+echo "--- Check 177: the default socket path exists in exactly one place ---"
+SECTION_FAIL=0
+CANONICAL_CRATE="crates/eggsec-runtime"
+CANONICAL_RS="crates/eggsec-runtime/src/daemon_endpoint.rs"
+SOCKET_LITERAL="/tmp/eggsec-daemon.sock"
+# This guard has to NAME the literal in order to search for it, so the guard's
+# own file is excluded from its own scan. A check that matches itself is not a
+# check: without the exclusion this guard fails on its own search term and
+# says nothing about the repository.
+GUARD_SELF="scripts/check-architecture-guards.sh"
+
+# Every hit in the executable surface must live in the canonical crate. That
+# crate may hold more than one occurrence -- the constant and the test that
+# pins its value -- so the rule is the crate, not the file.
+while IFS= read -r HIT; do
+  [[ -z "$HIT" ]] && continue
+  HIT_FILE="${HIT%%:*}"
+  if [[ "$HIT_FILE" != "$CANONICAL_CRATE"/* ]]; then
+    echo "FAIL: the default socket path is stated outside the canonical crate: $HIT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done < <(rg -H -n --fixed-strings "$SOCKET_LITERAL" crates/ scripts/ 2>/dev/null | grep -v "^${GUARD_SELF}:" || true)
+
+# The GUI's webview assets must hold no copy: the webview learns the path
+# from Rust, through the existing `daemon_status` command.
+if rg -q --fixed-strings "$SOCKET_LITERAL" crates/eggsec-gui/frontend/ 2>/dev/null; then
+  echo "FAIL: the GUI's webview assets still hold a copy of the default socket path."
+  rg -H -n --fixed-strings "$SOCKET_LITERAL" crates/eggsec-gui/frontend/ 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The shell scripts must hold no copy, so the build script cannot re-introduce
+# one.
+SCRIPT_HITS="$(rg -H -n --fixed-strings "$SOCKET_LITERAL" scripts/ 2>/dev/null | grep -v "^${GUARD_SELF}:" || true)"
+if [[ -n "$SCRIPT_HITS" ]]; then
+  echo "FAIL: a shell script still holds a copy of the default socket path."
+  printf '%s\n' "$SCRIPT_HITS"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The canonical crate must still state it.
+if ! rg -q --fixed-strings "$SOCKET_LITERAL" "$CANONICAL_RS" 2>/dev/null; then
+  echo "FAIL: the canonical crate no longer states the default socket path."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the default socket path exists in exactly one place."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 178. The server refuses to bind over a live socket.
+# Milestone 012 (ADR-0013).
+#
+# `run_server` used to unlink the socket path before it bound, so a second
+# daemon displaced a live daemon's socket and its clients broke. The bind
+# guard binds first, asks the shared liveness probe whether the occupant is
+# live, and refuses without unlinking when it is.
+#
+# This guard pins the *shape*; the behaviour is pinned by the Rust tests,
+# because a static check cannot observe a race.
+echo ""
+echo "--- Check 178: the server refuses to bind over a live socket ---"
+SECTION_FAIL=0
+SERVER_RS="crates/eggsec-daemon/src/server.rs"
+
+# The hits in a file's PRODUCTION half. Comment lines, `pub use` re-exports
+# and the test module are all skipped, so a doc comment that NAMES a call --
+# or a test that mentions one -- can neither satisfy nor break a check.
+production_hits_fixed() {
+  local needle="$1" file="$2" limit
+  limit="$(rg -H -n --fixed-strings '#[cfg(test)]' "$file" 2>/dev/null | head -1 | cut -d: -f2 || true)"
+  [[ -z "$limit" ]] && limit=999999
+  rg -H -n --fixed-strings "$needle" "$file" 2>/dev/null \
+    | grep -v ':[[:space:]]*//' \
+    | grep -v 'pub use' \
+    | awk -F: -v limit="$limit" 'NF >= 2 && $2 + 0 < limit + 0' \
+    || true
+}
+
+# The first production line that mentions a needle.
+first_production_line() {
+  production_hits_fixed "$1" "$2" | head -1 | cut -d: -f2 || true
+}
+
+# The first removal of the socket path must come after the first bind. A
+# removal before the bind is the defect: it destroys the evidence of whether
+# the path held a live daemon.
+FIRST_BIND="$(first_production_line 'UnixListener::bind' "$SERVER_RS")"
+FIRST_REMOVE="$(first_production_line 'remove_file' "$SERVER_RS")"
+if [[ -z "$FIRST_BIND" ]]; then
+  echo "FAIL: the server no longer binds a Unix listener."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+elif [[ -n "$FIRST_REMOVE" ]] && (( FIRST_REMOVE < FIRST_BIND )); then
+  echo "FAIL: the server removes the socket path (line $FIRST_REMOVE) before it binds it (line $FIRST_BIND)."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The refusal branch must exist.
+if [[ -z "$(production_hits_fixed 'AddrInUse' "$SERVER_RS")" ]]; then
+  echo "FAIL: the server has no AddrInUse refusal branch."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The bind path must consult the shared probe, so that a second liveness
+# notion cannot be introduced.
+if [[ -z "$(production_hits_fixed 'probe_daemon_liveness' "$SERVER_RS")" ]]; then
+  echo "FAIL: the server's bind path does not consult the shared liveness probe."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The liveness notion stays singular: no lock file, no PID file, no lease.
+for LOCK_LIKE in 'flock' 'lock_file' 'lockfile' 'pid_file' 'pidfile' '.lock'; do
+  if [[ -n "$(production_hits_fixed "$LOCK_LIKE" "$SERVER_RS")" ]]; then
+    echo "FAIL: the server's bind path references $LOCK_LIKE; the liveness notion must stay singular."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the server refuses to bind over a live socket."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 179. The environment override has one name and one resolver.
+# Milestone 012 (ADR-0013).
+#
+# The environment variable's name and the precedence rule live in one crate.
+# A second spelling of the name -- in the daemon, the engine, the GUI or the
+# CLI -- is a transcription that can drift from the rule it names.
+echo ""
+echo "--- Check 179: the environment override has one name and one resolver ---"
+SECTION_FAIL=0
+
+# The name may be stated only in the canonical crate.
+while IFS= read -r HIT; do
+  [[ -z "$HIT" ]] && continue
+  HIT_FILE="${HIT%%:*}"
+  if [[ "$HIT_FILE" != "$CANONICAL_CRATE"/* ]]; then
+    echo "FAIL: the socket environment variable's name is transcribed outside the canonical crate: $HIT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done < <(rg -H -n --fixed-strings 'EGGSEC_DAEMON_SOCKET' crates/ 2>/dev/null || true)
+
+# The canonical crate must own the four items the other surfaces name.
+for ITEM in \
+  'pub const DAEMON_SOCKET_ENV_VAR' \
+  'pub const DEFAULT_DAEMON_SOCKET_PATH' \
+  'pub fn resolve_daemon_socket_path' \
+  'pub fn daemon_socket_path_from_env'; do
+  if ! rg -q --fixed-strings "$ITEM" "$CANONICAL_RS" 2>/dev/null; then
+    echo "FAIL: the canonical crate does not declare $ITEM."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+# The four surfaces must resolve through the canonical items rather than
+# re-deriving the rule. A bare `pub use` re-export does not count, and
+# neither does a mention in the test module: the surface must actually
+# resolve a path through the canonical item.
+for SURFACE in \
+  "crates/eggsec-daemon/src/main.rs" \
+  "crates/eggsec/src/cli/mod.rs" \
+  "crates/eggsec-daemon/src/config.rs" \
+  "crates/eggsec-gui/src/config.rs"; do
+  if [[ ! -f "$SURFACE" ]]; then
+    echo "FAIL: $SURFACE is missing; the surface cannot be checked."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  SURFACE_LIMIT="$(rg -H -n --fixed-strings '#[cfg(test)]' "$SURFACE" 2>/dev/null | head -1 | cut -d: -f2 || true)"
+  [[ -z "$SURFACE_LIMIT" ]] && SURFACE_LIMIT=999999
+  SURFACE_HITS="$(rg -H -n 'daemon_socket_path_from_env|DEFAULT_DAEMON_SOCKET_PATH' "$SURFACE" 2>/dev/null \
+    | grep -v ':[[:space:]]*//' \
+    | grep -v 'pub use' \
+    | awk -F: -v limit="$SURFACE_LIMIT" 'NF >= 2 && $2 + 0 < limit + 0' \
+    || true)"
+  if [[ -z "$SURFACE_HITS" ]]; then
+    echo "FAIL: $SURFACE does not resolve the socket path through the canonical daemon endpoint."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the environment override has one name and one resolver."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 180. The report bridge's coverage table and the bridge's arms agree.
+# Milestone 013.
+#
+# The report bridge tells the operator which canonical operations produce a
+# report document. That answer lives in exactly one place -- the coverage
+# table in `crates/eggsec/src/runtime_bridge/report_coverage.rs` -- and the
+# bridge consults it before it builds anything.
+#
+# Three facts must not rot:
+#
+#   1. The table must account for EVERY result variant the engine declares.
+#      A new `TaskResult` variant that no row names would silently fall
+#      through the bridge and produce no report, with nothing to show for it.
+#   2. Every variant the table calls canonical must have a bridge arm, and
+#      every bridge arm must be a variant the table calls canonical. A
+#      disagreement between the two is the internal error the bridge logs at
+#      error level -- it must not be reachable from the source.
+#   3. The table must live in ONE place. A second copy would be a second
+#      hand-maintained catalog: it would drift silently, and the drift would
+#      show up as a missing row rather than as a failure.
+#
+# The names are READ FROM THEIR OWNERS, not transcribed here: a guard that
+# hardcoded the variant names would itself be the second source of truth this
+# check exists to prevent.
+#
+# The extractions are MULTILINE-AWARE (`rg -U`, and an awk that accumulates
+# across lines), because `rustfmt` breaks a long `variants:` array across
+# several lines. A single-line extraction would read a reformatted table as a
+# missing row, and the guard would fail on a tree that had not drifted.
+echo ""
+echo "--- Check 180: the report bridge's coverage table and its arms agree ---"
+SECTION_FAIL=0
+COVERAGE_SOURCE="crates/eggsec/src/runtime_bridge/report_coverage.rs"
+BRIDGE_SOURCE="crates/eggsec/src/runtime_bridge/report.rs"
+TYPES_SOURCE="crates/eggsec/src/dispatch/types.rs"
+EXECUTOR_SOURCE="crates/eggsec/src/runtime_bridge/executor.rs"
+
+# The variants the engine declares, read from the result type itself.
+ENUM_VARIANTS=""
+if [[ -f "$TYPES_SOURCE" ]]; then
+  ENUM_VARIANTS="$(sed -n '/^pub enum TaskResult {/,/^}/p' "$TYPES_SOURCE" \
+    | sed -n 's/^    \([A-Z][A-Za-z0-9]*\)[ ({,].*$/\1/p' | sort -u)"
+fi
+if [[ -z "$ENUM_VARIANTS" ]]; then
+  echo "FAIL: could not read the result variants from $TYPES_SOURCE; the guard cannot run."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+else
+  # The variants the coverage table names: the rows' variant lists plus the
+  # terminal result shape, which no operation produces.
+  COVERAGE_VARIANTS=""
+  if [[ -f "$COVERAGE_SOURCE" ]]; then
+    COVERAGE_VARIANTS="$(
+      {
+        rg -U -o 'variants: &\[[^\]]*\]' "$COVERAGE_SOURCE"
+        rg -U -o 'TERMINAL_RESULT_VARIANTS:[^=]*= *&\[[^\]]*\]' "$COVERAGE_SOURCE"
+      } | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u
+    )"
+  fi
+  if [[ -z "$COVERAGE_VARIANTS" ]]; then
+    echo "FAIL: could not read the coverage table's variants from $COVERAGE_SOURCE; the guard cannot run."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  elif [[ "$ENUM_VARIANTS" == "$COVERAGE_VARIANTS" ]]; then
+    echo "PASS: the coverage table accounts for every result variant the engine declares."
+  else
+    echo "FAIL: the coverage table and the engine's result variants disagree."
+    echo "  only in the result type:"
+    comm -23 <(printf '%s\n' "$ENUM_VARIANTS") <(printf '%s\n' "$COVERAGE_VARIANTS") | sed 's/^/    /'
+    echo "  only in the coverage table:"
+    comm -13 <(printf '%s\n' "$ENUM_VARIANTS") <(printf '%s\n' "$COVERAGE_VARIANTS") | sed 's/^/    /'
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # The table's rows, read as "verdict|variants". The awk accumulates across
+  # lines so a reformatted (multi-line) variants array reads as one row.
+  COVERAGE_ROWS=""
+  if [[ -f "$COVERAGE_SOURCE" ]]; then
+    COVERAGE_ROWS="$(awk '
+      /variants: &\[/ {
+        line = $0
+        sub(/^.*variants: &\[/, "", line)
+        if (line ~ /\]/) {
+          sub(/\].*$/, "", line)
+          names = line
+          collecting = 0
+        } else {
+          names = line
+          collecting = 1
+        }
+        next
+      }
+      collecting {
+        line = $0
+        if (line ~ /\]/) {
+          sub(/\].*$/, "", line)
+          names = names " " line
+          collecting = 0
+        } else {
+          names = names " " line
+        }
+        next
+      }
+      /form: ReportForm::/ {
+        verdict = $0
+        sub(/^.*form: ReportForm::/, "", verdict)
+        sub(/,.*$/, "", verdict)
+        print verdict "|" names
+        names = ""
+        next
+      }
+    ' "$COVERAGE_SOURCE")"
+  fi
+  if [[ -z "$COVERAGE_ROWS" ]]; then
+    echo "FAIL: could not read the coverage rows from $COVERAGE_SOURCE; the guard cannot run."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  else
+    CANONICAL_VARIANTS="$(printf '%s\n' "$COVERAGE_ROWS" \
+      | rg '^Canonical\|' | cut -d'|' -f2 | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u)"
+    EXCLUDED_VARIANTS="$(printf '%s\n' "$COVERAGE_ROWS" \
+      | rg '^NoCleanMapping\|' | cut -d'|' -f2 | rg -o '"[A-Za-z][A-Za-z0-9]*"' | tr -d '"' | sort -u)"
+
+    # The bridge's arms: the PRODUCTION half only. A test may name a variant
+    # as a fixture, but only a real arm counts here.
+    BRIDGE_PRODUCTION=""
+    BRIDGE_ARMS=""
+    if [[ -f "$BRIDGE_SOURCE" ]]; then
+      BRIDGE_PRODUCTION="$(sed '/#\[cfg(test)\]/,$d' "$BRIDGE_SOURCE")"
+      BRIDGE_ARMS="$(printf '%s' "$BRIDGE_PRODUCTION" | rg -o 'TaskResult::[A-Za-z][A-Za-z0-9]*' \
+        | sed 's/TaskResult:://' | sort -u)"
+    fi
+    if [[ -z "$BRIDGE_ARMS" ]]; then
+      echo "FAIL: could not read the bridge's arms from $BRIDGE_SOURCE; the guard cannot run."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    else
+      for variant in $CANONICAL_VARIANTS; do
+        if ! printf '%s' "$BRIDGE_PRODUCTION" | rg -q "TaskResult::${variant}\b"; then
+          echo "FAIL: the coverage table calls '$variant' canonical, but the bridge has no TaskResult::$variant arm."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+      for arm in $BRIDGE_ARMS; do
+        if ! printf '%s\n' "$CANONICAL_VARIANTS" | rg -qx "$arm"; then
+          echo "FAIL: the bridge has a TaskResult::$arm arm, but the coverage table does not call it canonical."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+      for variant in $EXCLUDED_VARIANTS; do
+        if printf '%s' "$BRIDGE_PRODUCTION" | rg -q "TaskResult::${variant}\b"; then
+          echo "FAIL: the bridge has a TaskResult::$variant arm, but the coverage table excludes that variant."
+          SECTION_FAIL=$((SECTION_FAIL + 1))
+        fi
+      done
+    fi
+  fi
+
+  # The table lives in exactly one place.
+  COVERAGE_TABLE_FILES="$(rg -l 'pub const REPORT_COVERAGE' crates/ --glob '*.rs' 2>/dev/null | sort | tr '\n' ' ')"
+  COVERAGE_TABLE_FILES="${COVERAGE_TABLE_FILES% }"
+  if [[ "$COVERAGE_TABLE_FILES" != "$COVERAGE_SOURCE" ]]; then
+    echo "FAIL: the report coverage table must live in exactly one place; found: ${COVERAGE_TABLE_FILES:-none}"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # The engine publishes its own table; it does not restate it.
+  if [[ -f "$EXECUTOR_SOURCE" ]]; then
+    if ! rg -q 'REPORT_COVERAGE' "$EXECUTOR_SOURCE"; then
+      echo "FAIL: the engine's executor does not publish the coverage table; the daemon would have no coverage to republish."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  fi
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the report bridge's coverage table and its arms agree."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 181. The export procedure is written.
+# Milestone 014.
+#
+# The export step is the step whose procedure was missing: a matrix column
+# with no procedure is a column nobody can run, and a procedure that still
+# says "not yet defined" is worse than no procedure, because it reads like
+# one.
+echo ""
+echo "--- Check 181: the export procedure is written ---"
+SECTION_FAIL=0
+BUILD_DOC="docs/GUI_BUILD.md"
+EXPORT_SECTION="$(sed -n '/^### 5\.7 Step 7 — Export/,/^### 5\.8 /p' "$BUILD_DOC")"
+if [[ -z "$EXPORT_SECTION" ]]; then
+  echo "FAIL: $BUILD_DOC has no §5.7 export step."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if printf '%s' "$EXPORT_SECTION" | rg -q 'Not yet defined'; then
+  echo "FAIL: $BUILD_DOC §5.7 still says 'Not yet defined'."
+  printf '%s' "$EXPORT_SECTION" | rg -n 'Not yet defined' || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for ROW in 'Action' 'Pass criterion' 'Evidence artefact'; do
+  if ! printf '%s' "$EXPORT_SECTION" | rg -q "\| \*\*$ROW\*\* \| .+ \|"; then
+    echo "FAIL: $BUILD_DOC §5.7 has no non-empty $ROW row."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if ! printf '%s' "$EXPORT_SECTION" | rg -q 'export_report'; then
+  echo "FAIL: $BUILD_DOC §5.7 does not name the export_report command."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+for FORMAT in json csv html md sarif xml; do
+  if ! printf '%s' "$EXPORT_SECTION" | rg -q "\`$FORMAT\`"; then
+    echo "FAIL: $BUILD_DOC §5.7 does not name the $FORMAT format."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the export procedure names its action, its criterion, its artefact, and its six formats."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 182. The retired milestone token stays retired.
+# Milestone 014.
+#
+# The matrix once claimed the GUI had no export affordance and blocked its
+# export column on a milestone. The affordance exists, so the token that
+# described the block is a token that lies. It expires with the affordance,
+# not with a date.
+echo ""
+echo "--- Check 182: the retired milestone token stays retired ---"
+SECTION_FAIL=0
+MATRIX="docs/GUI_PLATFORM_QUALIFICATION.md"
+APP_JS="crates/eggsec-gui/frontend/app.js"
+if rg -q 'export_report' "$APP_JS" 2>/dev/null; then
+  if rg -q 'pending M6' "$MATRIX" 2>/dev/null; then
+    echo "FAIL: $MATRIX still carries the retired 'pending M6' token, but the export affordance exists."
+    rg -n 'pending M6' "$MATRIX" || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+else
+  echo "FAIL: the export affordance is gone from $APP_JS; guard 182's premise no longer holds."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the matrix carries no retired blocking token."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 183. `qualified` means resolvable evidence.
+# Milestone 014.
+#
+# A cell that claims `qualified` is a claim about a run that happened. If the
+# run record cannot be found, the claim is not a claim about anything, and the
+# matrix stops being a statement of fact and becomes a statement of intent.
+echo ""
+echo "--- Check 183: a qualified cell names resolvable evidence ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import os
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+evidence_dir = "docs/evidence/gui-qualification"
+ci_runs_path = os.path.join(evidence_dir, "CI-RUNS.md")
+
+with open(matrix_path, encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+ci_runs = ""
+if os.path.isfile(ci_runs_path):
+    with open(ci_runs_path, encoding="utf-8") as handle:
+        ci_runs = handle.read()
+
+failures = 0
+for number, line in enumerate(lines, start=1):
+    if not line.startswith("| `"):
+        continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    if len(cells) < 2:
+        continue
+    platform = cells[0].strip("`")
+    for index, cell in enumerate(cells[1:], start=1):
+        match = re.match(r"^\*\*([^*]+)\*\*", cell)
+        if match is None or match.group(1).strip() != "qualified":
+            continue
+        references = re.findall(r"docs/evidence/gui-qualification/([A-Za-z0-9._-]+\.md)", cell)
+        urls = re.findall(r"https://github\.com/\S+/actions/runs/\d+", cell)
+        if not references and not urls:
+            print(f"FAIL: {matrix_path}:{number} the {platform} cell names no evidence reference.")
+            failures += 1
+            continue
+        for name in references:
+            if not os.path.isfile(os.path.join(evidence_dir, name)):
+                print(f"FAIL: {matrix_path}:{number} cites `{name}`, which does not exist.")
+                failures += 1
+        for url in urls:
+            if url not in ci_runs:
+                print(f"FAIL: {matrix_path}:{number} cites {url}, which is not in {ci_runs_path}.")
+                failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every qualified cell names evidence that resolves."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 184. The matrix shape is exact.
+# Milestone 014.
+#
+# The matrix is read by a validator, a guard, and a runbook, and all three
+# read it by position. A column added in the middle, a row dropped, or a cell
+# removed silently changes what every one of those readers believes.
+echo ""
+echo "--- Check 184: the matrix shape is exact ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+header = "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |"
+
+with open(matrix_path, encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+failures = 0
+if not any(line.strip() == header for line in lines):
+    print(f"FAIL: {matrix_path} has no header row exactly `{header}`.")
+    failures += 1
+
+rows = []
+for line in lines:
+    if not line.startswith("| `"):
+        continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    platform = cells[0].strip("`")
+    if platform in ("linux", "macos", "windows"):
+        rows.append((platform, len(cells) - 1))
+
+if sorted(platform for platform, _ in rows) != ["linux", "macos", "windows"]:
+    print(f"FAIL: {matrix_path} must have exactly one row per platform (linux, macos, windows); found {sorted(platform for platform, _ in rows)}.")
+    failures += 1
+
+for platform, cells in rows:
+    if cells != 7:
+        print(f"FAIL: {matrix_path} the `{platform}` row has {cells} cells; it must have 7.")
+        failures += 1
+
+if failures == 0 and sum(cells for _, cells in rows) != 21:
+    print(f"FAIL: {matrix_path} has {sum(cells for _, cells in rows)} cells; it must have 21.")
+    failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the matrix has the exact header, three rows, and twenty-one cells."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 185. The runbook derives its steps from the matrix.
+# Milestone 014.
+#
+# The runbook is the procedure for the matrix's columns. If the two lists
+# drift, an operator follows a procedure for a column the matrix does not
+# have, and a cell the matrix does have has no procedure.
+echo ""
+echo "--- Check 185: the runbook's steps are the matrix's columns ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+build_path = "docs/GUI_BUILD.md"
+
+with open(matrix_path, encoding="utf-8") as handle:
+    matrix_lines = handle.read().splitlines()
+
+header = None
+for line in matrix_lines:
+    if line.strip() == "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |":
+        header = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        break
+
+if header is None:
+    print("FAIL: the matrix has no header row.")
+    sys.exit(1)
+
+columns = [column.lower() for column in header[1:]]
+
+with open(build_path, encoding="utf-8") as handle:
+    build_lines = handle.read().splitlines()
+
+steps = []
+for line in build_lines:
+    match = re.match(r"^### 5\.\d+ Step (\d+) — (.+)$", line.strip())
+    if match:
+        steps.append((int(match.group(1)), match.group(2).strip().lower()))
+
+failures = 0
+if [name for _, name in steps] != columns:
+    print(f"FAIL: {build_path} §5's steps are {[name for _, name in steps]}; the matrix's columns are {columns}.")
+    failures += 1
+for number, name in steps:
+    if number != steps.index((number, name)) + 1:
+        print(f"FAIL: {build_path} §5's step numbers are not 1..7 in order.")
+        failures += 1
+        break
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the runbook's seven steps are the matrix's seven columns, in order."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 186. The harness's identifiers are the matrix's columns.
+# Milestone 014.
+#
+# The harness reports on the matrix's columns. An identifier it invents, or a
+# column it forgets, is a column the matrix can never promote — and the run
+# record's schema is the contract every writer and every reader shares.
+echo ""
+echo "--- Check 186: the harness's identifiers and record schema are pinned ---"
+SECTION_FAIL=0
+python3 - <<'PY'
+import re
+import sys
+
+matrix_path = "docs/GUI_PLATFORM_QUALIFICATION.md"
+harness_path = "crates/eggsec-gui/tests/qualification.rs"
+schema = "eggsec-gui-qualification-record/v1"
+schema_files = [
+    harness_path,
+    "scripts/gui_qualification.sh",
+    "scripts/check_gui_qualification.py",
+    "docs/evidence/gui-qualification/TEMPLATE.md",
+]
+
+with open(matrix_path, encoding="utf-8") as handle:
+    matrix_lines = handle.read().splitlines()
+
+columns = []
+for line in matrix_lines:
+    if line.strip() == "| Platform | Build | Launch | Connect | Submit | Cancel | Render | Export |":
+        columns = [
+            cell.strip().lower()
+            for cell in line.strip().strip("|").split("|")[1:]
+        ]
+        break
+
+if not columns:
+    print("FAIL: the matrix has no header row.")
+    sys.exit(1)
+
+with open(harness_path, encoding="utf-8") as handle:
+    harness = handle.read()
+
+match = re.search(
+    r"COLUMN_IDENTIFIERS[^=]*=\s*&?\[(.*?)\]", harness, re.DOTALL
+)
+if match is None:
+    print(f"FAIL: {harness_path} declares no COLUMN_IDENTIFIERS.")
+    sys.exit(1)
+
+identifiers = re.findall(r'"([a-z]+)"', match.group(1))
+failures = 0
+if identifiers != columns:
+    print(f"FAIL: {harness_path}'s identifiers are {identifiers}; the matrix's columns are {columns}.")
+    failures += 1
+
+for path in schema_files:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            content = handle.read()
+    except OSError:
+        print(f"FAIL: {path} does not exist.")
+        failures += 1
+        continue
+    if schema not in content:
+        print(f"FAIL: {path} does not carry the record schema `{schema}`.")
+        failures += 1
+
+sys.exit(1 if failures else 0)
+PY
+if [[ $? -ne 0 ]]; then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the harness's identifiers are the matrix's columns, and every writer and reader carries the same record schema."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 187. The procedure is hermetic.
+# Milestone 014.
+#
+# The procedure runs on a developer's machine and on a CI runner. It writes
+# artefacts, so it has to say where it writes them, and it must never need
+# privileges the operator has to go and find.
+echo ""
+echo "--- Check 187: the qualification procedure is hermetic ---"
+SECTION_FAIL=0
+PROCEDURE="scripts/gui_qualification.sh"
+if rg -q '\bsudo\b' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE elevates its privileges."
+  rg -n '\bsudo\b' "$PROCEDURE" || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if rg -q 'rm\s+-[a-z]*r' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE removes things recursively."
+  rg -n 'rm\s+-[a-z]*r' "$PROCEDURE" || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# Every absolute path LITERAL the procedure names must be inside the
+# temporary root. A path built from a shell expansion ("$OUT_DIR/...") is not
+# a literal: it is wherever the caller pointed it, and the caller chooses.
+OFFENDING="$(python3 - "$PROCEDURE" <<'PYEOF'
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    body = handle.read()
+
+literals = set(re.findall(r"[\"'](/[^\"'\$]*)", body))
+allowed = {"/dev/null"}
+offending = sorted(
+    literal
+    for literal in literals
+    if literal not in allowed and not literal.startswith("/tmp/")
+    and literal != "/tmp"
+)
+for literal in offending:
+    print(literal)
+PYEOF
+)"
+if [[ -n "$OFFENDING" ]]; then
+  echo "FAIL: $PROCEDURE names absolute path literals outside the temporary root."
+  printf '%s\n' "$OFFENDING"
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'TMPDIR' "$PROCEDURE" 2>/dev/null; then
+  echo "FAIL: $PROCEDURE does not confine its scratch writes to the temporary root."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the procedure needs no privileges and writes only under its output and the temporary root."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 188. The promotion validator is green.
+# Milestone 014.
+#
+# The matrix's rules are enforced by a program, not by a reader's diligence.
+# If the validator fails, the matrix's claims are not being checked, and every
+# other check in this file is only a floor.
+echo ""
+echo "--- Check 188: the promotion validator passes ---"
+SECTION_FAIL=0
+if ! python3 scripts/check_gui_qualification.py; then
+  echo "FAIL: scripts/check_gui_qualification.py rejects the matrix."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the promotion validator is green."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 189. The CI job publishes the qualification record.
+# Milestone 014.
+#
+# A CI run that nobody can read is not evidence. The record has to leave the
+# runner as an artefact, or the Linux row can never be promoted by CI at all.
+echo ""
+echo "--- Check 189: the CI job publishes the qualification record ---"
+SECTION_FAIL=0
+WORKFLOW=".github/workflows/deep-checks.yml"
+GUI_JOB="$(sed -n '/^  gui-platform:/,/^  [a-z-]*:$/p' "$WORKFLOW")"
+if [[ -z "$GUI_JOB" ]]; then
+  echo "FAIL: $WORKFLOW has no gui-platform job."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'scripts/gui_qualification\.sh'; then
+  echo "FAIL: the gui-platform job does not run the qualification procedure."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'gui-qualification-\$\{\{ matrix\.os \}\}'; then
+  echo "FAIL: the gui-platform job does not publish a gui-qualification artefact."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! printf '%s' "$GUI_JOB" | rg -q 'upload-artifact'; then
+  echo "FAIL: the gui-platform job does not upload the run record as an artefact."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the gui-platform job runs the procedure and publishes the run record."
+else
+  FAIL=$((FAIL + 1))
+fi
+# 190. Every dependency exception is owned and dated.
+# Milestone 015.
+#
+# A dependency exception is a decision to ship a known-bad advisory. It is
+# only a decision while somebody owns it and somebody has promised to look
+# at it again. An ignore with no owner and no review-by date is a silent
+# permanent waiver, and the 23-entry advisory set that milestone 015 closed
+# was exactly a backlog of such waivers that nobody was tracking.
+#
+# `deny.toml` deliberately carries no owner field -- the house style puts the
+# ownership data in the exception document -- so the check has to read both
+# files. It must also fail closed: a parse that finds nothing is not
+# evidence that there is nothing to find. A guard that silently passes is
+# worse than none.
+echo ""
+echo "--- Check 190: every dependency exception is owned and dated ---"
+SECTION_FAIL=0
+DENY_TOML="deny.toml"
+EXCEPTIONS_DOC="docs/DEPENDENCY_EXCEPTIONS.md"
+
+if [[ ! -f "$DENY_TOML" ]]; then
+  echo "FAIL: $DENY_TOML is missing; the canonical dependency-policy source cannot be checked."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if [[ ! -f "$EXCEPTIONS_DOC" ]]; then
+  echo "FAIL: $EXCEPTIONS_DOC is missing; the exception record cannot be checked."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  # Slice the `[advisories]` ignore array out of the policy file. The array is
+  # the only place an advisory ID may be suppressed, so the parse is scoped to
+  # that section rather than to the whole file.
+  IGNORE_BLOCK=$(awk '
+    /^\[advisories\]/                 { in_adv = 1; next }
+    /^\[/                            { in_adv = 0 }
+    in_adv && /^[[:space:]]*ignore[[:space:]]*=/ { in_ign = 1; next }
+    in_ign && /^[[:space:]]*\]/      { in_ign = 0; next }
+    in_ign                           { print }
+  ' "$DENY_TOML" 2>/dev/null || true)
+
+  if [[ -z "$IGNORE_BLOCK" ]]; then
+    echo "FAIL: the [advisories] ignore array could not be parsed from $DENY_TOML."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  IGNORE_ENTRIES=$(rg -o '\{[^{}]*\}' <<< "$IGNORE_BLOCK" 2>/dev/null || true)
+  if [[ -z "$IGNORE_ENTRIES" ]]; then
+    echo "FAIL: no advisory ignore entries were parsed from $DENY_TOML."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # Every `###` section of the exception document, reduced to the facts the
+  # guard needs: the advisory IDs it covers, its owner, and its review-by date.
+  # A section runs from its heading to the next `###` or `##` heading.
+  SECTION_FACTS=$(awk '
+    function flush(   ids, s, id, n, arr, i) {
+      if (title == "") return;
+      ids = "";
+      s = title "\n" body;
+      while (match(s, /RUSTSEC-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]/)) {
+        id = substr(s, RSTART, RLENGTH);
+        if (index(" " ids " ", " " id " ") == 0) ids = ids (ids == "" ? "" : " ") id;
+        s = substr(s, RSTART + RLENGTH);
+      }
+      n = split(ids, arr, " ");
+      for (i = 1; i <= n; i++) {
+        if (arr[i] == "") continue;
+        printf "%s\t%s\t%s\t%s\n", arr[i], owner, reviewby, title;
+      }
+    }
+    /^### / {
+      flush(); title = $0; owner = ""; reviewby = ""; body = ""; next;
+    }
+    /^## / {
+      flush(); title = ""; owner = ""; reviewby = ""; body = ""; next;
+    }
+    {
+      if (title == "") next;
+      body = body $0 "\n";
+      if ($0 ~ /^\|[[:space:]]*Owner[[:space:]]*\|/) {
+        v = $0; sub(/^\|[[:space:]]*Owner[[:space:]]*\|/, "", v);
+        sub(/[[:space:]]*\|[[:space:]]*$/, "", v);
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); owner = v;
+      }
+      if ($0 ~ /^\|[[:space:]]*Review-by[[:space:]]*\|/) {
+        v = $0; sub(/^\|[[:space:]]*Review-by[[:space:]]*\|/, "", v);
+        sub(/[[:space:]]*\|[[:space:]]*$/, "", v);
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); reviewby = v;
+      }
+    }
+    END { flush() }
+  ' "$EXCEPTIONS_DOC" 2>/dev/null || true)
+
+  if [[ -z "$SECTION_FACTS" ]]; then
+    echo "FAIL: no exception records could be parsed from $EXCEPTIONS_DOC."
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+
+  # Advisory IDs carried by a RESOLVED heading. Their ignores were removed
+  # when the dependency left the graph; a RESOLVED ID that is ignored again
+  # is a resurrected exception.
+  RESOLVED_IDS=$(awk '
+    /^### / {
+      if (title == "") { title = $0; next }
+      if (title ~ /RESOLVED/) {
+        s = title;
+        while (match(s, /RUSTSEC-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]/)) {
+          print substr(s, RSTART, RLENGTH);
+          s = substr(s, RSTART + RLENGTH);
+        }
+      }
+      title = $0;
+      next;
+    }
+    /^## / { title = ""; next }
+  ' "$EXCEPTIONS_DOC" 2>/dev/null || true)
+
+  # (a) Every ignore entry has a non-empty reason.
+  # (b) Every reason references the exception document.
+  # (c) Every ignored ID has an owned and dated record.
+  IGNORED_IDS=""
+  while IFS= read -r ENTRY; do
+    if [[ -z "$ENTRY" ]]; then continue; fi
+    ENTRY_ID=$(printf '%s\n' "$ENTRY" | rg -o 'RUSTSEC-[0-9]{4}-[0-9]{4}' | head -1 || true)
+    if [[ -z "$ENTRY_ID" ]]; then
+      echo "FAIL: an ignore entry in $DENY_TOML carries no advisory ID: $ENTRY"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    IGNORED_IDS="$IGNORED_IDS $ENTRY_ID"
+
+    ENTRY_REASON_RAW=$(printf '%s\n' "$ENTRY" | rg -o 'reason[[:space:]]*=[[:space:]]*"[^"]*"' || true)
+    if [[ -z "$ENTRY_REASON_RAW" ]]; then
+      echo "FAIL: $ENTRY_ID has no reason in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    ENTRY_REASON="${ENTRY_REASON_RAW#*\"}"
+    ENTRY_REASON="${ENTRY_REASON%\"}"
+    if [[ -z "${ENTRY_REASON//[[:space:]]/}" ]]; then
+      echo "FAIL: $ENTRY_ID has an empty reason in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    if [[ "$ENTRY_REASON" != *"docs/DEPENDENCY_EXCEPTIONS.md"* ]]; then
+      echo "FAIL: $ENTRY_ID's reason does not reference docs/DEPENDENCY_EXCEPTIONS.md."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+
+    # (c) The owner and the review-by date live in the exception document.
+    MATCHED=$(printf '%s\n' "$SECTION_FACTS" | rg "^${ENTRY_ID}	" || true)
+    if [[ -z "$MATCHED" ]]; then
+      echo "FAIL: $ENTRY_ID is ignored in $DENY_TOML but has no record in $EXCEPTIONS_DOC."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      continue
+    fi
+    OWNED_AND_DATED=0
+    while IFS=$'\t' read -r _SEC_ID _SEC_OWNER _SEC_REVIEW _SEC_TITLE; do
+      if [[ -z "${_SEC_OWNER//[[:space:]]/}" ]]; then continue; fi
+      if [[ "$_SEC_REVIEW" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$_SEC_REVIEW" == "— (closed)" ]]; then
+        OWNED_AND_DATED=1
+      fi
+    done <<< "$MATCHED"
+    if [[ $OWNED_AND_DATED -eq 0 ]]; then
+      echo "FAIL: $ENTRY_ID has no record with a non-empty '| Owner |' and a dated '| Review-by |' in $EXCEPTIONS_DOC."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done <<< "$IGNORE_ENTRIES"
+
+  # (d) No RESOLVED exception retains a live ignore.
+  while IFS= read -r RESOLVED_ID; do
+    if [[ -z "$RESOLVED_ID" ]]; then continue; fi
+    if [[ " $IGNORED_IDS " == *" $RESOLVED_ID "* ]]; then
+      echo "FAIL: $RESOLVED_ID is RESOLVED in $EXCEPTIONS_DOC but is still ignored in $DENY_TOML."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done <<< "$RESOLVED_IDS"
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every dependency exception is owned and dated."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 191. An operator attestation is attributed, and never defaulted.
+# Milestone 014 (the qualification driver's promotion path).
+#
+# Rule P1 of the qualification matrix requires a cell's operator outcome to be
+# `pass`. Until now nothing could write that value: the harness emitted
+# `not-performed` at every one of its sites, and the only documented route to a
+# promotion was a hand edit of the record's json block. That is a promotion
+# with no tooling behind it, and a hand edit is exactly the kind of thing a
+# later run silently overwrites.
+#
+# The machinery now exists: an operator-authored attestation file is validated,
+# merged into the record in one write, and the validator refuses a `pass` that
+# nobody signed. This guard pins the three facts that make that machinery real
+# and the two facts that keep it honest — the procedure accepts an attestation,
+# the validator knows the schema, and no code path *defaults* an operator
+# outcome to `pass`; the only way to obtain one is a named human's
+# attestation, and the matrix still demands one.
+echo ""
+echo "--- Check 191: an operator attestation is attributed, and never defaulted ---"
+SECTION_FAIL=0
+QUAL_PY="scripts/check_gui_qualification.py"
+QUAL_SH="scripts/gui_qualification.sh"
+QUAL_HARNESS="crates/eggsec-gui/tests/qualification.rs"
+ATTESTATION_SCHEMA="eggsec-gui-operator-attestation/v1"
+
+if ! rg -q '^\s+--attestation\)' "$QUAL_SH" 2>/dev/null; then
+  echo "FAIL: the qualification procedure does not accept an operator attestation."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The flag must reach the record writer, or the attestation is read and
+# dropped: a procedure that validates an attestation and never merges it would
+# leave every record exactly as unattributed as it was. The pinned form is the
+# writer's own argument line — the same flag also appears in the help text and
+# in the validator's own call, and neither of those merges anything.
+if ! rg -q --fixed-strings 'RECORD_WRITER_ARGS+=(--attestation "$ATTESTATION_PATH")' "$QUAL_SH" 2>/dev/null; then
+  echo "FAIL: the qualification procedure does not pass the operator attestation to the record writer."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if ! rg -q --fixed-strings "ATTESTATION_SCHEMA = \"$ATTESTATION_SCHEMA\"" "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not declare the operator attestation schema."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The reader half must refuse a `pass` that nobody signed, and must refuse one
+# that carries no observation. The messages are the contract: a rule that says
+# what it refuses is a rule a reader can check.
+if ! rg -q --fixed-strings 'a `pass` must be attributed' "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not refuse an operator pass that nobody signed."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if ! rg -q --fixed-strings 'carries no `observed`' "$QUAL_PY" 2>/dev/null; then
+  echo "FAIL: the validator does not require an observation for an operator pass."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# No code path may DEFAULT an operator outcome to `pass`. The only writer of a
+# `pass` is the merge of a signed attestation.
+while IFS= read -r OPERATOR_DEFAULT; do
+  [[ -z "$OPERATOR_DEFAULT" ]] && continue
+  OPERATOR_VALUE="$(printf '%s\n' "$OPERATOR_DEFAULT" \
+    | rg -o 'setdefault\("operator", *"[^"]*"\)|"operator": *"[^"]*"' \
+    | rg -o '"[^"]*"' | tail -1 | tr -d '"')"
+  if [[ "$OPERATOR_VALUE" == "pass" ]]; then
+    echo "FAIL: a code path defaults an operator outcome to pass; only a named human's attestation may set it."
+    printf '%s\n' "$OPERATOR_DEFAULT"
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+  fi
+done <<< "$(rg -n --no-heading 'setdefault\("operator", *"[^"]*"\)|"operator": *"[^"]*"' "$QUAL_PY" 2>/dev/null || true)"
+
+# The machine cannot attest for a human.
+if rg -q --fixed-strings 'OperatorOutcome::Pass' "$QUAL_HARNESS" 2>/dev/null; then
+  echo "FAIL: the qualification harness emits an operator pass; the machine cannot attest for a human."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+# The matrix must still demand the operator's attestation for the behavioural
+# columns. A rule weakened to `not-applicable` would make every promotion free.
+if ! python3 - <<'PY'
+import re
+import sys
+
+with open("docs/GUI_PLATFORM_QUALIFICATION.md", encoding="utf-8") as handle:
+    lines = handle.read().splitlines()
+
+header = [
+    "Rule",
+    "Kind",
+    "Platforms",
+    "Columns",
+    "Requires",
+    "Required outcome",
+    "Required attestation",
+    "Artefact",
+]
+p1 = None
+for line in lines:
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        continue
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    if len(cells) != len(header):
+        continue
+    if cells[0].strip("`") == "P1":
+        p1 = cells
+        break
+
+if p1 is None:
+    print("FAIL: the matrix's rules table has no P1 row.")
+    sys.exit(1)
+
+columns = [part.strip().strip("`") for part in p1[3].split(",")]
+required = p1[6].strip("`")
+behavioural = ["Connect", "Submit", "Cancel", "Render"]
+missing = sorted(column for column in behavioural if column not in columns)
+if missing:
+    print("FAIL: rule P1 no longer covers " + ", ".join(missing) + ".")
+    sys.exit(1)
+if required != "pass":
+    print(
+        f"FAIL: rule P1 requires the operator outcome `{required}`; a "
+        "promotion must still carry a human's attestation."
+    )
+    sys.exit(1)
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: an operator attestation is attributed, and never defaulted."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 192. Every CI checkout carries the repository's history.
+# Milestone 014 (the qualification driver's promotion path).
+#
+# The architecture guard and the qualification validator both decide whether
+# one commit descends from another, and `git merge-base` can only answer that
+# when the checkout carries the history. `actions/checkout` gives you the tip
+# alone unless it is told otherwise, so a shallow checkout cannot answer the
+# question at all -- and the validator reported that "cannot tell" as a
+# contradiction. That is how CI read the macOS operator's attestation as an
+# attestation of another run: a false accusation, caused by the checkout
+# rather than by the evidence.
+#
+# `fetch-depth: 0` is the fix, and this guard pins it. A job that checks out
+# the tip alone again fails here -- in the workflow, where the cause is
+# visible -- rather than in the validator's judgement of somebody's work.
+echo ""
+echo "--- Check 192: every CI checkout carries the repository's history ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import glob
+import re
+import sys
+
+problems = []
+checkouts = 0
+
+for path in sorted(glob.glob(".github/workflows/*.yml")):
+    with open(path, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(\s*)- uses:\s*actions/checkout@", line)
+        if match is None:
+            continue
+        checkouts += 1
+        indent = len(match.group(1))
+        step = []
+        for following in lines[index + 1 :]:
+            stripped = following.strip()
+            if stripped:
+                if not following.startswith(" " * (indent + 1)):
+                    break
+                if re.match(r"^\s*- ", following) and (
+                    len(following) - len(following.lstrip())
+                ) <= indent:
+                    break
+            step.append(following)
+        if not any(re.search(r"fetch-depth:\s*0\s*$", entry) for entry in step):
+            problems.append(
+                f"{path}:{index + 1}: the checkout does not ask for the full "
+                "history (`fetch-depth: 0`); the guards decide commit ancestry, "
+                "and a shallow checkout cannot answer that question"
+            )
+
+if checkouts == 0:
+    print("FAIL: no checkout step was found to check.")
+    sys.exit(1)
+for problem in problems:
+    print(f"FAIL: {problem}")
+sys.exit(1 if problems else 0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: every CI checkout fetches the full history."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 193. The CI's dependency-policy tool is one version, and it is the version
+# the local contract runs.
+# Milestone 015 (the dependency advisory backlog).
+#
+# `make check-deps` IS the dependency policy, and it is run by whichever
+# cargo-deny the machine happens to have. Two versions of that tool must not
+# decide the same policy: milestone 015's closure recorded the skew as
+# finding F4 -- local 0.20.2, CI 0.19.0 -- with the note that "a local green
+# is not proof of a CI green".
+#
+# The floor is that same finding, made enforceable: CI must not run a
+# cargo-deny older than the one the local contract runs, or the two would
+# again decide the same policy with different tools.
+#
+# (An earlier version of this guard carried a floor of 0.19.9 and justified it
+# by cargo-deny's thread-pool bug, #868. That justification was wrong: the
+# runner's stall reproduces on 0.20.2 as well, and it is in the inclusion
+# graph's rendering, not in the thread pool. The version pin stands on F4's
+# own terms; the stall is guarded separately, by Check 194.)
+echo ""
+echo "--- Check 193: the CI's cargo-deny is one version, and it is the local one ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import glob
+import re
+import sys
+
+#: The cargo-deny the local contract runs. CI must not fall behind it, or the
+#: two would decide the same policy with different tools again (finding F4).
+MINIMUM = (0, 20, 2)
+
+pins = []
+unpinned = []
+for path in sorted(glob.glob(".github/workflows/*.yml")):
+    with open(path, "r", encoding="utf-8") as handle:
+        for number, line in enumerate(handle.read().splitlines(), start=1):
+            if not re.search(r"tool:\s*cargo-deny\b", line):
+                continue
+            match = re.search(r"cargo-deny@(\d+)\.(\d+)\.(\d+)", line)
+            if match is None:
+                unpinned.append(f"{path}:{number}")
+                continue
+            pins.append((path, number, tuple(int(part) for part in match.groups())))
+
+if unpinned:
+    for where in unpinned:
+        print(f"FAIL: {where} installs cargo-deny without an exact version.")
+    print(
+        "FAIL: a floating cargo-deny decides the dependency policy by "
+        "whatever the day brought."
+    )
+    sys.exit(1)
+
+if not pins:
+    print("FAIL: no cargo-deny pin was found in the workflows.")
+    sys.exit(1)
+
+distinct = {version for _, _, version in pins}
+if len(distinct) > 1:
+    print(
+        "FAIL: the workflows install more than one cargo-deny ("
+        + ", ".join(sorted(".".join(str(part) for part in version) for version in distinct))
+        + "); the same tool must decide the same policy everywhere."
+    )
+    sys.exit(1)
+
+version = distinct.pop()
+if version < MINIMUM:
+    print(
+        f"FAIL: cargo-deny {'.'.join(str(part) for part in version)} is older "
+        "than the version the local contract runs ("
+        + ".".join(str(part) for part in MINIMUM)
+        + "); a local green would not be proof of a CI green (finding F4)."
+    )
+    sys.exit(1)
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the CI's cargo-deny is one version, and it is the local one."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 194. The dependency policy is decided without the inclusion graph.
+# Milestone 015 (the dependency advisory backlog), correction addendum.
+#
+# cargo-deny prints an inclusion graph for every duplicated crate. This
+# workspace duplicates 98 of them, and rendering that graph is where the CI
+# runner stalls: the Deep Checks job hangs inside `check bans`, mid-graph, with
+# no output and no error. The stall is reproducible on cargo-deny 0.19.0 and on
+# 0.20.2, and a control branch proved a shallow checkout does not cause it.
+#
+# `--hide-inclusion-graph` removes the rendering path and changes nothing
+# else: the same 98 duplicate warnings are printed and the same four verdicts
+# are reached. So the flag is what keeps the job alive, and it is the kind of
+# thing a version bump, a refactor, or a new sub-command can silently drop.
+#
+# This guard names the flag, so the fix cannot regress into a hang.
+echo ""
+echo "--- Check 194: the dependency policy is decided without the inclusion graph ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import re
+import sys
+
+FLAG = "--hide-inclusion-graph"
+
+try:
+    with open("Makefile", "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+except OSError as error:
+    print(f"FAIL: the Makefile could not be read: {error}")
+    sys.exit(1)
+
+invocations = []
+for number, line in enumerate(lines, start=1):
+    stripped = line.strip()
+    if not stripped.startswith("cargo deny"):
+        continue
+    invocations.append((number, stripped))
+
+if not invocations:
+    print("FAIL: no `cargo deny` invocation was found in the Makefile.")
+    sys.exit(1)
+
+# Exact token, not a substring: `--hide-inclusion-graphs` is not the flag,
+# and a substring test would wave it through.
+missing = [
+    number
+    for number, text in invocations
+    if FLAG not in text.split()
+]
+if missing:
+    for number in missing:
+        print(f"FAIL: Makefile:{number} runs cargo-deny without {FLAG}.")
+    print(
+        "FAIL: the inclusion graph is where the CI runner stalls (the Deep "
+        "Checks job hangs in `check bans`, mid-graph, with no output and no "
+        "error); hiding the graph changes no warning and no verdict, and its "
+        "absence brings the hang back."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the dependency policy is decided without the inclusion graph."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 195. A TUI tab does not redefine a method its own input macro already emits.
+# Milestone 015 (the dependency advisory backlog), correction addendum.
+#
+# The TUI's tab modules are feature-gated, and `make check` builds the TUI
+# with default features -- so no feature-gated tab module is compiled by the
+# per-PR contract. The weekly per-feature sweep is the oracle that does
+# compile them, and when the sweep finally ran past the cargo-deny stall it
+# found this: `crates/eggsec-tui/src/tabs/vuln.rs` defined
+# `ensure_input_focus` by hand *and* invoked `tab_input_custom!`, which emits
+# `ensure_input_focus`. That is a duplicate definition (E0201), so the
+# `vuln-management` feature did not compile at all -- a defect that had been
+# on `main` since commit c66f0943 and had never been built by any fast check.
+#
+# This check makes the collision statically visible, so it cannot survive
+# another sweep cycle. It compares each `impl TabInput for ...` block's
+# hand-written methods against the methods the macros that block invokes
+# actually emit. A tab that invokes no macro cannot collide, and a tab that
+# defines a method no invoked macro emits is fine -- only the intersection
+# is a defect.
+#
+# It fails closed: if the macros file cannot be read or parsed, the check
+# reports the failure rather than passing because it found nothing.
+echo ""
+echo "--- Check 195: a TUI tab does not redefine a method its input macro emits ---"
+SECTION_FAIL=0
+if ! python3 - <<'PY'
+import os
+import re
+import sys
+
+TABS_DIR = "crates/eggsec-tui/src/tabs"
+MACROS = os.path.join(TABS_DIR, "macros.rs")
+
+#: A Rust char literal. Rust lifetimes ('a) are not char literals, so a `'`
+#: only opens one when this shape actually matches.
+CHAR_LITERAL = re.compile(r"'(\\.|[^\\'])'")
+
+
+def strip_noise(text):
+    """Blank out comments and string/char literals, preserving offsets."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                out[i] = " "
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            depth = 1
+            out[i] = out[i + 1] = " "
+            i += 2
+            while i < n and depth:
+                if text[i] == "/" and i + 1 < n and text[i + 1] == "*":
+                    depth += 1
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                elif text[i] == "*" and i + 1 < n and text[i + 1] == "/":
+                    depth -= 1
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                else:
+                    if text[i] != "\n":
+                        out[i] = " "
+                    i += 1
+            continue
+        if ch == '"':
+            i += 1
+            while i < n:
+                if text[i] == "\\":
+                    out[i] = " "
+                    i += 1
+                    if i < n:
+                        out[i] = " "
+                        i += 1
+                    continue
+                if text[i] == '"':
+                    out[i] = " "
+                    i += 1
+                    break
+                if text[i] != "\n":
+                    out[i] = " "
+                i += 1
+            continue
+        if ch == "'":
+            match = CHAR_LITERAL.match(text, i)
+            if match is not None:
+                for j in range(match.start(), match.end()):
+                    out[j] = " "
+                i = match.end()
+                continue
+            i += 1
+            continue
+        i += 1
+    return "".join(out)
+
+
+def match_brace(text, start):
+    """Index of the `}` closing the `{` at `start`."""
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def read(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return strip_noise(handle.read())
+
+
+def macro_methods(path):
+    """Map macro name -> the set of method names its body emits."""
+    text = read(path)
+    emitted = {}
+    for match in re.finditer(r"macro_rules!\s+(\w+)\s*\{", text):
+        end = match_brace(text, match.end() - 1)
+        if end < 0:
+            continue
+        emitted[match.group(1)] = set(
+            re.findall(r"\bfn\s+(\w+)\s*\(", text[match.end():end])
+        )
+    return emitted
+
+
+def impl_blocks(text):
+    """Yield (type name, body) for each `impl TabInput for X { ... }`."""
+    for match in re.finditer(r"impl\s+TabInput\s+for\s+(\w+)\s*\{", text):
+        end = match_brace(text, match.end() - 1)
+        if end < 0:
+            continue
+        yield match.group(1), text[match.end():end]
+
+
+def top_level_items(body):
+    """(hand-written fn names, invoked macro names) at the impl block's level."""
+    depth = 0
+    fns, macros = set(), set()
+    pattern = r"[{}]|\bfn\s+(\w+)\s*\(|\b(\w+)!\s*[({]"
+    for match in re.finditer(pattern, body):
+        token = match.group(0)
+        if token == "{":
+            depth += 1
+            continue
+        if token == "}":
+            depth -= 1
+            continue
+        if depth != 0:
+            continue
+        if match.group(1):
+            fns.add(match.group(1))
+        elif match.group(2):
+            macros.add(match.group(2))
+    return fns, macros
+
+
+try:
+    emitted = macro_methods(MACROS)
+except OSError as error:
+    print(f"FAIL: {MACROS} could not be read: {error}")
+    sys.exit(1)
+
+if not emitted:
+    print(f"FAIL: no macro was found in {MACROS}; the comparison cannot be made.")
+    sys.exit(1)
+
+collisions = []
+for root, _dirs, files in os.walk(TABS_DIR):
+    for name in sorted(files):
+        if not name.endswith(".rs"):
+            continue
+        path = os.path.join(root, name)
+        try:
+            text = read(path)
+        except OSError as error:
+            print(f"FAIL: {path} could not be read: {error}")
+            sys.exit(1)
+        for type_name, body in impl_blocks(text):
+            fns, macros = top_level_items(body)
+            for macro in sorted(macros):
+                if macro not in emitted:
+                    continue
+                for method in sorted(fns & emitted[macro]):
+                    collisions.append((path, type_name, macro, method))
+
+for path, type_name, macro, method in collisions:
+    print(
+        f"FAIL: {path}: `impl TabInput for {type_name}` defines `{method}` and "
+        f"also invokes `{macro}!`, which emits it."
+    )
+if collisions:
+    print(
+        "FAIL: a tab that redefines a method its own input macro emits is a "
+        "duplicate definition (E0201). The feature-gated tab module does not "
+        "compile, and `make check` does not build the TUI with that feature, "
+        "so only the per-feature sweep sees it."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: a TUI tab does not redefine a method its input macro emits."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 196. The repository's shell scripts run on a stock macOS bash.
+# Milestone 015 (the dependency advisory backlog), portability addendum.
+#
+# macOS ships bash 3.2 as /bin/bash, and that is the shell a maintainer on a
+# Mac actually runs. A bash-4 construct in a script is therefore not a
+# portability detail: it aborts the script. `scripts/check-features-individual.sh`
+# used `declare -A`, and on macOS it died with `db: unbound variable` before
+# compiling a single feature profile -- so the repository's exhaustive oracle
+# could not be run locally at all, and the one defect it would have caught
+# (a feature-gated TUI tab that did not compile) reached `main` unfixed.
+#
+# So the scripts stay inside the bash 3.2 language, and this check keeps them
+# there. It scans every shell script for the bash-4 constructs, ignoring
+# comments -- a script is allowed to *mention* the construct it refuses to
+# use.
+#
+# The check's own detection block names those constructs, so it exempts
+# itself between the sentinels below. It fails closed: a script it cannot
+# read is a failure, not a pass.
+echo ""
+echo "--- Check 196: the repository's shell scripts run on a stock macOS bash ---"
+SECTION_FAIL=0
+# >>> BASH4-SCAN EXEMPTION BEGIN (this block names the constructs it forbids)
+if ! python3 - <<'PY'
+import glob
+import os
+import re
+import sys
+
+#: The bash constructs this repository's scripts may not use, each with the
+#: release that introduced it. macOS ships bash 3.2.
+CONSTRUCTS = [
+    (re.compile(r"\bdeclare\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\blocal\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\btypeset\s+-A\b"), "associative array (bash 4.0)"),
+    (re.compile(r"\bmapfile\b"), "mapfile (bash 4.0)"),
+    (re.compile(r"\breadarray\b"), "readarray (bash 4.0)"),
+    (re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*,,"), "${var,,} case conversion (bash 4.0)"),
+    (re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\^\^"), "${var^^} case conversion (bash 4.0)"),
+    (re.compile(r"\bwait\s+-n\b"), "wait -n (bash 4.3)"),
+    (re.compile(r"\[\[\s+-v\s"), "[[ -v ]] (bash 4.2)"),
+    (re.compile(r"\bcoproc\b"), "coproc (bash 4.0)"),
+]
+
+#: The guard script exempts its own detection block: it necessarily names the
+#: constructs it forbids.
+EXEMPT_BEGIN = "# >>> BASH4-SCAN EXEMPTION BEGIN"
+EXEMPT_END = "# <<< BASH4-SCAN EXEMPTION END"
+
+
+def strip_comment(line):
+    """Remove a shell comment, respecting quotes.
+
+    A `#` only opens a comment at the start of a word and outside quotes, so
+    `echo "a#b"` and `echo '#x'` keep their `#`.
+    """
+    quote = None
+    for index, char in enumerate(line):
+        if quote is not None:
+            if char == quote:
+                quote = None
+            continue
+        if char in "'\"":
+            quote = char
+            continue
+        if char == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+    return line
+
+
+def exempt_lines(lines):
+    """0-based indices inside this file's own exemption block."""
+    exempt = set()
+    inside = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(EXEMPT_BEGIN):
+            inside = True
+            continue
+        if stripped.startswith(EXEMPT_END):
+            inside = False
+            continue
+        if inside:
+            exempt.add(index)
+    return exempt
+
+
+scripts = sorted(glob.glob("scripts/*.sh")) + sorted(glob.glob("*.sh"))
+if not scripts:
+    print("FAIL: no shell script was found to check.")
+    sys.exit(1)
+
+problems = []
+for path in scripts:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError as error:
+        print(f"FAIL: {path} could not be read: {error}")
+        sys.exit(1)
+    exempt = exempt_lines(lines)
+    for index, line in enumerate(lines):
+        if index in exempt:
+            continue
+        code = strip_comment(line)
+        for pattern, construct in CONSTRUCTS:
+            if pattern.search(code):
+                problems.append((path, index + 1, construct, code.strip()))
+
+for path, number, construct, code in problems:
+    print(f"FAIL: {path}:{number} uses {construct}: {code}")
+if problems:
+    print(
+        "FAIL: these constructs need bash 4, and macOS ships bash 3.2, where "
+        "they abort the script outright -- the repository's own per-feature "
+        "sweep could not be run locally at all. Use a `case` function or a "
+        "plain lookup instead."
+    )
+    sys.exit(1)
+
+sys.exit(0)
+PY
+then
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+# <<< BASH4-SCAN EXEMPTION END
+
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: the repository's shell scripts run on a stock macOS bash."
 else
   FAIL=$((FAIL + 1))
 fi
