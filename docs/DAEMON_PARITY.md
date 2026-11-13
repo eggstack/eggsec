@@ -30,7 +30,8 @@ Wire protocol version: `DAEMON_PROTOCOL_VERSION = 2` (v2 adds durable
 | Timeouts | Caller-side | `Subscribe` reads and HTTP handlers are bounded; persistence fan-out uses `PERSISTENCE_TASK_TIMEOUT` | Same posture, daemon-side bounds |
 | Structured errors | `OperationError` DTOs | `ServerMessage::Error { code: ErrorCode, message }`; `TaskFailed` carries `RuntimeErrorInfo` | Same structure, transport envelope differs |
 | Artifact references/retrieval | In-process `Artifact` handles | `ArtifactRef { id, kind, path, mime_type, summary }` inside outcomes and snapshots; metadata survives the same lifecycle as the task result | Same metadata; bytes stay daemon-side |
-| Capability discovery/version negotiation | Feature flags at build time | `Capabilities` → `DaemonCapabilities { runtime, transports }`; `Health` carries `protocol_version`; clients must check it before sending commands | Daemon superset |
+| Capability discovery/version negotiation | Feature flags at build time | `Capabilities` → `DaemonCapabilities { runtime, transports, operation_schema }`; `Health` carries `protocol_version`; clients must check it before sending commands | Daemon superset |
+| Operation/schema discovery | No daemon — the frontend builds its forms from static knowledge | `DescribeOperations` → `Operations { operations: DescribeOperationsResponse }`: the canonical operation catalog plus the derived request schema, read-only | Daemon superset; a client must degrade to a static form set when `operation_schema` is `false` or the daemon answers `UnsupportedCommand` |
 | Ownership/RBAC | Single caller | `ClientRole` (Owner/Controller/Observer/Approver) × `CommandPermission`; `GetTaskResult` requires `Observer`; ownership persists across restarts | Daemon superset |
 
 ## Result retrieval and reconnect/replay (WS5)

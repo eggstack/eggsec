@@ -383,7 +383,11 @@ handler does before dispatch.
 
 ### Runtime Binding (`app/mod.rs:152`)
 
-`RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `TuiRuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
+`RuntimeBinding` wraps either an `EmbeddedRuntimeClient` or `DaemonRuntimeClient` behind the `RuntimeClient` trait. Methods: `capabilities()`, `create_session()`, `list_sessions()`, `snapshot()`, `submit()`, `cancel()`, `cancel_active()`, `subscribe()`.
+
+The contract itself lives in the leaf crate **`eggsec-frontend-client`** (see [frontend_client.md](frontend_client.md)). The TUI's former `crates/eggsec-tui/src/runtime_client/` module was removed when the contract was extracted: the trait was renamed `TuiRuntimeClient` → `RuntimeClient`, and the TUI now depends on `eggsec-frontend-client` instead of on `eggsec-daemon-protocol` directly. `App::runtime_client` is therefore `Option<Arc<dyn RuntimeClient + Send + Sync>>`, and daemon attach mode constructs `eggsec_frontend_client::DaemonRuntimeClient::connect(...)`.
+
+`connect()` now takes the caller's `ClientIdentity` alongside the socket path, because the contract carries no frontend's identity of its own. The TUI passes its own — `ClientKind::Tui`, label `eggsec-tui`, request-id prefix `tui-` (`crates/eggsec-tui/src/app/mod.rs:390-397`). **The TUI's observable behaviour is unchanged**: the same client kind is declared to the daemon, the same label appears in daemon-side listings, and the request ids keep the `tui-` namespace they always had. The desktop GUI passes its own identity over the same seam — see [desktop_gui.md](desktop_gui.md).
 
 ### Attach Mode (`app/runner.rs:415–507`)
 
@@ -485,7 +489,8 @@ Counts below are `#[test]` / `#[tokio::test]` attributes in source (no cargo run
 - `tabs/tab_entry_focus.rs`: per-tab entry-focus invariant
 - `app/task_management.rs`: 37 tests over feature-gated runtime request builders (db-pentest, intercept, C2, NSE) plus canonical-conversion round trips
 - `app/action_hints.rs`: 20 tests covering hint priority levels
-- Total TUI crate `src/`: **1,128** test attributes across 121 `.rs` files
+- `tabs/intercept/tests.rs`: 45 tests over the `web-proxy`-gated Intercept tab — the session lifecycle, the flow list, the detail panes and the correlation views. **This file is only compiled under the `web-proxy` feature**, so the crate's *default* build never runs it: a defect in the tab is invisible to `cargo test -p eggsec-tui --lib` and shows up only in the `db-pentest,web-proxy,c2` profile that `make check-full` exercises.
+- Total TUI crate `src/`: **1,132** test attributes across 118 `.rs` files
 
 ### Runtime Request Builders (`app/task_management.rs`)
 
@@ -515,9 +520,27 @@ extension allowlist → canonical root containment), not a TUI filesystem read.
 
 ### Feature-Profile Verification
 
-- `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only).
+- `scripts/check-features-individual.sh` mechanically enumerates every declared `eggsec-tui` feature (other than `default`/`full`) plus the `eggsec-tui/full` aggregate. Adding a TUI feature to `Cargo.toml` without sweep coverage fails the orphan guard. TUI profiles need no system prerequisites (pnet is pure-Rust, openssl is vendored, wireless-tools is runtime-only). The sweep runs on **bash 3.2**, so it can be run on a stock macOS shell as well as on the Linux CI runner — guard Check 196 keeps the repository's scripts inside that language, because a bash-4 construct aborts the script rather than degrading it, and a sweep that cannot start is a sweep that never sees anything.
 - `make check-feature-profiles` includes the broad dependency-light TUI profile (`db-pentest,web-proxy,c2` check + lib tests) for fast cross-feature compile-drift detection between weekly deep sweeps. `eggsec-tui/full` remains a Deep Checks gate.
 - Guard 98 (`scripts/check-architecture-guards.sh`) pins these three invariants; DTO field-level contracts belong to Rust compilation and the builder semantic tests, not to grep guards.
+
+**The tab modules are feature-gated, and the mandatory contract does not build
+them.** `make check` builds `eggsec-tui` with default features, which is
+`[]` — so a tab module behind `#[cfg(feature = "...")]` is compiled only by the
+per-feature sweep, which runs weekly (or on demand), not per PR. That gap is
+real and it is why a defect could sit on `main` undetected: `tabs/vuln.rs`
+defined `ensure_input_focus` by hand *and* invoked `tab_input_custom!`, which
+emits `ensure_input_focus`. That is a duplicate definition (E0201), so the
+`vuln-management` feature did not compile at all — and no fast check built it.
+
+**Guard Check 195** narrows that gap to the class that actually bit. It
+compares each `impl TabInput for ...` block's hand-written methods against the
+methods the macros that block invokes really emit, and fails when the two
+overlap. A tab that invokes no macro cannot collide; a tab that defines a
+method no invoked macro emits is fine; only the intersection is a defect. The
+rest of the gap — a feature-gated tab that fails to compile for any other
+reason — is still the sweep's job, and that remains a known limitation of the
+per-PR contract rather than something this check closes.
 
 ### Regression Test Harness (`tabs/handle_enter_regression.rs`)
 
@@ -597,4 +620,4 @@ Context-aware hints replace static help text. `ActionHint` contains `key` + `lab
 
 ---
 
-*Last verified against source: 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*
+*Last verified against source: 2026-10-25 (the §Test Counts totals were re-measured against source after the Intercept tab's session-stamp and focus-contract repair added one test attribute — the total was already stale at 1,128 / 121 files against a tree that carried 1,131 / 118, and now reads 1,132 / 118; the seven per-file counts listed above were re-measured and remain correct, and `tabs/intercept/tests.rs` is now listed, with the note that the `web-proxy`-gated tab's tests are invisible to the default build); earlier pass 2026-10-23 (the daemon connect now passes the TUI's own `ClientIdentity` — `ClientKind::Tui` / `eggsec-tui` / `tui-` — over the frontend-client seam; observable behaviour unchanged); earlier pass 2026-10-06 (full re-verification of tab inventory, `TAB_SPECS` field values, trait/line cites, theme counts, overlay precedence, key-decoding layers, selector containment, and source-level test counts); earlier passes 2026-08-25 / 2026-09-20 / 2026-09-22 / 2026-09-25*

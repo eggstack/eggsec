@@ -77,6 +77,7 @@ impl OperationMetadata {
                 TargetPolicyKind::ExplicitScopeRequired | TargetPolicyKind::PrivateOrLocalRequired
             ),
             required_capabilities: self.required_capabilities.to_vec(),
+            target_policy: self.target_policy,
         }
     }
 
@@ -165,6 +166,39 @@ impl OperationMetadata {
                             | TargetPolicyKind::PrivateOrLocalRequired
                     ),
                     required_capabilities: self.required_capabilities.to_vec(),
+                    target_policy: self.target_policy,
+                })
+            }
+            TargetPolicyKind::InterfaceBound => {
+                // The local identifier is optional: an interface-bound
+                // operation takes no network target. When one is supplied it
+                // is carried into the descriptor (and from there into the
+                // audit record) so it is never silently dropped, and it is
+                // NOT normalized as a network target -- the enforcement
+                // kernel reads `target_policy` and does not match a local
+                // identifier against the scope's remote target rules.
+                let t = target.filter(|s| !s.is_empty());
+                Ok(OperationDescriptor {
+                    operation: self.id.to_string(),
+                    mode: self.mode,
+                    risk: self.risk,
+                    intended_uses: self.intended_uses.to_vec(),
+                    target: t.map(|s| s.to_string()),
+                    normalized_target: OperationTarget::None,
+                    required_features: self
+                        .required_features
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    required_policy_flags: self
+                        .required_policy_flags
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    requires_private_or_local_target: false,
+                    requires_explicit_scope: true,
+                    required_capabilities: self.required_capabilities.to_vec(),
+                    target_policy: self.target_policy,
                 })
             }
             TargetPolicyKind::TargetRequired
@@ -204,6 +238,7 @@ impl OperationMetadata {
                             | TargetPolicyKind::PrivateOrLocalRequired
                     ),
                     required_capabilities: self.required_capabilities.to_vec(),
+                    target_policy: self.target_policy,
                 })
             }
         }
@@ -477,6 +512,30 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         grpc_exposable: true,
     },
     OperationMetadata {
+        // The capture half of the `packet` family. It is split out from
+        // `packet` because a capture binds to a **local interface**, not to a
+        // network target: `packet` also serves `traceroute` and `packet-send`,
+        // which do address a remote host and must keep requiring one. The
+        // risk tier and the capability are identical to `packet`'s, so the
+        // split relaxes nothing -- it only stops the capture from inheriting
+        // a remote-target requirement it can never satisfy.
+        id: "packet-capture",
+        display_name: "Packet Capture",
+        mode: OperationMode::StandardAssessment,
+        risk: OperationRisk::RawPacket,
+        intended_uses: &[IntendedUse::WebAssessment],
+        required_features: &["packet-inspection"],
+        required_policy_flags: &[],
+        required_capabilities: &[Capability::RawPacketProbe],
+        target_policy: TargetPolicyKind::InterfaceBound,
+        manual_exposable: true,
+        tui_exposable: true,
+        mcp_exposable: true,
+        rest_exposable: true,
+        agent_exposable: true,
+        grpc_exposable: true,
+    },
+    OperationMetadata {
         id: "graphql",
         display_name: "GraphQL Fuzzing",
         mode: OperationMode::StandardAssessment,
@@ -608,7 +667,9 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         required_features: &["wireless"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::PassiveFingerprint],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        // A passive scan binds to a **local interface**, not to a network
+        // target: there is no host to be in scope for.
+        target_policy: TargetPolicyKind::InterfaceBound,
         manual_exposable: true,
         tui_exposable: true,
         mcp_exposable: true,
@@ -625,7 +686,10 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
         required_features: &["wireless-advanced"],
         required_policy_flags: &[],
         required_capabilities: &[Capability::RawPacketProbe],
-        target_policy: TargetPolicyKind::ExplicitScopeRequired,
+        // A deauth binds to a **local interface** and a BSSID, not to a
+        // network target. The risk tier and the capability are unchanged:
+        // the split relaxes the *target*, never the authorisation.
+        target_policy: TargetPolicyKind::InterfaceBound,
         manual_exposable: true,
         tui_exposable: true,
         mcp_exposable: false,
@@ -1358,31 +1422,97 @@ mod operation_metadata_tests {
         }
     }
 
-    /// Interface-bound sniffing keeps its fail-closed posture.
+    /// The interface-bound family keeps its fail-closed posture.
     ///
-    /// `packet` and `wireless` stay `ExplicitScopeRequired`: they have no target
-    /// to scope against, and unlike the relaxed set they *are* sensitive
-    /// sniffing operations, so requiring a loaded scope is the only lever an
-    /// operator has over them.
+    /// `packet` stays `ExplicitScopeRequired`: it addresses a remote host
+    /// (`traceroute`, `packet-send`) and must keep refusing a target-less
+    /// run.
+    ///
+    /// The interface-bound operations (`packet-capture`, `wireless`,
+    /// `wireless-deauth`) bind to a **local** interface or identifier, so they
+    /// accept a target-less run -- but they keep requiring an explicit scope,
+    /// and the local identifier is carried rather than dropped.
     #[test]
     fn interface_bound_operations_still_fail_closed() {
-        for op in ["packet", "wireless", "wireless-deauth"] {
+        // The remote-target half of the packet family is unchanged.
+        let packet = metadata_for_tool_id("packet").unwrap_or_else(|| panic!("packet missing"));
+        let err = packet
+            .try_descriptor_for_target(None)
+            .err()
+            .unwrap_or_else(|| panic!("packet should still refuse a target-less run"));
+        assert!(
+            matches!(err, DescriptorError::MissingTarget { .. }),
+            "packet failed for the wrong reason: {err}"
+        );
+        let desc = packet
+            .try_descriptor_for_target(Some("10.0.0.5"))
+            .unwrap_or_else(|e| panic!("packet should accept a target, got {e}"));
+        assert!(
+            desc.requires_explicit_scope,
+            "packet lost its scope requirement"
+        );
+        assert!(
+            !desc.target_policy.is_interface_bound(),
+            "packet must not become interface-bound"
+        );
+
+        // The interface-bound half accepts no target, and accepts a local
+        // identifier without turning it into a network target.
+        for op in ["packet-capture", "wireless", "wireless-deauth"] {
             let metadata = metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} missing"));
-            let err = metadata
-                .try_descriptor_for_target(None)
-                .err()
-                .unwrap_or_else(|| panic!("{op} should still refuse a target-less run"));
             assert!(
-                matches!(err, DescriptorError::MissingTarget { .. }),
-                "{op} failed for the wrong reason: {err}"
+                metadata.target_policy.is_interface_bound(),
+                "{op} should be interface-bound"
             );
-            // And a supplied target is still accepted and scope-checkable.
-            let desc = metadata
-                .try_descriptor_for_target(Some("10.0.0.5"))
-                .unwrap_or_else(|e| panic!("{op} should accept a target, got {e}"));
+
+            let no_target = metadata
+                .try_descriptor_for_target(None)
+                .unwrap_or_else(|e| panic!("{op} should accept no target, got {e}"));
             assert!(
-                desc.requires_explicit_scope,
+                no_target.requires_explicit_scope,
                 "{op} lost its scope requirement"
+            );
+            assert!(
+                !no_target.requires_private_or_local_target,
+                "{op} must not demand a private-range target"
+            );
+            assert!(no_target.target.is_none(), "{op} invented a target");
+
+            let local = metadata
+                .try_descriptor_for_target(Some("wlan0"))
+                .unwrap_or_else(|e| panic!("{op} should accept a local identifier, got {e}"));
+            assert_eq!(
+                local.target.as_deref(),
+                Some("wlan0"),
+                "{op} dropped the local identifier"
+            );
+            assert_eq!(
+                local.normalized_target,
+                OperationTarget::None,
+                "{op} normalized a local identifier as a network target"
+            );
+            assert!(
+                local.requires_explicit_scope,
+                "{op} lost its scope requirement"
+            );
+        }
+    }
+
+    /// Every interface-bound operation is in the target-less set.
+    ///
+    /// The catalog's own consistency checks rely on it: an agent- or
+    /// MCP-exposable operation with a target policy other than `NoTarget` is
+    /// required to be either scope-required or target-less by nature.
+    #[test]
+    fn interface_bound_operations_are_target_less_by_nature() {
+        for metadata in ALL_OPERATION_METADATA {
+            if !metadata.target_policy.is_interface_bound() {
+                continue;
+            }
+            assert!(
+                TARGET_LESS_OPERATIONS.contains(&metadata.id),
+                "{} is interface-bound but is not in TARGET_LESS_OPERATIONS",
+                metadata.id
             );
         }
     }
@@ -1411,9 +1541,21 @@ mod operation_metadata_tests {
         }
     }
 
-    /// The set of operations that are target-less by nature.
+    /// The set of operations that have no **network** target by nature.
     ///
     /// Deliberately explicit rather than derived: an operation joining this list
     /// loses a fail-closed guard, so it should be a visible edit.
-    const TARGET_LESS_OPERATIONS: &[&str] = &["storage", "integrations", "workflow"];
+    ///
+    /// The interface-bound operations belong here for the same reason: they
+    /// bind to a local interface or a local identifier, so there is no
+    /// remote target to require. They still require an explicit scope -- the
+    /// requirement is about the operator's consent, not about a target.
+    const TARGET_LESS_OPERATIONS: &[&str] = &[
+        "storage",
+        "integrations",
+        "workflow",
+        "packet-capture",
+        "wireless",
+        "wireless-deauth",
+    ];
 }

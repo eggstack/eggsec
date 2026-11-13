@@ -1,7 +1,36 @@
 # Test Infrastructure for Eggsec
 # ================================
 
-.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+.PHONY: test test-fast test-slow test-unit test-integration test-nse test-coverage test-ci test-feature-matrix test-architecture-guards test-tui-pty check-no-default check check-deps check-gui check-gui-prereqs gui-release check-daemon-profile build-daemon-profile check-python check-full check-feature-profiles check-features-individual clippy clippy-domain release-check fmt build clean help
+
+# ── Desktop GUI shell profile ─────────────────────────────────────────────
+#
+# The `shell` feature carries the Tauri v2 dependency, so compiling it needs
+# the platform webview SDK. Linux needs the webkit2gtk development packages;
+# macOS and Windows ship the webview with the OS, so the gate is open there.
+#
+# The gate follows the discipline of scripts/check-features-individual.sh:
+# an ABSENT prerequisite is a SKIP with the reason named, while a PRESENT
+# prerequisite whose build breaks is a hard FAIL -- the build error is never
+# swallowed. `make check-gui` is the ungated escape hatch: it always runs and
+# reports cargo's own error.
+GUI_SHELL_PREREQ_HINT = Linux: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config
+
+# Output directory for the GUI release build (M007). Git-ignored.
+GUI_RELEASE_OUT ?= dist/gui
+
+# Runs "$(1)" when the platform webview prerequisite is present; otherwise
+# prints a SKIP line naming the prerequisite and succeeds.
+define GUI_SHELL_GATE
+@if [ "$$(uname -s)" != "Linux" ]; then \
+	$(1); \
+elif command -v pkg-config >/dev/null 2>&1 \
+	&& { pkg-config --exists webkit2gtk-4.1 2>/dev/null || pkg-config --exists webkit2gtk-4.0 2>/dev/null; }; then \
+	$(1); \
+else \
+	echo "SKIP: desktop GUI shell profile (prerequisite absent: $(GUI_SHELL_PREREQ_HINT))."; \
+fi
+endef
 
 # Default: run unit tests only (fast feedback loop)
 test: test-unit
@@ -42,11 +71,24 @@ clippy:
 	cargo clippy --lib -p eggsec -- -D warnings
 	cargo clippy --lib -p eggsec --features cli -- -D warnings
 	cargo clippy -p eggsec-core -p eggsec-tool-core -p eggsec-report-model -p eggsec-output -p eggsec-runtime -p eggsec-ui-model -p eggsec-agent -p eggsec-transport -p eggsec-transport-eggfetch -p eggsec-policy -- -D warnings
-	cargo clippy -p eggsec-tui -p eggsec-cli -- -D warnings
+	cargo clippy -p eggsec-tui -- -D warnings
+	# The CLI's `daemon` / `session` / `task` subcommands live behind the
+	# `daemon-client` feature, so the plain `-p eggsec-cli` lint above never
+	# compiles them. Lint the feature on.
+	cargo clippy -p eggsec-cli --features daemon-client -- -D warnings
 	cargo clippy -p eggsec-secrets -p eggsec-payloads -p eggsec-service-db -p eggsec-udp-scan -- -D warnings
+	# The operation-schema module is behind a feature, so the plain
+	# `-p eggsec-runtime` lint above never compiles it. Lint the feature on.
+	cargo clippy -p eggsec-runtime --features schema -- -D warnings
+	# The daemon protocol and the frontend client are the wire contract for
+	# every frontend; they carry published types, so they are linted too.
+	cargo clippy -p eggsec-daemon-protocol -p eggsec-frontend-client -- -D warnings
+	# The desktop GUI shell (Tauri) is a separate profile that needs the
+	# platform webview SDK, so it is gated on that prerequisite.
+	$(call GUI_SHELL_GATE,cargo clippy -p eggsec-gui --features shell -- -D warnings)
 
 # Lint domain/platform crates with their relevant features (deep checks only:
-# heavier closures, may need system prerequisites like libssl-dev).
+# heavier closures; the `nse` closure needs a C toolchain for its vendored OpenSSL).
 # The standalone NSE runtime owns its own lint gate in eggstack/eggsec-nse CI.
 clippy-domain:
 	cargo clippy -p eggsec-db-lab --features db-drivers -- -D warnings
@@ -96,6 +138,10 @@ check-msrv:
 	cargo +1.89 check -p eggsec-transport
 	cargo +1.89 check -p eggsec-transport-eggfetch
 	cargo +1.89 check -p eggsec --no-default-features
+	# The desktop GUI shell profile under the declared MSRV. Same
+	# prerequisite gate as `make check`: absent -> SKIP, present but
+	# broken -> FAIL.
+	$(call GUI_SHELL_GATE,cargo +1.89 check -p eggsec-gui --features shell)
 
 # Dependency advisory/license/source policy (Phase F supply-chain hardening).
 # Canonical gate: `deny.toml` via cargo-deny over the full workspace closure
@@ -103,18 +149,31 @@ check-msrv:
 # Fails closed when cargo-deny is absent — install with
 # `cargo install cargo-deny` (CI installs a SHA-pinned version). Never silently
 # skip: a missing tool is a failed check, not a pass.
+#
+# `--hide-inclusion-graph` is not cosmetic. cargo-deny prints an inclusion
+# graph for every duplicated crate, and this workspace duplicates 98 of them;
+# rendering that graph is where the CI runner stalls (the Deep Checks job hangs
+# inside `check bans`, mid-graph, with no output and no error — the stall is
+# reproducible on 0.19.0 and 0.20.2, and a shallow checkout does not cause it).
+# Hiding the graph removes the stall site and changes nothing else: the same
+# 98 duplicate warnings and the same four verdicts are still printed and still
+# decide the policy. Guard Check 194 keeps the flag on every invocation.
 check-deps:
 	@command -v cargo-deny >/dev/null 2>&1 || (echo "FAIL: cargo-deny not found. Install with 'cargo install cargo-deny' (CI uses a SHA-pinned install-action)." >&2; exit 1)
-	cargo deny --workspace --all-features check
-	cargo deny --workspace --all-features check advisories
-	cargo deny --workspace --all-features check bans
-	cargo deny --workspace --all-features check licenses
-	cargo deny --workspace --all-features check sources
+	cargo deny --workspace --all-features check --hide-inclusion-graph
+	cargo deny --workspace --all-features check advisories --hide-inclusion-graph
+	cargo deny --workspace --all-features check bans --hide-inclusion-graph
+	cargo deny --workspace --all-features check licenses --hide-inclusion-graph
+	cargo deny --workspace --all-features check sources --hide-inclusion-graph
 
 # Full mandatory Rust CI contract (no cargo-nextest required)
 check:
 	cargo fmt --all --check
 	cargo check --workspace --no-default-features
+	# The desktop GUI shell profile (Tauri). The workspace check above
+	# covers the GUI's non-shell profile only; the shell profile needs the
+	# platform webview SDK, so it is gated on that prerequisite.
+	$(call GUI_SHELL_GATE,cargo check -p eggsec-gui --features shell)
 	# Build the *test* targets for the no-default-features profile too:
 	# `cargo check --workspace` only compiles library/binary targets, so a
 	# feature-gated `use eggsec::commands` in tests/ can break unnoticed.
@@ -122,6 +181,10 @@ check:
 	cargo check -p eggsec
 	cargo check -p eggsec-cli
 	cargo check -p eggsec-cli --no-default-features
+	# The CLI's daemon client surface lives behind `daemon-client`, so the
+	# checks above never compile the `daemon` / `session` / `task` subcommands.
+	cargo check -p eggsec-cli --features daemon-client
+	cargo test -p eggsec-cli --features daemon-client
 	$(MAKE) check-deps
 	$(MAKE) clippy
 	cargo test -p eggsec --doc
@@ -137,6 +200,49 @@ check:
 	cargo test -p eggsec-transport-eggfetch --tests --no-fail-fast
 	cargo test -p eggsec-tui --lib --no-fail-fast
 	bash scripts/check-architecture-guards.sh
+
+# Desktop GUI shell profile (Tauri), UNGATED: it always runs, so a broken
+# shell build is a hard failure and a host without the webview SDK gets
+# cargo's own error message instead of a silent skip.
+check-gui:
+	@echo "Desktop GUI shell profile (prerequisite: $(GUI_SHELL_PREREQ_HINT))."
+	cargo check -p eggsec-gui --features shell
+	cargo clippy -p eggsec-gui --features shell -- -D warnings
+
+# Desktop GUI prerequisite probe: reports whether the shell profile can be
+# built on this host. It REPORTS, it does not install anything and it does
+# not fail the build -- `make check-gui` is the gate that fails.
+check-gui-prereqs:
+	bash scripts/check_gui_prereqs.sh
+
+# Desktop GUI release build (M007). Produces the binary plus its build
+# metadata sidecar in $(GUI_RELEASE_OUT). It performs no signing, no
+# bundling, no installer and no publication -- the distribution workstream
+# owns those.
+gui-release:
+	bash scripts/build_gui_release.sh --out $(GUI_RELEASE_OUT)
+
+# Daemon feature profile `service` (M008): the GUI-serving profile. The
+# static half pins the manifest to the documented list; the runtime half
+# pins the COMPILED feature set to the same list. The profile needs a C
+# toolchain (vendored OpenSSL under `nse`), so it is a deep check rather
+# than part of `make check`.
+DAEMON_PROFILE_OUT ?= dist/daemon-profile
+
+.PHONY: build-daemon-profile
+build-daemon-profile:
+	bash scripts/build-daemon-profile.sh --profile service --out $(DAEMON_PROFILE_OUT)
+
+.PHONY: check-daemon-profile
+# This gate is `cargo check`, not `clippy -D warnings`. The profile compiles
+# engine modules the default build never reaches (packet, stress, wireless,
+# database, tool-api), and those modules carry pre-existing clippy debt that
+# no milestone has cleaned up. The profile BUILD must be green; its lint debt
+# is tracked separately rather than silently gated here.
+check-daemon-profile:
+	cargo check -p eggsec-daemon --features service
+	cargo test -p eggsec --features cli --test feature_matrix
+	cargo test -p eggsec-daemon --features service --test feature_profile
 
 # Optional broad validation (pre-release, not required for merge)
 # Note: dependency policy (`check-deps`) already runs inside `check`; this
@@ -174,6 +280,10 @@ check-feature-profiles:
 	# eggsec-tui/full aggregate in Deep Checks.
 	cargo check -p eggsec-tui --features db-pentest,web-proxy,c2
 	cargo test -p eggsec-tui --features db-pentest,web-proxy,c2 --lib --no-fail-fast
+	# The daemon's GUI-serving profile (`service`). It carries `nse`, which
+	# vendors OpenSSL and needs a C toolchain, so it belongs here rather
+	# than in `make check`.
+	$(MAKE) check-daemon-profile
 
 # Release validation (local only, no publication)
 release-check:
@@ -194,6 +304,11 @@ help:
 	@echo "Primary (run these):"
 	@echo "  make check           - Full mandatory Rust CI contract (format, lint, test, guards, deps)"
 	@echo "  make check-deps      - Dependency advisory/license/source policy (cargo deny)"
+	@echo "  make check-gui       - Desktop GUI shell profile (check + clippy, ungated)"
+	@echo "  make check-gui-prereqs - Report whether the GUI shell can be built here"
+	@echo "  make gui-release     - Desktop GUI release build + metadata sidecar"
+	@echo "  make check-daemon-profile - Daemon service profile conformance (deep check)"
+	@echo "  make build-daemon-profile - Build the daemon service profile"
 	@echo "  make check-python    - Python CI check (one build, all checks)"
 	@echo "  make test            - Unit tests only (default)"
 	@echo "  make check-full      - Optional broad validation (pre-release)"

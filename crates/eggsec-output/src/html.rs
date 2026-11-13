@@ -1,6 +1,14 @@
 use super::escape::escape_html;
 use serde::{Deserialize, Serialize};
 
+/// The remote chart-library reference emitted by the default rendering.
+///
+/// This is the document's only remote origin. The constant carries its own
+/// indentation and trailing newline so the self-contained variant can drop
+/// the whole line and leave no residue behind.
+const REMOTE_CHART_SCRIPT: &str =
+    "    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlConfig {
     pub title: String,
@@ -41,7 +49,32 @@ impl HtmlReport {
         self
     }
 
+    /// Generate the default rendering of this report.
+    ///
+    /// This is the CLI's artifact: it carries the remote chart library
+    /// reference and is byte-for-byte stable.
     pub fn generate(&self) -> String {
+        self.build_document(true)
+    }
+
+    /// Generate the self-contained variant of this report.
+    ///
+    /// Identical to [`Self::generate`] except that the remote chart library
+    /// reference is omitted, so the document carries no remote origin and
+    /// can be embedded under a Content Security Policy that forbids one.
+    ///
+    /// The default rendering is unchanged: a caller that wants the CLI's
+    /// artifact, byte-for-byte, calls [`Self::generate`].
+    pub fn generate_self_contained(&self) -> String {
+        self.build_document(false)
+    }
+
+    /// Build the report document.
+    ///
+    /// `include_remote_chart` decides whether the remote chart library
+    /// reference is emitted. The two variants differ only in that one
+    /// reference, so the default rendering is unaffected by the flag.
+    fn build_document(&self, include_remote_chart: bool) -> String {
         let theme = if self.config.theme == "dark" {
             self.dark_theme()
         } else {
@@ -55,6 +88,15 @@ impl HtmlReport {
             .collect::<Vec<_>>()
             .join("\n");
 
+        // The remote chart library is the document's only remote origin.
+        // The self-contained variant drops the whole line, so the two
+        // documents differ only by that reference.
+        let chart_script = if include_remote_chart {
+            REMOTE_CHART_SCRIPT
+        } else {
+            ""
+        };
+
         format!(
             r#"<!DOCTYPE html>
 <html lang="en">
@@ -65,8 +107,7 @@ impl HtmlReport {
     <style>
         {}
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
+{}</head>
 <body>
     <div class="container">
         <header>
@@ -139,6 +180,7 @@ impl HtmlReport {
 </html>"#,
             escape_html(&self.config.title),
             theme,
+            chart_script,
             escape_html(&self.summary.timestamp),
             escape_html(&self.summary.target),
             escape_html(&self.summary.scan_type),
@@ -322,4 +364,16 @@ pub fn generate_html_report(
 ) -> String {
     let report = HtmlReport::new(summary, findings);
     report.generate()
+}
+
+/// Generate the self-contained variant of an HTML report.
+///
+/// The document carries no remote origin reference, so it can be embedded
+/// under a Content Security Policy that forbids one.
+pub fn generate_self_contained_html_report(
+    summary: super::markdown::ScanSummary,
+    findings: Vec<super::markdown::Finding>,
+) -> String {
+    let report = HtmlReport::new(summary, findings);
+    report.generate_self_contained()
 }

@@ -8,7 +8,10 @@
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-use eggsec_runtime::{ClientId, Runtime, RuntimeConfig, RuntimeError, RuntimeTaskExecutor};
+use eggsec_runtime::{
+    ClientId, Runtime, RuntimeCapabilities, RuntimeConfig, RuntimeError, RuntimeTaskExecutor,
+    TaskCapability,
+};
 
 use crate::client_registry::{
     check_permission, command_permission, ClientInfo, ClientKind, ClientRegistry, ClientRole,
@@ -77,10 +80,83 @@ pub struct DaemonHost {
     client_registry: std::sync::Mutex<ClientRegistry>,
     session_access: std::sync::Mutex<FxHashMap<eggsec_runtime::SessionId, SessionAccess>>,
     store: Arc<dyn DaemonStore>,
-    /// Whether the executor is a no-op stub (rejects all tasks).
-    /// Used to report honest capabilities to clients.
-    executor_is_noop: bool,
+    /// The task kinds this host publishes, derived at construction from the
+    /// executor's declaration intersected with the canonical capability list.
+    ///
+    /// The list is derived rather than declared so a host cannot advertise a
+    /// capability its executor rejects outright. It is also the runtime's
+    /// **enforced** set: publication and admission are the same object, so
+    /// the daemon never advertises a capability it will refuse.
+    published_task_kinds: Vec<TaskCapability>,
+    /// The engine feature set the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. The daemon publishes it verbatim so a
+    /// client can explain WHY an operation is unavailable.
+    enabled_features: Option<Vec<String>>,
+    /// The report-form coverage the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. The daemon publishes it **verbatim**: it
+    /// derives nothing and restates nothing, so the engine's table is the
+    /// only place the fact lives.
+    report_forms: Option<Vec<eggsec_runtime::report::ReportFormEntry>>,
 }
+
+/// Intersect an executor's declared support with the daemon's conservative
+/// policy.
+///
+/// The canonical list owns the *names*: it is derived from the task-kind set,
+/// so it can never omit a kind the engine can execute. The executor's
+/// declaration owns the *reachability*: an executor may declare less than the
+/// canonical list (the daemon then publishes the smaller set), but the daemon
+/// never widens the canonical list because an executor asked for it.
+fn published_task_kinds(declared: &[TaskCapability]) -> Vec<TaskCapability> {
+    RuntimeCapabilities::canonical()
+        .task_kinds
+        .into_iter()
+        .filter(|cap| declared.iter().any(|d| d.name == cap.name))
+        .collect()
+}
+
+/// The names of a capability list, for comparison and error reporting.
+fn capability_names(capabilities: &[TaskCapability]) -> Vec<String> {
+    capabilities.iter().map(|c| c.name.clone()).collect()
+}
+
+/// Why a host could not be constructed from a pre-built runtime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DaemonHostError {
+    /// The runtime's enforced capability set is not the set the host would
+    /// publish, so the host would advertise a capability the runtime refuses
+    /// at admission (or refuse one it advertised).
+    ///
+    /// The host refuses to construct rather than narrowing silently: a
+    /// published list and an admitted list that disagree are exactly the
+    /// inconsistency this host exists to make unrepresentable.
+    CapabilitySetsDisagree {
+        published: Vec<String>,
+        enforced: Vec<String>,
+    },
+}
+
+impl std::fmt::Display for DaemonHostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CapabilitySetsDisagree {
+                published,
+                enforced,
+            } => write!(
+                f,
+                "the runtime's enforced capability set ({}) is not the published set ({})",
+                enforced.join(", "),
+                published.join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for DaemonHostError {}
 
 impl DaemonHost {
     pub fn new(
@@ -88,14 +164,29 @@ impl DaemonHost {
         executor: impl RuntimeTaskExecutor,
         store: Arc<dyn DaemonStore>,
     ) -> Self {
-        let runtime = Runtime::new(RuntimeConfig::default(), executor);
+        let declared = executor.supported_task_kinds();
+        // The published set is computed FIRST, and then handed to the runtime
+        // as its enforced set. Publication and admission are therefore the
+        // same object by construction: the daemon never advertises a
+        // capability it will refuse, and never refuses one it advertised.
+        let published = published_task_kinds(&declared);
+        let runtime_config = RuntimeConfig {
+            capabilities: RuntimeCapabilities::with_task_kinds(published.clone()),
+            ..Default::default()
+        };
+        let runtime = Runtime::new(runtime_config, executor);
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The coverage is the executor's own build fact, republished verbatim.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop: false,
+            published_task_kinds: published,
+            enabled_features,
+            report_forms,
         }
     }
 
@@ -106,14 +197,28 @@ impl DaemonHost {
             capabilities: eggsec_runtime::RuntimeCapabilities::noop(),
             ..Default::default()
         };
-        let runtime = Runtime::new(runtime_config, NoopExecutorStub);
+        let executor = NoopExecutorStub;
+        // The stub declares no support, so the derived list is empty: a
+        // rejecting executor can never end up advertising a capability.
+        let declared = executor.supported_task_kinds();
+        let runtime = Runtime::new(runtime_config, executor);
+        // The no-op stub links no engine, so it publishes no feature set:
+        // the daemon reports "unknown", which is not the same as "no
+        // features are enabled".
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The same holds for the report-form coverage: the stub links no
+        // engine, so the daemon publishes "unknown" rather than an empty
+        // coverage.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
         Self {
             runtime: Arc::new(runtime),
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop: true,
+            published_task_kinds: published_task_kinds(&declared),
+            enabled_features,
+            report_forms,
         }
     }
 
@@ -122,20 +227,40 @@ impl DaemonHost {
     /// Used when the caller needs to share the same `Runtime` instance
     /// with an executor that requires runtime session lookups (e.g.,
     /// `EggsecRuntimeExecutor` which resolves session surface/scope).
+    ///
+    /// The runtime's **enforced** capability set is fixed at its
+    /// construction, so the host publishes exactly that set -- narrowed to
+    /// the canonical list -- and refuses to construct when the two disagree.
+    /// Refusing beats narrowing silently: a published list that is wider
+    /// than the admitted list is the inconsistency this host exists to make
+    /// unrepresentable.
     pub fn with_runtime(
         config: DaemonConfig,
         runtime: Arc<Runtime>,
         store: Arc<dyn DaemonStore>,
-        executor_is_noop: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, DaemonHostError> {
+        let declared = runtime.supported_task_kinds();
+        let published = published_task_kinds(&declared);
+        let enforced = runtime.enforced_task_kinds();
+        if capability_names(&published) != capability_names(&enforced) {
+            return Err(DaemonHostError::CapabilitySetsDisagree {
+                published: capability_names(&published),
+                enforced: capability_names(&enforced),
+            });
+        }
+        let enabled_features = runtime.enabled_features().map(|s| s.to_vec());
+        // The coverage is the executor's own build fact, republished verbatim.
+        let report_forms = runtime.report_forms().map(|rows| rows.to_vec());
+        Ok(Self {
             runtime,
             config,
             client_registry: std::sync::Mutex::new(ClientRegistry::new()),
             session_access: std::sync::Mutex::new(FxHashMap::default()),
             store,
-            executor_is_noop,
-        }
+            published_task_kinds: published,
+            enabled_features,
+            report_forms,
+        })
     }
 
     pub fn runtime(&self) -> &Arc<Runtime> {
@@ -191,6 +316,22 @@ impl DaemonHost {
             );
         }
         result
+    }
+
+    /// The audit surface label for a session.
+    ///
+    /// Session-scoped audit events carry the *session's* runtime surface, not
+    /// a blanket "daemon" label, so a desktop GUI session is distinguishable
+    /// from a TUI session in the persisted audit trail. Events that have no
+    /// session — client declaration, startup recovery — are genuinely
+    /// daemon-level and keep "daemon".
+    fn session_surface_label(&self, session_id: &eggsec_runtime::SessionId) -> String {
+        self.session_access
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(session_id)
+            .map(|access| access.surface.label().to_owned())
+            .unwrap_or_else(|| "daemon".to_owned())
     }
 
     /// Recover persisted session state from the store on startup.
@@ -297,7 +438,7 @@ impl DaemonHost {
                 if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: format!("command-denied:{}", cmd.discriminant()),
-                        surface: "daemon".into(),
+                        surface: self.session_surface_label(session_id),
                         outcome: "denied".into(),
                         client_id: client_id.map(|c| c.to_string()),
                         session_id: Some(session_id.to_string()),
@@ -329,6 +470,18 @@ impl DaemonHost {
                     message: "client must declare before listing persisted sessions".into(),
                 };
             }
+        } else if let ClientCommand::DescribeOperations { request_id } = &cmd {
+            // The operation catalog and request schema are daemon-wide
+            // descriptive state rather than session state, so this command
+            // carries no session id — but it still requires a declared client
+            // identity, exactly like the other daemon-wide reads above.
+            if client_id.is_none() {
+                return ServerMessage::Error {
+                    request_id: request_id.clone(),
+                    code: ErrorCode::ClientNotDeclared,
+                    message: "client must declare before describing operations".into(),
+                };
+            }
         }
 
         match cmd {
@@ -340,17 +493,14 @@ impl DaemonHost {
             },
 
             ClientCommand::Capabilities { request_id } => {
-                let runtime_caps = if self.executor_is_noop {
-                    eggsec_runtime::RuntimeCapabilities {
-                        task_kinds: vec![],
-                        transports: vec!["in-process".into()],
-                        supports_cancellation: true,
-                        supports_multiple_sessions: true,
-                        supports_multiple_active_tasks: false,
-                    }
-                } else {
-                    eggsec_runtime::RuntimeCapabilities::default()
-                };
+                // The published list is the host's stored, derived list -- not
+                // a capability constant chosen at the call site. A rejecting
+                // executor therefore publishes nothing, and a real one
+                // publishes exactly what it declared within the canonical
+                // capability list.
+                let runtime_caps = eggsec_runtime::RuntimeCapabilities::with_task_kinds(
+                    self.published_task_kinds.clone(),
+                );
                 ServerMessage::Capabilities {
                     request_id,
                     capabilities: crate::protocol::DaemonCapabilities {
@@ -360,6 +510,18 @@ impl DaemonHost {
                             bind_address: self.config.socket_path.clone(),
                             enabled: true,
                         }],
+                        // This daemon can always publish the operation catalog
+                        // and the derived request schema.
+                        operation_schema: true,
+                        // The engine feature set is a build fact the executor
+                        // published; `None` means "unknown", which is not the
+                        // same as "no features are enabled".
+                        enabled_features: self.enabled_features.clone(),
+                        // The report-form coverage is the engine's own build
+                        // fact, republished verbatim. `None` means "unknown",
+                        // which is not the same as "no operation has a report
+                        // form".
+                        report_forms: self.report_forms.clone(),
                     },
                 }
             }
@@ -420,6 +582,9 @@ impl DaemonHost {
                 } else {
                     surface
                 };
+                // The audit trail records the surface the session was created
+                // with, so a GUI session is distinguishable from a TUI one.
+                let audit_surface = surface.label().to_owned();
                 match self
                     .runtime()
                     .create_session_with_scope(Default::default(), surface.clone(), scope)
@@ -470,7 +635,7 @@ impl DaemonHost {
                                     store.as_ref(),
                                     PersistedAuditEvent {
                                         action: "create-session".into(),
-                                        surface: "daemon".into(),
+                                        surface: audit_surface,
                                         outcome: "allow".into(),
                                         client_id: client_id_str,
                                         session_id: Some(session_id_copy.to_string()),
@@ -566,6 +731,32 @@ impl DaemonHost {
                 }
             }
 
+            ClientCommand::GetTaskReport {
+                request_id,
+                session_id,
+                task_id,
+            } => {
+                // The report is produced by the engine's executor and read
+                // back through the runtime. A task whose result has no
+                // report form simply has no report; that is not an error
+                // condition for the caller, but the client needs to be able
+                // to tell it apart from a transport failure, so it is
+                // answered with a routable error rather than silence.
+                match self.runtime().report_for(&task_id) {
+                    Some(report) => ServerMessage::TaskReport {
+                        request_id,
+                        session_id,
+                        task_id,
+                        report,
+                    },
+                    None => ServerMessage::Error {
+                        request_id,
+                        code: ErrorCode::TaskNotFound,
+                        message: "no report is available for this task".to_string(),
+                    },
+                }
+            }
+
             ClientCommand::SubmitTask {
                 request_id,
                 session_id,
@@ -577,6 +768,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("submit-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -588,7 +780,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "submit-task".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -637,6 +829,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("cancel-task", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -648,7 +841,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "cancel-task".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -694,6 +887,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("cancel-active", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -705,7 +899,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "cancel-active".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -749,6 +943,7 @@ impl DaemonHost {
                     let runtime = self.runtime.clone();
                     let enable_persistence = self.config.enable_persistence;
                     let client_id_str = client_id.map(|c| c.to_string());
+                    let audit_surface = self.session_surface_label(&session_id);
                     tokio::spawn(persistence_with_timeout("close-session", async move {
                         if enable_persistence {
                             if let Ok(snapshot) = runtime.snapshot(session_id).await {
@@ -760,7 +955,7 @@ impl DaemonHost {
                                 store.as_ref(),
                                 PersistedAuditEvent {
                                     action: "close-session".into(),
-                                    surface: "daemon".into(),
+                                    surface: audit_surface,
                                     outcome: "allow".into(),
                                     client_id: client_id_str,
                                     session_id: Some(session_id.to_string()),
@@ -790,19 +985,53 @@ impl DaemonHost {
 
             ClientCommand::ApprovePolicy {
                 request_id,
-                session_id: _,
-                task_id: _,
-                approved: _,
-                reason: _,
+                session_id,
+                task_id,
+                approved,
+                reason,
             } => {
-                // Record audit event even though this is not yet wired
+                // The answer names *yes* or *no*. It never names the
+                // authorisation: what the answer permits is computed by the
+                // policy kernel on the executor's side, which re-runs its own
+                // authorisation path with an override bounded by the classes
+                // it demanded.
+                let resolve = self
+                    .runtime()
+                    .resolve_approval(session_id, task_id, approved, reason);
+                let (outcome, response) = match resolve {
+                    Ok(()) => {
+                        let outcome = if approved { "allow" } else { "deny" };
+                        (outcome, ServerMessage::Ok { request_id })
+                    }
+                    Err(error) => {
+                        // Nothing is pending: the task never asked, the
+                        // decision was already answered, the holder was
+                        // cancelled, or the surface never held a decision at
+                        // all. A strict client lands here, because a strict
+                        // surface has no operator to ask.
+                        (
+                            "rejected",
+                            ServerMessage::Error {
+                                request_id,
+                                code: ErrorCode::InvalidState,
+                                message: error.to_string(),
+                            },
+                        )
+                    }
+                };
+
+                // Record the answer: who answered, for which session, on
+                // which surface, and with what outcome. The session holds at
+                // most one active task, so the session identifies the
+                // decision the answer resolved.
+                let audit_surface = self.session_surface_label(&session_id);
                 if let Err(error) = self
                     .record_audit_event(PersistedAuditEvent {
                         action: "approve-policy".into(),
-                        surface: "daemon".into(),
-                        outcome: "unsupported".into(),
+                        surface: audit_surface,
+                        outcome: outcome.into(),
                         client_id: client_id.map(|c| c.to_string()),
-                        session_id: None,
+                        session_id: Some(session_id.to_string()),
                         timestamp_secs: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_else(|error| {
@@ -815,11 +1044,7 @@ impl DaemonHost {
                 {
                     tracing::warn!(?error, "failed to record policy approval audit event");
                 }
-                ServerMessage::Error {
-                    request_id,
-                    code: ErrorCode::Unsupported,
-                    message: "daemon policy approval is not wired yet".into(),
-                }
+                response
             }
 
             ClientCommand::ListPersistedSessions { request_id } => {
@@ -978,6 +1203,28 @@ impl DaemonHost {
                     },
                 }
             }
+
+            ClientCommand::DescribeOperations { request_id } => {
+                // Read-only publication of the canonical operation catalog and
+                // the derived request schema (ADR-0008).
+                //
+                // The payload is assembled from immutable registry data, so it
+                // is safe to serve concurrently and reproduces exactly. This
+                // command creates no session, mutates no task state, and takes
+                // part in no authorization decision: it reads the catalog and
+                // a derived schema, and grants nothing.
+                //
+                // Access control is inherited from the surrounding dispatch
+                // rather than re-implemented here: the command carries no
+                // session id, so the session-scoped permission check above
+                // does not apply to it, and it is answerable before any
+                // session exists. A declared client identity is still
+                // required, exactly as for the other daemon-wide reads.
+                ServerMessage::Operations {
+                    request_id,
+                    operations: crate::operations::describe_operations(),
+                }
+            }
         }
     }
 
@@ -1067,6 +1314,70 @@ impl DaemonHost {
     }
 }
 
+/// How long a liveness probe waits for the daemon to answer `Health`.
+///
+/// The probe is a round trip over a local Unix socket. A daemon that cannot
+/// answer within this bound is wedged, not slow, and a start path that
+/// waited longer would hang the operator's shell.
+pub const PREFLIGHT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The outcome of a liveness probe against a daemon socket path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DaemonLiveness {
+    /// A daemon answered `Health` on this path.
+    Live {
+        /// The protocol version the live daemon reported.
+        protocol_version: u32,
+    },
+    /// Nothing answered on this path within the probe's bound: no socket, a
+    /// stale socket file left by a crashed daemon, or a daemon that did not
+    /// answer in time.
+    NotLive,
+}
+
+/// Probe a socket path for a live daemon.
+///
+/// The probe is a **connection** plus a `Health` exchange, never a `stat`:
+/// a socket file left behind by a crashed daemon is indistinguishable from a
+/// live one by file existence, and only a connection tells them apart.
+/// `Health` needs no client declaration and writes nothing, so the probe
+/// creates no session, no task, and no audit record.
+pub async fn probe_daemon_liveness(
+    socket_path: &str,
+    timeout: std::time::Duration,
+) -> DaemonLiveness {
+    let probe = async {
+        let mut client = match crate::client::DaemonClient::connect(socket_path).await {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::debug!(path = %socket_path, error = %error, "No daemon answered on the socket path");
+                return DaemonLiveness::NotLive;
+            }
+        };
+        match client.health().await {
+            Ok(crate::protocol::ServerMessage::Health {
+                protocol_version, ..
+            }) => DaemonLiveness::Live { protocol_version },
+            Ok(other) => {
+                tracing::debug!(path = %socket_path, response = ?other, "Socket answered with a non-Health message");
+                DaemonLiveness::NotLive
+            }
+            Err(error) => {
+                tracing::debug!(path = %socket_path, error = %error, "Health exchange failed");
+                DaemonLiveness::NotLive
+            }
+        }
+    };
+
+    match tokio::time::timeout(timeout, probe).await {
+        Ok(outcome) => outcome,
+        Err(_) => {
+            tracing::warn!(path = %socket_path, timeout_secs = timeout.as_secs(), "Liveness probe timed out");
+            DaemonLiveness::NotLive
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1102,6 +1413,35 @@ mod tests {
         ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
         {
             Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
+        }
+    }
+
+    /// An executor that publishes a report document and an engine feature
+    /// set, so the host's report read and capability publication can both be
+    /// exercised.
+    struct ReportExecutor {
+        report: Option<serde_json::Value>,
+    }
+
+    impl RuntimeTaskExecutor for ReportExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
+        }
+
+        fn enabled_features(&self) -> Option<Vec<String>> {
+            Some(vec!["cli".to_owned(), "nse".to_owned()])
+        }
+
+        fn report_for(&self, _task_id: &TaskId) -> Option<serde_json::Value> {
+            self.report.clone()
         }
     }
 
@@ -1179,6 +1519,537 @@ mod tests {
             }
             other => panic!("expected Capabilities, got {:?}", other),
         }
+    }
+
+    /// The daemon advertises that it can publish the operation catalog and the
+    /// derived request schema, so a client can discover the capability without
+    /// issuing the command and failing.
+    #[tokio::test]
+    async fn capabilities_advertise_the_operation_schema() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-schema".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert!(capabilities.operation_schema);
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// The daemon publishes the engine feature set the executor behind it
+    /// published, so a client can explain WHY an operation is unavailable.
+    #[tokio::test]
+    async fn capabilities_publish_the_executor_feature_set() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor { report: None },
+            crate::store::noop_store(),
+        );
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-features".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.enabled_features,
+                    Some(vec!["cli".to_owned(), "nse".to_owned()])
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes no feature set leaves the daemon's answer
+    /// *unknown*, which is not the same as "no features are enabled".
+    #[tokio::test]
+    async fn capabilities_report_an_unpublished_feature_set_as_unknown() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-unknown".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.enabled_features, None,
+                    "an executor that publishes nothing leaves the feature set unknown"
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes a report-form coverage: the daemon
+    /// republishes it **verbatim**, row for row.
+    struct CoverageExecutor;
+
+    impl RuntimeTaskExecutor for CoverageExecutor {
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Ok(TaskOutcome::Text("test-result".into())) })
+        }
+
+        fn report_forms(&self) -> Option<Vec<eggsec_runtime::report::ReportFormEntry>> {
+            Some(vec![
+                eggsec_runtime::report::ReportFormEntry {
+                    operation_id: "scan-ports".to_owned(),
+                    form: eggsec_runtime::report::ReportForm::Canonical,
+                    reason: String::new(),
+                },
+                eggsec_runtime::report::ReportFormEntry {
+                    operation_id: "waf-detect".to_owned(),
+                    form: eggsec_runtime::report::ReportForm::NoCleanMapping,
+                    reason: "neither variant carries a target".to_owned(),
+                },
+            ])
+        }
+    }
+
+    /// The daemon's capabilities carry the coverage the executor published:
+    /// one row per operation, republished verbatim.
+    #[tokio::test]
+    async fn capabilities_publish_the_executor_report_coverage() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            CoverageExecutor,
+            crate::store::noop_store(),
+        );
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-coverage".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                let forms = capabilities
+                    .report_forms
+                    .expect("the executor's coverage is published");
+                assert_eq!(forms.len(), 2);
+                assert_eq!(forms[0].operation_id, "scan-ports");
+                assert_eq!(forms[0].form, eggsec_runtime::report::ReportForm::Canonical);
+                assert!(forms[0].reason.is_empty());
+                assert_eq!(forms[1].operation_id, "waf-detect");
+                assert_eq!(
+                    forms[1].form,
+                    eggsec_runtime::report::ReportForm::NoCleanMapping
+                );
+                assert_eq!(forms[1].reason, "neither variant carries a target");
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that publishes no coverage leaves the daemon's answer
+    /// *unknown*, which is not the same as "no operation has a report form".
+    #[tokio::test]
+    async fn capabilities_report_an_unpublished_report_coverage_as_unknown() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "cap-coverage-unknown".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Capabilities { capabilities, .. } => {
+                assert_eq!(
+                    capabilities.report_forms, None,
+                    "an executor that publishes nothing leaves the coverage unknown"
+                );
+            }
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// The report the executor published is served to the client, with the
+    /// document the executor recorded.
+    #[tokio::test]
+    async fn handle_get_task_report_returns_the_published_document() {
+        let report = serde_json::json!({"findings": [], "target": "10.0.0.1"});
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor {
+                report: Some(report.clone()),
+            },
+            crate::store::noop_store(),
+        );
+        let client_id = declare_test_client(&host).await;
+        let session_id = eggsec_runtime::SessionId::new();
+        let task_id = TaskId::new();
+
+        let resp = host
+            .handle_command(
+                ClientCommand::GetTaskReport {
+                    request_id: "report-1".into(),
+                    session_id,
+                    task_id,
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+
+        match resp {
+            ServerMessage::TaskReport {
+                request_id,
+                session_id: answered_session,
+                task_id: answered_task,
+                report: answered,
+            } => {
+                assert_eq!(request_id, "report-1");
+                assert_eq!(answered_session, session_id);
+                assert_eq!(answered_task, task_id);
+                assert_eq!(answered, report);
+            }
+            other => panic!("expected TaskReport, got {:?}", other),
+        }
+    }
+
+    /// A task with no report is answered with a routable error rather than
+    /// silence, so the client can tell it apart from a transport failure.
+    #[tokio::test]
+    async fn handle_get_task_report_without_a_report_is_a_task_not_found() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            ReportExecutor { report: None },
+            crate::store::noop_store(),
+        );
+        let client_id = declare_test_client(&host).await;
+
+        let resp = host
+            .handle_command(
+                ClientCommand::GetTaskReport {
+                    request_id: "report-2".into(),
+                    session_id: eggsec_runtime::SessionId::new(),
+                    task_id: TaskId::new(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "report-2");
+                assert_eq!(code, ErrorCode::TaskNotFound);
+                assert!(
+                    message.contains("no report"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+    }
+
+    /// The command serves the canonical operation catalog together with the
+    /// derived request schema.
+    #[tokio::test]
+    async fn handle_describe_operations() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-1".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Operations {
+            request_id,
+            operations,
+        } = resp
+        else {
+            panic!("expected Operations, got {:?}", resp);
+        };
+        assert_eq!(request_id, "describe-1");
+        assert!(!operations.operations.is_empty());
+        assert_eq!(operations.task_kinds.len(), 30);
+        assert!(!operations.task_kind_schema.is_null());
+        // Every published operation names a canonical catalog id.
+        for operation in &operations.operations {
+            assert!(!operation.id.is_empty());
+            assert!(!operation.display_name.is_empty());
+        }
+    }
+
+    /// The published identity and policy fields must match the catalog field
+    /// for field. If this fails, the daemon published a transcribed copy
+    /// rather than reading the catalog.
+    #[tokio::test]
+    async fn describe_operations_matches_the_catalog() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-catalog".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Operations { operations, .. } = resp else {
+            panic!("expected Operations, got {:?}", resp);
+        };
+        assert_eq!(
+            operations.operations.len(),
+            eggsec_policy::ALL_OPERATION_METADATA.len()
+        );
+        for metadata in eggsec_policy::ALL_OPERATION_METADATA {
+            let published = operations
+                .operations
+                .iter()
+                .find(|operation| operation.id == metadata.id)
+                .expect("every catalog operation must be published");
+            assert_eq!(published.display_name, metadata.display_name);
+            assert_eq!(published.mode, metadata.mode);
+            assert_eq!(published.risk, metadata.risk);
+            assert_eq!(published.target_policy, metadata.target_policy.to_string());
+            assert_eq!(published.manual_exposable, metadata.manual_exposable);
+            assert_eq!(published.rest_exposable, metadata.rest_exposable);
+        }
+    }
+
+    /// The command is daemon-wide descriptive state, so it requires a declared
+    /// client identity exactly like the other daemon-wide reads. An undeclared
+    /// client is rejected by the surrounding dispatch, not by a bespoke rule.
+    #[tokio::test]
+    async fn describe_operations_requires_a_declared_client() {
+        let host = test_host();
+        let resp = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-undeclared".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match resp {
+            ServerMessage::Error {
+                code: ErrorCode::ClientNotDeclared,
+                ..
+            } => {}
+            other => panic!("expected ClientNotDeclared, got {:?}", other),
+        }
+    }
+
+    /// The command creates no task state and mutates no session state.
+    #[tokio::test]
+    async fn describe_operations_creates_no_task_state() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let before = host
+            .handle_command(
+                ClientCommand::ListSessions {
+                    request_id: "list-before".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let _ = host
+            .handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "describe-no-state".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let after = host
+            .handle_command(
+                ClientCommand::ListSessions {
+                    request_id: "list-after".into(),
+                },
+                test_ctx(Some(client_id)),
+            )
+            .await;
+        let ServerMessage::Sessions {
+            sessions: before, ..
+        } = before
+        else {
+            panic!("expected Sessions, got {:?}", before);
+        };
+        let ServerMessage::Sessions {
+            sessions: after, ..
+        } = after
+        else {
+            panic!("expected Sessions, got {:?}", after);
+        };
+        assert_eq!(
+            serde_json::to_value(&before).expect("serializable"),
+            serde_json::to_value(&after).expect("serializable"),
+            "DescribeOperations must not create or mutate session state"
+        );
+    }
+
+    /// The payload is immutable registry data, so concurrent readers see the
+    /// same thing and none of them observes a partial result.
+    #[tokio::test]
+    async fn describe_operations_is_concurrency_safe() {
+        let host = test_host();
+        let client_id = declare_test_client(&host).await;
+        let (first, second) = tokio::join!(
+            host.handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "concurrent-1".into(),
+                },
+                test_ctx(Some(client_id)),
+            ),
+            host.handle_command(
+                ClientCommand::DescribeOperations {
+                    request_id: "concurrent-2".into(),
+                },
+                test_ctx(Some(client_id)),
+            ),
+        );
+        let ServerMessage::Operations {
+            operations: first_ops,
+            ..
+        } = first
+        else {
+            panic!("expected Operations, got {:?}", first);
+        };
+        let ServerMessage::Operations {
+            operations: second_ops,
+            ..
+        } = second
+        else {
+            panic!("expected Operations, got {:?}", second);
+        };
+        assert_eq!(
+            serde_json::to_value(&first_ops).expect("serializable"),
+            serde_json::to_value(&second_ops).expect("serializable"),
+        );
+    }
+
+    /// A desktop GUI session must be distinguishable from a TUI session in the
+    /// persisted audit trail: a session-scoped audit record carries the
+    /// session's runtime surface, not a blanket "daemon" label.
+    #[tokio::test]
+    async fn gui_session_audit_trail_carries_the_gui_surface_label() {
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let host = DaemonHost::new(
+            DaemonConfig {
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        );
+
+        for surface in [
+            eggsec_runtime::RuntimeSurface::DesktopGuiManual,
+            eggsec_runtime::RuntimeSurface::TuiManual,
+        ] {
+            let resp = host
+                .handle_command(
+                    ClientCommand::CreateSession {
+                        request_id: "gui-audit".into(),
+                        surface,
+                        scope: None,
+                        labels: vec![],
+                    },
+                    test_ctx(None),
+                )
+                .await;
+            assert!(
+                matches!(resp, ServerMessage::SessionCreated { .. }),
+                "the session must be created"
+            );
+        }
+
+        // The audit write happens on a fire-and-forget persistence task, so
+        // the rows appear shortly after the command returns.
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if surfaces.len() >= 2 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual"),
+            "a GUI session must be auditable as desktop-gui-manual, got {surfaces:?}"
+        );
+        assert!(
+            surfaces.iter().any(|surface| surface == "tui-manual"),
+            "a TUI session must be auditable as tui-manual, got {surfaces:?}"
+        );
+        assert!(
+            !surfaces.iter().any(|surface| surface == "daemon"),
+            "a session-scoped audit event must not carry the blanket daemon label, got {surfaces:?}"
+        );
+    }
+
+    /// A session-less daemon event is genuinely daemon-level and keeps the
+    /// "daemon" label.
+    #[tokio::test]
+    async fn session_less_audit_events_keep_the_daemon_label() {
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let host = DaemonHost::new(
+            DaemonConfig {
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        );
+        let _ = host
+            .handle_command(
+                ClientCommand::DeclareClient {
+                    request_id: "declare-audit".into(),
+                    kind: ClientKind::Tui,
+                    label: None,
+                },
+                test_ctx(None),
+            )
+            .await;
+
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if !surfaces.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(surfaces, vec!["daemon".to_owned()]);
     }
 
     #[tokio::test]
@@ -1823,13 +2694,16 @@ mod tests {
             .await;
         match resp {
             ServerMessage::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::InvalidState,
                 message,
                 ..
             } => {
-                assert!(message.contains("not wired yet"));
+                // The owner reached the handler: the RBAC let the answer
+                // through, and the handler found no decision pending for the
+                // task. Milestone 011 (ADR-0012).
+                assert!(message.contains("no pending policy decision"));
             }
-            other => panic!("expected Unsupported error, got {:?}", other),
+            other => panic!("expected InvalidState error, got {:?}", other),
         }
     }
 
@@ -2061,6 +2935,7 @@ mod tests {
         for kind in [
             ClientKind::Tui,
             ClientKind::Cli,
+            ClientKind::Gui,
             ClientKind::Mcp,
             ClientKind::Rest,
             ClientKind::Agent,
@@ -2287,7 +3162,9 @@ mod tests {
             _ => panic!("expected SessionCreated"),
         };
 
-        // Even owner on strict session should not get approval success (not wired)
+        // Even an owner on a strict session must not get approval success.
+        // A strict surface has no operator to ask, so it never holds a
+        // decision and there is nothing to answer. Milestone 011 (ADR-0012).
         let resp = host
             .handle_command(
                 ClientCommand::ApprovePolicy {
@@ -2302,10 +3179,10 @@ mod tests {
             .await;
         match resp {
             ServerMessage::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::InvalidState,
                 ..
             } => {}
-            other => panic!("expected Unsupported, got {:?}", other),
+            other => panic!("expected InvalidState, got {:?}", other),
         }
     }
 
@@ -2495,7 +3372,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "full-executor")]
+    #[cfg(feature = "service")]
     mod full_executor_tests {
         use super::*;
         use eggsec_runtime::request::{PortScanParams, RunRequest, TaskKind};
@@ -3184,6 +4061,179 @@ mod tests {
             "task should be cancelled after close"
         );
     }
+
+    /// A stub executor that declares an exact set of task kinds.
+    ///
+    /// It exists so the published list can be driven from both sides of the
+    /// declaration: a narrower set than the policy and a wider one.
+    struct DeclaringExecutor {
+        declared: Vec<TaskCapability>,
+    }
+
+    impl DeclaringExecutor {
+        fn new(names: &[&str]) -> Self {
+            Self {
+                declared: names
+                    .iter()
+                    .map(|name| TaskCapability::new(*name, *name))
+                    .collect(),
+            }
+        }
+    }
+
+    impl RuntimeTaskExecutor for DeclaringExecutor {
+        fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+            self.declared.clone()
+        }
+
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: eggsec_runtime::RunRequest,
+            _context: eggsec_runtime::RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> Pin<Box<dyn Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>>
+        {
+            Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+        }
+    }
+
+    /// Read the task-kind names a host publishes.
+    async fn published_task_kind_names(host: &DaemonHost) -> Vec<String> {
+        let response = host
+            .handle_command(
+                ClientCommand::Capabilities {
+                    request_id: "published".into(),
+                },
+                test_ctx(None),
+            )
+            .await;
+        match response {
+            ServerMessage::Capabilities { capabilities, .. } => capabilities
+                .runtime
+                .task_kinds
+                .iter()
+                .map(|capability| capability.name.clone())
+                .collect(),
+            other => panic!("expected Capabilities, got {:?}", other),
+        }
+    }
+
+    /// An executor that declares no support publishes no task kinds: the
+    /// "advertised but not executable" state is unreachable.
+    #[tokio::test]
+    async fn an_executor_that_declares_no_support_publishes_no_task_kinds() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&[]),
+            crate::store::noop_store(),
+        );
+        assert!(published_task_kind_names(&host).await.is_empty());
+    }
+
+    /// The published list is the declared support intersected with the
+    /// canonical capability list -- no more, no less.
+    #[tokio::test]
+    async fn the_published_list_is_the_declared_support_intersected_with_the_canonical_list() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&["port-scan"]),
+            crate::store::noop_store(),
+        );
+        assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
+    }
+
+    /// A kind outside the canonical list is never published, even when the
+    /// executor declares it: the canonical list owns the names.
+    #[tokio::test]
+    async fn a_declared_kind_outside_the_canonical_list_is_not_published() {
+        let host = DaemonHost::new(
+            DaemonConfig::default(),
+            DeclaringExecutor::new(&["port-scan", "not-a-canonical-kind"]),
+            crate::store::noop_store(),
+        );
+        assert_eq!(published_task_kind_names(&host).await, vec!["port-scan"]);
+    }
+
+    /// The canonical list covers every capability name the task-kind set
+    /// defines, so a hazard family is advertised like any other. Advertising
+    /// is not permitting: the operator's execution policy still decides
+    /// whether the operation may run.
+    #[tokio::test]
+    async fn an_executor_that_declares_nothing_publishes_the_canonical_set() {
+        let host = test_host();
+        let published = published_task_kind_names(&host).await;
+        let canonical = RuntimeCapabilities::canonical();
+        assert_eq!(published.len(), canonical.task_kinds.len());
+        assert!(published.len() > 1, "the canonical set is not empty");
+        for capability in &canonical.task_kinds {
+            assert!(
+                published.contains(&capability.name),
+                "missing canonical task kind: {}",
+                capability.name
+            );
+        }
+        for expected in &["resume", "stress-test", "wireless-active", "db-pentest"] {
+            assert!(
+                published.contains(&expected.to_string()),
+                "the canonical set must advertise {expected}"
+            );
+        }
+    }
+
+    /// A no-op host still publishes an empty list, now by derivation rather
+    /// than by a separate branch.
+    #[tokio::test]
+    async fn a_noop_host_still_publishes_an_empty_list() {
+        let host = DaemonHost::new_noop(DaemonConfig::default(), crate::store::noop_store());
+        assert!(published_task_kind_names(&host).await.is_empty());
+    }
+
+    /// The honesty invariant as a property: for every host construction
+    /// path, the published list is empty **iff** the executor declares no
+    /// support. Advertising more than the executor can execute is
+    /// impossible.
+    #[tokio::test]
+    async fn the_start_path_never_publishes_a_capability_it_cannot_execute() {
+        let declaring = DeclaringExecutor::new(&["port-scan", "fuzz"]);
+        let canonical_count = RuntimeCapabilities::canonical().task_kinds.len();
+        let hosts: Vec<(DaemonHost, usize)> = vec![
+            (
+                DaemonHost::new(
+                    DaemonConfig::default(),
+                    DeclaringExecutor::new(&[]),
+                    crate::store::noop_store(),
+                ),
+                0,
+            ),
+            (
+                DaemonHost::new(
+                    DaemonConfig::default(),
+                    DeclaringExecutor::new(&["port-scan"]),
+                    crate::store::noop_store(),
+                ),
+                1,
+            ),
+            (test_host(), canonical_count),
+            (
+                DaemonHost::new_noop(DaemonConfig::default(), crate::store::noop_store()),
+                0,
+            ),
+        ];
+        for (host, expected) in hosts {
+            let published = published_task_kind_names(&host).await;
+            assert_eq!(published.len(), expected);
+            assert_eq!(
+                published.is_empty(),
+                expected == 0,
+                "the published list must be empty exactly when the executor declares no support"
+            );
+        }
+        // The declaring executor's own declaration is what the host derives
+        // from: the two agree by construction.
+        assert_eq!(declaring.declared.len(), 2);
+    }
 }
 
 /// No-op executor stub used by `DaemonHost::new_noop`.
@@ -3191,6 +4241,12 @@ mod tests {
 struct NoopExecutorStub;
 
 impl RuntimeTaskExecutor for NoopExecutorStub {
+    /// Declares no support, so the host's derived published list is empty:
+    /// a host that rejects every task cannot advertise one.
+    fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        Vec::new()
+    }
+
     fn execute(
         &self,
         _task_id: eggsec_runtime::TaskId,

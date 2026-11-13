@@ -263,7 +263,7 @@ Current `evaluate_and_enforce_operation` behavior for ManualPermissive `RequireC
 
 | Command | Source | Purpose |
 |---------|--------|---------|
-| `daemon start/status/stop` | `crates/eggsec-cli/src/daemon_cli.rs` | Daemon lifecycle management |
+| `daemon start/status/stop` | `crates/eggsec-cli/src/daemon_cli.rs` | Daemon lifecycle management. `daemon start` requires the non-default `daemon-client` feature and hosts the **engine** executor (the daemon binary is the persistent one); it refuses to displace a live daemon and reports success only after the daemon answers `Health` |
 | `daemon history` | `crates/eggsec-cli/src/daemon_cli.rs` | List persisted sessions |
 | `daemon show <id>` | `crates/eggsec-cli/src/daemon_cli.rs` | Show persisted snapshot |
 | `session list/create/snapshot` | `crates/eggsec-cli/src/daemon_cli.rs` | Session introspection |

@@ -182,7 +182,7 @@ The `ExecutorRegistry` (`executors/registry.rs:9`) uses `rustc_hash::FxHashMap` 
 
 Paths reach the single executor owner post-authorization:
 
-### 1. Manual Surfaces (CLI/TUI)
+### 1. Manual Surfaces (CLI/TUI/Desktop GUI)
 
 CLI handlers classify once via `commands::route::route_for_commands`, convert to
 canonical requests, enforce via `ctx.evaluate_and_enforce_operation(descriptor)`,
@@ -190,6 +190,15 @@ and render outcomes (CLI adapter owns rendering, not executor selection).
 See [cli_commands.md](cli_commands.md). TUI actions enforce via `EnforcementFacade`
 (exact binding), then `TuiTaskDispatcher` converts `TaskKind → canonical request →
 execute_canonical` (shallow adapter, no second mapping).
+
+The desktop GUI is a **peer** of the CLI and TUI manual surfaces, not a new
+policy class: `ExecutionSurface::DesktopGuiManual` derives the same
+`ManualPermissive` profile, honors operator overrides, and is never
+agent-controlled. It has no strict variant. Because it is a manual surface, a
+GUI-dispatched operation reaches the same `EnforcementContext::evaluate()` gate
+as a CLI-dispatched one — the surface only decides the profile, not whether the
+gate runs. See [config.md](config.md) for the surface→profile mapping and
+[runtime_bridge.md](runtime_bridge.md) for the wire-surface conversion.
 
 ```
 CLI handler

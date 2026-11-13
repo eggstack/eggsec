@@ -113,7 +113,7 @@ pass "Built and staged eggsec-daemon and eggsec-cli"
 step 2 "Start daemon (background, ephemeral data dir)"
 
 DAEMON_LOG="$WORK_DIR/daemon.log"
-"$DAEMON_BIN" "$SOCKET" \
+"$DAEMON_BIN" --socket-path "$SOCKET" \
   >"$DAEMON_LOG" 2>&1 &
 DAEMON_PID=$!
 

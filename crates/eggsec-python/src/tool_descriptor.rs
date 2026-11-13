@@ -199,6 +199,7 @@ fn target_policy_for_stable(tool_id: &str) -> &'static str {
                 eggsec::config::TargetPolicyKind::PrivateOrLocalRequired => {
                     "private-or-local-required"
                 }
+                eggsec::config::TargetPolicyKind::InterfaceBound => "interface-bound",
             };
         }
     }
@@ -352,6 +353,7 @@ impl ToolDescriptorPy {
             eggsec::config::TargetPolicyKind::TargetRequired => "target-required",
             eggsec::config::TargetPolicyKind::ExplicitScopeRequired => "explicit-scope-required",
             eggsec::config::TargetPolicyKind::PrivateOrLocalRequired => "private-or-local-required",
+            eggsec::config::TargetPolicyKind::InterfaceBound => "interface-bound",
         }
         .to_string();
         let supported_surfaces = compute_surfaces(

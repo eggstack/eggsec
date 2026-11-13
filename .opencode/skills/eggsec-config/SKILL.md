@@ -132,11 +132,11 @@ let outcome = enforcement.evaluate(&descriptor);
 ```rust
 use eggsec::config::{ExecutionSurface, EnforcementContext};
 
-let surface = ExecutionSurface::CliManual; // or TuiManual, McpServer, etc.
+let surface = ExecutionSurface::CliManual; // or TuiManual, DesktopGuiManual, McpServer, etc.
 let enforcement = EnforcementContext::for_surface(surface, policy, loaded_scope);
 ```
 
-Surfaces that `honors_manual_override()` are only `CliManual` and `TuiManual`. Automated surfaces (`is_agent_controlled()`) require explicit scope manifests for networked operations.
+Surfaces that `honors_manual_override()` are `CliManual`, `TuiManual`, and `DesktopGuiManual`. Automated surfaces (`is_agent_controlled()`) require explicit scope manifests for networked operations.
 
 ### Preflight Evaluation
 

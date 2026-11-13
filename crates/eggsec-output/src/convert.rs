@@ -89,30 +89,60 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
 
     let mut html = generate_html_report(summary, findings);
 
-    if !report.wireless_networks.is_empty() {
-        html.push_str("<section class=\"wireless-networks\">\n");
-        html.push_str("<h2>Wireless Networks</h2>\n");
-        html.push_str("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\">\n");
-        html.push_str("<tr><th>SSID</th><th>BSSID</th><th>Channel</th><th>Security</th><th>Signal</th><th>Last Seen</th><th>WPS</th><th>Hidden</th><th>Transition</th></tr>\n");
-        for network in &report.wireless_networks {
-            html.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
-                super::escape::escape_html(&network.ssid),
-                super::escape::escape_html(&network.bssid),
-                network.channel,
-                super::escape::escape_html(&network.security_type),
-                network.signal_strength,
-                super::escape::escape_html(&network.last_seen),
-                if network.wps_enabled { "yes" } else { "no" },
-                if network.is_hidden { "yes" } else { "no" },
-                if network.transition_mode { "yes" } else { "no" }
-            ));
-        }
-        html.push_str("</table>\n");
-        html.push_str("</section>\n\n");
-    }
+    append_wireless_networks(&mut html, report);
 
     html
+}
+
+/// Render a report as a self-contained HTML document.
+///
+/// The result carries no remote origin reference, so it can be embedded
+/// under a Content Security Policy that forbids one. The default
+/// [`convert_to_html`] keeps the CLI's artifact unchanged.
+pub fn convert_to_html_self_contained(report: &ScanReportData) -> String {
+    use super::html::generate_self_contained_html_report;
+    use crate::markdown::ScanSummary;
+
+    let summary = ScanSummary::from(report);
+    let findings: Vec<crate::markdown::Finding> =
+        report.findings.iter().map(|f| f.into()).collect();
+
+    let mut html = generate_self_contained_html_report(summary, findings);
+
+    append_wireless_networks(&mut html, report);
+
+    html
+}
+
+/// Append the wireless-network table to a rendered HTML report.
+///
+/// Shared by both HTML renderings so the two documents differ only by the
+/// remote chart-library reference.
+fn append_wireless_networks(html: &mut String, report: &ScanReportData) {
+    if report.wireless_networks.is_empty() {
+        return;
+    }
+
+    html.push_str("<section class=\"wireless-networks\">\n");
+    html.push_str("<h2>Wireless Networks</h2>\n");
+    html.push_str("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\">\n");
+    html.push_str("<tr><th>SSID</th><th>BSSID</th><th>Channel</th><th>Security</th><th>Signal</th><th>Last Seen</th><th>WPS</th><th>Hidden</th><th>Transition</th></tr>\n");
+    for network in &report.wireless_networks {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{} dBm</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+            super::escape::escape_html(&network.ssid),
+            super::escape::escape_html(&network.bssid),
+            network.channel,
+            super::escape::escape_html(&network.security_type),
+            network.signal_strength,
+            super::escape::escape_html(&network.last_seen),
+            if network.wps_enabled { "yes" } else { "no" },
+            if network.is_hidden { "yes" } else { "no" },
+            if network.transition_mode { "yes" } else { "no" }
+        ));
+    }
+    html.push_str("</table>\n");
+    html.push_str("</section>\n\n");
 }
 
 pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::Error> {

@@ -36,13 +36,33 @@ pub fn descriptor_for_run_request(
 /// (`TaskKind::operation_id` / `TaskKind::canonical_target`) so runtime
 /// semantics cannot silently diverge from the canonical path. Returns
 /// `(operation_id, target)` where `target` is `None` for operations with
-/// `NoTarget` policy or interface-bound tasks.
+/// `NoTarget` policy, and the **local identifier** for an interface-bound
+/// operation.
+///
+/// `resume` is the one kind whose target is not in its payload: the
+/// checkpoint is the authority for what is being resumed. The bridge resolves
+/// the checkpoint's target here and binds it to the `pipeline` operation, so
+/// the resumed run is scope-checked like any other. A checkpoint that cannot
+/// be read, or that carries no target, is a hard failure — the bridge never
+/// falls back to a target-less resume.
 fn resolve_operation_and_target(
     task_kind: &TaskKind,
 ) -> Result<(&'static str, Option<String>), RuntimeBridgeError> {
     // Exhaustive via TaskKind methods; no wildcard fallback. Packet
     // traceroute/send map explicitly to the `packet` family with their target
     // (they no longer fail as `UnsupportedTaskKind`).
+    if let TaskKind::Resume(params) = task_kind {
+        let target = crate::pipeline::session::read_target(&params.session_path).map_err(|e| {
+            RuntimeBridgeError::InvalidTarget {
+                operation_id: task_kind.operation_id().to_string(),
+                reason: format!(
+                    "could not resolve the resume checkpoint's target from '{}': {e}",
+                    params.session_path
+                ),
+            }
+        })?;
+        return Ok((task_kind.operation_id(), Some(target)));
+    }
     Ok((task_kind.operation_id(), task_kind.canonical_target()))
 }
 
@@ -189,20 +209,32 @@ mod tests {
         assert_eq!(desc.operation, "stress-test");
     }
 
+    /// The capture is interface-bound: it owns its own operation, takes no
+    /// network target, and carries its local identifier.
     #[test]
     fn packet_capture_descriptor() {
+        let req = make_request(TaskKind::PacketCapture(PacketCaptureParams {
+            interface: Some("eth0".into()),
+            filter: None,
+            duration_secs: None,
+            ..Default::default()
+        }));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "packet-capture");
+        assert_eq!(desc.target.as_deref(), Some("eth0"));
+        assert!(desc.requires_explicit_scope);
+        assert!(desc.target_policy.is_interface_bound());
+
+        // No interface named: the operation still builds, with no target.
         let req = make_request(TaskKind::PacketCapture(PacketCaptureParams {
             interface: None,
             filter: None,
             duration_secs: None,
             ..Default::default()
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "packet-capture");
+        assert_eq!(desc.target, None);
     }
 
     #[test]
@@ -330,33 +362,52 @@ mod tests {
         assert_eq!(desc.operation, "vuln");
     }
 
+    /// The passive wireless scan is interface-bound: it takes no network
+    /// target, and its local identifier (the interface name) is carried into
+    /// the descriptor rather than dropped.
     #[test]
     fn wireless_descriptor() {
+        let req = make_request(TaskKind::Wireless(WirelessParams {
+            interface: Some("wlan0".into()),
+            duration_secs: None,
+        }));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "wireless");
+        assert_eq!(desc.target.as_deref(), Some("wlan0"));
+        assert!(desc.requires_explicit_scope);
+        assert!(desc.target_policy.is_interface_bound());
+
+        // No interface named: the operation still builds, with no target.
         let req = make_request(TaskKind::Wireless(WirelessParams {
             interface: None,
             duration_secs: None,
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "wireless");
+        assert_eq!(desc.target, None);
+        assert!(desc.requires_explicit_scope);
     }
 
+    /// An active wireless request is the `wireless-deauth` operation: risk
+    /// `Intrusive`, capability `RawPacketProbe`. It must never be authorised
+    /// under the passive operation's risk level.
     #[test]
     fn wireless_active_descriptor() {
         let req = make_request(TaskKind::WirelessActive(WirelessActiveParams {
-            interface: None,
-            target_bssid: None,
+            interface: Some("wlan0".into()),
+            target_bssid: Some("aa:bb:cc:dd:ee:ff".into()),
             ..Default::default()
         }));
-        let result = descriptor_for_run_request(&req);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            RuntimeBridgeError::InvalidTarget { .. }
-        ));
+        let desc = descriptor_for_run_request(&req).unwrap();
+        assert_eq!(desc.operation, "wireless-deauth");
+        assert_eq!(desc.target.as_deref(), Some("aa:bb:cc:dd:ee:ff"));
+        assert!(desc.requires_explicit_scope);
+        assert!(desc.target_policy.is_interface_bound());
+
+        // The deauth's risk tier is the intrusive one, not the passive scan's.
+        let passive = crate::config::operation_metadata("wireless").unwrap();
+        let active = crate::config::operation_metadata("wireless-deauth").unwrap();
+        assert_ne!(passive.risk, active.risk);
     }
 
     #[test]
@@ -471,18 +522,57 @@ mod tests {
 
     /// `requires_explicit_scope` must not become a blanket bypass: an op that
     /// the catalog marks strict still demands one, whatever else it is.
+    ///
+    /// The interface-bound family is included: it demands an explicit scope
+    /// too, because the requirement is the operator's consent gate and not a
+    /// statement about a target.
     #[test]
     fn strict_ops_still_demand_explicit_scope() {
-        for id in ["packet", "wireless", "wireless-deauth"] {
+        for id in ["packet", "wireless", "wireless-deauth", "packet-capture"] {
             let meta = ALL_OPERATION_METADATA
                 .iter()
                 .find(|m| m.id == id)
                 .unwrap_or_else(|| panic!("{id} must exist in the catalog"));
-            assert_eq!(
-                meta.target_policy,
-                crate::config::TargetPolicyKind::ExplicitScopeRequired,
-                "{id} must stay strict after the target-less relaxation"
+            let desc = meta
+                .try_descriptor_for_target(Some("10.0.0.5"))
+                .unwrap_or_else(|e| panic!("{id} should accept a target, got {e}"));
+            assert!(
+                desc.requires_explicit_scope,
+                "{id} must still demand an explicit scope"
             );
         }
+    }
+
+    /// The remote-target half of the packet family keeps requiring a remote
+    /// target: `packet-send` must not become runnable with no destination.
+    #[test]
+    fn the_packet_family_keeps_its_remote_target_requirement() {
+        let packet = ALL_OPERATION_METADATA
+            .iter()
+            .find(|m| m.id == "packet")
+            .unwrap_or_else(|| panic!("packet must exist in the catalog"));
+        assert_eq!(
+            packet.target_policy,
+            crate::config::TargetPolicyKind::ExplicitScopeRequired,
+            "packet must keep requiring an explicit scope"
+        );
+        assert!(
+            packet.try_descriptor_for_target(None).is_err(),
+            "packet must refuse a target-less run"
+        );
+
+        // The capture half is split out and interface-bound.
+        let capture = ALL_OPERATION_METADATA
+            .iter()
+            .find(|m| m.id == "packet-capture")
+            .unwrap_or_else(|| panic!("packet-capture must exist in the catalog"));
+        assert!(capture.target_policy.is_interface_bound());
+        // The split relaxes the *target*, never the authorisation: the
+        // capture keeps the packet family's risk tier and capability.
+        assert_eq!(capture.risk, packet.risk);
+        assert_eq!(
+            capture.required_capabilities, packet.required_capabilities,
+            "the capture must keep the packet family's capability requirement"
+        );
     }
 }

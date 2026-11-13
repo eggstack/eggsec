@@ -4,8 +4,10 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tokio_util::sync::CancellationToken;
 
+use crate::capabilities::{RuntimeCapabilities, TaskCapability};
 use crate::event::{RuntimeErrorInfo, RuntimeEvent, TaskOutcome, TaskStatus};
 use crate::ids::{ClientId, SessionId, TaskId};
+use crate::report::ReportFormEntry;
 use crate::request::{RunRequest, RuntimeSurface};
 use crate::session::{
     RuntimeExecutionContext, RuntimeSession, SessionScope, SessionSnapshot, SessionSummary,
@@ -54,6 +56,72 @@ pub trait RuntimeTaskExecutor: Send + Sync + 'static {
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>> + Send + 'static>,
     >;
+
+    /// The task kinds this executor can execute.
+    ///
+    /// The default is the **canonical** list: every capability name the
+    /// task-kind set defines, derived rather than transcribed. An executor
+    /// that says nothing is therefore treated as able to run every canonical
+    /// kind, which is the same statement the derived list makes everywhere
+    /// else in the workspace.
+    ///
+    /// An executor that rejects every task MUST declare the empty set
+    /// instead -- otherwise a host would advertise capabilities the executor
+    /// cannot execute, which is the one state this declaration exists to make
+    /// unrepresentable.
+    fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        RuntimeCapabilities::canonical().task_kinds
+    }
+
+    /// The engine features compiled into this executor's build.
+    ///
+    /// This is a *build* fact, not a runtime capability: it says which
+    /// feature-gated operations the linked engine could run at all. A host
+    /// publishes it so a client can tell "this operation is unavailable
+    /// because the daemon was built without its feature" apart from "this
+    /// operation is unavailable because the daemon does not advertise it".
+    ///
+    /// `None` means **unknown**: the executor links no engine, or does not
+    /// publish the fact. `Some(vec![])` means an engine is linked with no
+    /// features enabled — a different, knowable fact. The distinction
+    /// matters because an empty vector must never be read as "unknown",
+    /// which would let a client report a wrong reason for an unavailable
+    /// operation.
+    ///
+    /// The default is `None` so every existing implementor keeps its current
+    /// behaviour and no host has to change to compile.
+    fn enabled_features(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    /// The report document for a completed task, if this executor produced one.
+    ///
+    /// `None` means "no report for this task" — either the executor produces
+    /// no reports at all, or this particular result has no report form. A
+    /// host reads this to answer a client's report request; it is a read
+    /// path, and the executor's own retention policy decides how long a
+    /// report stays available.
+    fn report_for(&self, _task_id: &TaskId) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// The report-form coverage this executor's build publishes.
+    ///
+    /// This is another *build* fact, like [`Self::enabled_features`]: it says
+    /// which canonical operations produce a report document and which do
+    /// not. A host publishes it so a client can tell an operator **why** a
+    /// completed task has no report, rather than only that it has none.
+    ///
+    /// `None` means **unknown**: the executor links no engine, or does not
+    /// publish the fact — the same distinction [`Self::enabled_features`]
+    /// draws. `Some(vec![])` means the executor published an empty coverage,
+    /// which is a different, knowable fact.
+    ///
+    /// The default is `None` so every existing implementor keeps its current
+    /// behaviour and no host has to change to compile.
+    fn report_forms(&self) -> Option<Vec<ReportFormEntry>> {
+        None
+    }
 }
 
 struct RuntimeState {
@@ -75,20 +143,167 @@ struct RuntimeState {
 /// lifecycle state.
 pub struct Runtime {
     state: Arc<Mutex<RuntimeState>>,
+    /// The executor's declared support, captured at construction.
+    ///
+    /// It lives outside the state mutex so a host can read it synchronously
+    /// while building its own derived capability list, without taking an
+    /// async lock in a constructor.
+    supported_task_kinds: Vec<TaskCapability>,
+    /// The executor's published enabled-feature set, captured at construction.
+    ///
+    /// `None` means the executor did not publish one (it links no engine, or
+    /// predates the declaration). It lives outside the state mutex for the
+    /// same reason `supported_task_kinds` does: a host reads it synchronously
+    /// while building its own published capability list.
+    enabled_features: Option<Vec<String>>,
+    /// The executor's published report-form coverage, captured at construction.
+    ///
+    /// `None` means the executor did not publish one (it links no engine, or
+    /// predates the declaration). It lives outside the state mutex for the
+    /// same reason `enabled_features` does: a host reads it synchronously
+    /// while building its own published capability list. The coverage is
+    /// immutable for the life of the process, so every concurrent reader
+    /// observes the same rows.
+    report_forms: Option<Vec<ReportFormEntry>>,
+    /// The runtime's enforced capability set, captured at construction.
+    ///
+    /// This is the configured set every session carries, and therefore the
+    /// set a submission is admitted against. It lives outside the state mutex
+    /// for the same reason `supported_task_kinds` does: a host reads it
+    /// synchronously while building its published capability list, so that the
+    /// published set and the enforced set can be made the same object.
+    enforced_task_kinds: Vec<TaskCapability>,
+    /// The executor behind this runtime.
+    ///
+    /// It is held outside the state mutex as well as inside it, so the
+    /// synchronous read paths (`report_for`) never have to take a lock that
+    /// an async caller might be holding.
+    executor: Arc<dyn RuntimeTaskExecutor>,
+    /// The runtime's pending-approval registry.
+    ///
+    /// A manual operation whose policy demands a confirmation is held here
+    /// until an operator answers. It lives outside the state mutex so that
+    /// answering a pending decision never waits behind a task-lifecycle
+    /// lock, and so the handle can be cloned into an execution context
+    /// cheaply.
+    approvals: crate::approval::ApprovalGate,
 }
 
 impl Runtime {
     /// Create a new runtime with the given configuration and executor.
     pub fn new(config: RuntimeConfig, executor: impl RuntimeTaskExecutor) -> Self {
         let (event_tx, _) = broadcast::channel(config.event_channel_capacity);
+        let supported_task_kinds = executor.supported_task_kinds();
+        let enabled_features = executor.enabled_features();
+        let report_forms = executor.report_forms();
+        let enforced_task_kinds = config.capabilities.task_kinds.clone();
+        let executor: Arc<dyn RuntimeTaskExecutor> = Arc::new(executor);
         Self {
             state: Arc::new(Mutex::new(RuntimeState {
                 sessions: HashMap::new(),
                 config,
                 event_tx,
-                executor: Arc::new(executor),
+                executor: Arc::clone(&executor),
             })),
+            supported_task_kinds,
+            enabled_features,
+            report_forms,
+            enforced_task_kinds,
+            executor,
+            approvals: crate::approval::ApprovalGate::new(),
         }
+    }
+
+    /// The enabled-feature set the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. A caller MUST NOT read `None` as "no
+    /// features are enabled"; it means the answer is unknown.
+    pub fn enabled_features(&self) -> Option<&[String]> {
+        self.enabled_features.as_deref()
+    }
+
+    /// The report-form coverage the executor behind this runtime published.
+    ///
+    /// `None` means the executor published nothing — it links no engine, or
+    /// it does not know the fact. A caller MUST NOT read `None` as "no
+    /// operation has a report form"; it means the answer is unknown, exactly
+    /// as `None` means unknown for the feature set.
+    ///
+    /// The coverage is captured at construction and never changes, so every
+    /// reader observes the same rows.
+    pub fn report_forms(&self) -> Option<&[ReportFormEntry]> {
+        self.report_forms.as_deref()
+    }
+
+    /// The report document the executor recorded for a completed task.
+    ///
+    /// `None` means no report is available for that task, which covers both
+    /// "the executor produces no reports" and "this task's result has no
+    /// report form".
+    pub fn report_for(&self, task_id: &TaskId) -> Option<serde_json::Value> {
+        self.executor.report_for(task_id)
+    }
+
+    /// Answers a policy decision the runtime is holding for a task.
+    ///
+    /// A host calls this when a client answers a pending decision. The
+    /// answer names *yes* or *no*; it never names the authorisation — the
+    /// classes that are permitted are computed by the policy kernel on the
+    /// executor's side, which re-runs its own authorisation path with an
+    /// override bounded by what it demanded.
+    ///
+    /// Returns `Err(RuntimeError::NoPendingApproval)` when nothing is
+    /// pending: the task never asked, the decision was already answered, the
+    /// holder was cancelled, or the surface never held a decision at all.
+    pub fn resolve_approval(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+        approved: bool,
+        reason: Option<String>,
+    ) -> Result<(), RuntimeError> {
+        self.approvals.resolve(
+            session_id,
+            task_id,
+            crate::approval::ApprovalAnswer::from_parts(approved, reason),
+        )
+    }
+
+    /// The policy decision the runtime is holding for a task, if any.
+    ///
+    /// A host uses this to tell a client what it is being asked to answer.
+    pub fn pending_approval(
+        &self,
+        session_id: SessionId,
+        task_id: TaskId,
+    ) -> Option<crate::event::PolicyPrompt> {
+        self.approvals.pending(session_id, task_id)
+    }
+
+    /// The task kinds the executor behind this runtime declares it can run.
+    ///
+    /// A host derives its published capability list from this, so the
+    /// published list can never claim more than the executor can execute.
+    pub fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+        self.supported_task_kinds.clone()
+    }
+
+    /// The task kinds this runtime **enforces** at admission.
+    ///
+    /// This is the runtime's configured capability set — the same set every
+    /// session carries, and therefore the set a submission is admitted
+    /// against. It is distinct from [`Self::supported_task_kinds`], which is
+    /// the executor's *declaration*: a host publishes the declaration and
+    /// enforces the configured set, and the two are made the same object at
+    /// construction so that a published capability is never refused as an
+    /// unsupported kind.
+    ///
+    /// The set is captured at construction, because the runtime's
+    /// configuration never changes after it. A host therefore reads it
+    /// synchronously, with no lock and no await point.
+    pub fn enforced_task_kinds(&self) -> Vec<TaskCapability> {
+        self.enforced_task_kinds.clone()
     }
 
     /// Create a new session bound to the given execution surface.
@@ -291,6 +506,7 @@ impl Runtime {
                     session_id,
                     surface: session.execution_surface(),
                     scope: session.scope().cloned(),
+                    approval: self.approvals.clone(),
                 }
             };
 
@@ -659,8 +875,12 @@ impl Runtime {
         snapshot: SessionSnapshot,
     ) -> Result<SessionId, RuntimeError> {
         let session_id = snapshot.session_id;
-        let session = RuntimeSession::hydrate_from_snapshot(snapshot);
         let mut state = self.state.lock().await;
+        // A recovered session enforces the runtime's *configured* capability
+        // set, so it admits exactly what a fresh session admits. The
+        // snapshot's persisted `capabilities` field is not authoritative.
+        let capabilities = state.config.capabilities.clone();
+        let session = RuntimeSession::hydrate_from_snapshot(snapshot, capabilities);
         state.sessions.insert(session_id, session);
         emit_event(&state.event_tx, RuntimeEvent::SessionCreated { session_id });
         Ok(session_id)
@@ -681,6 +901,124 @@ mod tests {
     use crate::event::LogLevel;
     use crate::request::{PortScanParams, RuntimeSurface, TaskKind};
     use std::time::Duration;
+
+    /// An executor that declares an exact set of task kinds.
+    struct DeclaringExecutor {
+        declared: Vec<TaskCapability>,
+    }
+
+    impl RuntimeTaskExecutor for DeclaringExecutor {
+        fn supported_task_kinds(&self) -> Vec<TaskCapability> {
+            self.declared.clone()
+        }
+
+        fn execute(
+            &self,
+            _task_id: TaskId,
+            _request: RunRequest,
+            _context: RuntimeExecutionContext,
+            _sink: RuntimeEventSink,
+            _cancel: CancellationToken,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                    + Send
+                    + 'static,
+            >,
+        > {
+            Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+        }
+    }
+
+    /// The default declaration is the canonical list, so an executor that
+    /// says nothing declares the same capability set the runtime enforces.
+    /// An executor that rejects everything must declare the empty set
+    /// explicitly instead.
+    #[test]
+    fn the_default_declaration_is_the_canonical_set() {
+        struct DefaultExecutor;
+        impl RuntimeTaskExecutor for DefaultExecutor {
+            fn execute(
+                &self,
+                _task_id: TaskId,
+                _request: RunRequest,
+                _context: RuntimeExecutionContext,
+                _sink: RuntimeEventSink,
+                _cancel: CancellationToken,
+            ) -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                        + Send
+                        + 'static,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+            }
+        }
+
+        let declared = DefaultExecutor.supported_task_kinds();
+        assert_eq!(
+            declared.len(),
+            RuntimeCapabilities::canonical().task_kinds.len()
+        );
+        assert!(!declared.is_empty());
+    }
+
+    /// The default coverage declaration is `None`, which means **unknown**:
+    /// an executor that says nothing about report forms is not saying that
+    /// no operation has a report form.
+    #[test]
+    fn the_default_executor_publishes_no_coverage() {
+        struct DefaultExecutor;
+        impl RuntimeTaskExecutor for DefaultExecutor {
+            fn execute(
+                &self,
+                _task_id: TaskId,
+                _request: RunRequest,
+                _context: RuntimeExecutionContext,
+                _sink: RuntimeEventSink,
+                _cancel: CancellationToken,
+            ) -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<TaskOutcome, RuntimeError>>
+                        + Send
+                        + 'static,
+                >,
+            > {
+                Box::pin(async { Err(RuntimeError::UnsupportedTaskKind) })
+            }
+        }
+
+        assert_eq!(DefaultExecutor.report_forms(), None);
+    }
+
+    /// The runtime reports the executor's declaration, so a host can derive
+    /// its published capability list from it.
+    #[test]
+    fn the_runtime_reports_the_executors_declaration() {
+        let runtime = Runtime::new(
+            RuntimeConfig::default(),
+            DeclaringExecutor {
+                declared: vec![TaskCapability::new("port-scan", "Port scanning")],
+            },
+        );
+        let declared = runtime.supported_task_kinds();
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0].name, "port-scan");
+    }
+
+    /// A rejecting executor declares the empty set, so a host built on it
+    /// cannot advertise a capability it cannot execute.
+    #[test]
+    fn a_rejecting_executor_declares_the_empty_set() {
+        let runtime = Runtime::new(
+            RuntimeConfig::default(),
+            DeclaringExecutor {
+                declared: Vec::new(),
+            },
+        );
+        assert!(runtime.supported_task_kinds().is_empty());
+    }
 
     /// A test executor that immediately completes with a text outcome.
     struct ImmediateExecutor;
@@ -1450,13 +1788,22 @@ mod tests {
         );
     }
 
+    /// A runtime whose configured capability set does not cover a kind
+    /// refuses that kind at admission. The canonical set covers everything,
+    /// so the rejection is exercised with an explicit narrow set.
     #[tokio::test]
     async fn submit_rejects_unsupported_task_kind() {
-        use crate::capabilities::RuntimeCapabilities;
+        use crate::capabilities::{RuntimeCapabilities, TaskCapability};
         use crate::request::StressTestParams;
 
         let config = RuntimeConfig {
-            capabilities: RuntimeCapabilities::daemon_conservative(),
+            capabilities: RuntimeCapabilities {
+                task_kinds: vec![TaskCapability::new("port-scan", "Port scanning")],
+                transports: vec!["in-process".into()],
+                supports_cancellation: true,
+                supports_multiple_sessions: true,
+                supports_multiple_active_tasks: false,
+            },
             ..Default::default()
         };
         let runtime = Runtime::new(config, ImmediateExecutor);
@@ -1614,12 +1961,26 @@ mod tests {
         assert_eq!(task.last_error.as_deref(), Some("session closed"));
     }
 
+    /// A runtime configured with a capability set narrower than the canonical
+    /// one still refuses the kinds outside it. The canonical list is the
+    /// *default*, not the only option — the admission check reads the
+    /// configured set.
     #[tokio::test]
-    async fn conservative_capabilities_reject_hazardous_task_kinds() {
-        use crate::capabilities::RuntimeCapabilities;
+    async fn a_narrow_capability_set_rejects_the_kinds_outside_it() {
+        use crate::capabilities::{RuntimeCapabilities, TaskCapability};
 
+        let narrow = RuntimeCapabilities {
+            task_kinds: vec![
+                TaskCapability::new("port-scan", "Port scanning"),
+                TaskCapability::new("load-test", "HTTP load testing"),
+            ],
+            transports: vec!["in-process".into()],
+            supports_cancellation: true,
+            supports_multiple_sessions: true,
+            supports_multiple_active_tasks: false,
+        };
         let config = RuntimeConfig {
-            capabilities: RuntimeCapabilities::daemon_conservative(),
+            capabilities: narrow,
             ..Default::default()
         };
         let runtime = Runtime::new(config, ImmediateExecutor);
@@ -1676,6 +2037,72 @@ mod tests {
             assert!(
                 matches!(result, Err(RuntimeError::UnsupportedTaskKind)),
                 "Expected UnsupportedTaskKind for hazardous task, got: {:?}",
+                result
+            );
+        }
+    }
+
+    /// The canonical capability set admits the hazard families. Admitting is
+    /// not permitting: the runtime's admission check reads capability *names*,
+    /// while the enforcement layer — which runs later, inside the executor —
+    /// reads the operation's risk, the operator's execution policy, the
+    /// loaded scope, and the enabled features. A hazard family that reaches
+    /// the executor is refused there with the risk-policy denial, not here
+    /// with `UnsupportedTaskKind`.
+    #[tokio::test]
+    async fn the_canonical_capability_set_admits_the_hazard_families() {
+        let runtime = Runtime::new(RuntimeConfig::default(), ImmediateExecutor);
+        let session_id = runtime
+            .create_session(SessionOptions::default(), RuntimeSurface::TuiManual)
+            .await
+            .unwrap();
+
+        let kinds = vec![
+            TaskKind::Resume(crate::request::ResumeParams {
+                session_path: "/tmp/does-not-exist.eggsec".into(),
+            }),
+            TaskKind::StressTest(crate::request::StressTestParams {
+                target: "10.0.0.1".into(),
+                flood_type: "syn".into(),
+                duration_secs: None,
+                threads: None,
+                rate_pps: None,
+            }),
+            TaskKind::WirelessActive(crate::request::WirelessActiveParams {
+                interface: None,
+                target_bssid: None,
+                ..Default::default()
+            }),
+            TaskKind::DbPentest(crate::request::DbPentestParams {
+                db_type: "postgres".into(),
+                target: "10.0.0.1".into(),
+                port: None,
+                ..Default::default()
+            }),
+            TaskKind::Intercept(crate::request::InterceptParams {
+                listen_port: None,
+                target: None,
+                ..Default::default()
+            }),
+            TaskKind::C2(crate::request::C2Params {
+                profile: None,
+                target: None,
+                ..Default::default()
+            }),
+        ];
+
+        for kind in kinds {
+            let name = kind.capability_name();
+            let req = RunRequest {
+                task_kind: kind,
+                requested_by: None,
+                surface: RuntimeSurface::TuiManual,
+                labels: vec![],
+            };
+            let result = runtime.submit(session_id, req).await;
+            assert!(
+                !matches!(result, Err(RuntimeError::UnsupportedTaskKind)),
+                "{name} must be admitted by the canonical capability set, got: {:?}",
                 result
             );
         }

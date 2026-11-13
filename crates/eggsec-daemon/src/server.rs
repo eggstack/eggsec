@@ -7,7 +7,7 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::DaemonError;
-use crate::host::DaemonHost;
+use crate::host::{probe_daemon_liveness, DaemonHost, DaemonLiveness, PREFLIGHT_PROBE_TIMEOUT};
 use crate::protocol::{
     ClientCommand, DaemonRequestContext, ErrorCode, ServerMessage, TransportKind,
 };
@@ -75,24 +75,140 @@ impl Drop for CancelOnDrop {
     }
 }
 
+/// Classify a line that failed to deserialize as a [`ClientCommand`].
+///
+/// A client routes responses by request id, so a refusal MUST carry the
+/// request id it was asked about. An answer with an empty request id never
+/// resolves the pending request and the client waits out its timeout
+/// instead of learning that its command was refused.
+///
+/// Two refusals are distinguished:
+///
+/// * `ErrorCode::UnsupportedCommand` — the line names a command this daemon
+///   does not know. A newer client talking to an older daemon lands here,
+///   and the client can degrade instead of failing.
+/// * `ErrorCode::InvalidRequest` — the line is malformed, or it names a
+///   command this daemon knows but whose payload does not fit.
+///
+/// The request id and the command type are recovered by a best-effort parse
+/// of the raw line; when they cannot be read, the request id is empty.
+fn refused_command_response(line: &str, parse_error: &serde_json::Error) -> ServerMessage {
+    let parsed: serde_json::Value = match serde_json::from_str(line) {
+        Ok(value) => value,
+        Err(_) => {
+            return ServerMessage::Error {
+                request_id: String::new(),
+                code: ErrorCode::InvalidRequest,
+                message: format!("invalid command: {parse_error}"),
+            };
+        }
+    };
+
+    let request_id = parsed
+        .get("request_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_owned();
+
+    let command_type = parsed.get("type").and_then(|value| value.as_str());
+    match command_type {
+        Some(command_type) if !ClientCommand::command_names().contains(&command_type) => {
+            ServerMessage::Error {
+                request_id,
+                code: ErrorCode::UnsupportedCommand,
+                message: format!("unsupported command: {command_type}"),
+            }
+        }
+        _ => ServerMessage::Error {
+            request_id,
+            code: ErrorCode::InvalidRequest,
+            message: format!("invalid command: {parse_error}"),
+        },
+    }
+}
+
 /// Run the Unix socket server, dispatching commands to the host.
 ///
 /// Listens on the path from `host.config().socket_path`. Accepts
 /// connections in a loop, reading one JSON line per command and writing
 /// one JSON line per response. The loop exits when `shutdown` is
 /// cancelled.
+///
+/// **The bind contract.** The server binds the socket path *without
+/// unlinking it first*, and refuses when the path is held by a live daemon.
+/// The sequence is:
+///
+/// 1. `UnixListener::bind(socket_path)`.
+///    - Success → this daemon owns the path. Nothing was removed, so nothing
+///      could have been displaced.
+///    - Failure with `AddrInUse` → the path is occupied; go to step 2.
+///    - Any other error → return it unchanged.
+/// 2. Ask whether the occupant is live, with the **shared** probe
+///    (`probe_daemon_liveness`) and the pre-flight's own bound. No second
+///    liveness notion is introduced.
+///    - `Live` → **refuse** ([`DaemonError::SocketPathHeld`]). The socket file
+///      is *not* removed: the live daemon's clients depend on it.
+///    - `NotLive` → the path holds no daemon; go to step 3.
+/// 3. Reclaim the stale path, **once**: remove the file (ignoring
+///    `NotFound`), then bind again.
+///    - Success → this daemon owns the path.
+///    - Failure with `AddrInUse` → **refuse**
+///      ([`DaemonError::SocketPathTaken`]): another daemon took the path in
+///      between. This daemon does not unlink again and does not take the
+///      socket.
+///    - Any other error → return it.
+///
+/// The residual is stated honestly: between the probe in step 2 and the
+/// `remove_file` in step 3, a third actor could remove the stale path and a
+/// live daemon could bind it. The window is one `remove_file` call wide.
 pub async fn run_server(
     host: Arc<DaemonHost>,
     shutdown: CancellationToken,
 ) -> Result<(), DaemonError> {
     let socket_path = &host.config().socket_path;
-    if let Err(error) = std::fs::remove_file(socket_path) {
-        if error.kind() != std::io::ErrorKind::NotFound {
-            tracing::warn!(path = %socket_path, error = %error, "Failed to remove stale daemon socket");
-            return Err(error.into());
+    let listener = match UnixListener::bind(socket_path) {
+        Ok(listener) => listener,
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+            match probe_daemon_liveness(socket_path, PREFLIGHT_PROBE_TIMEOUT).await {
+                DaemonLiveness::Live { protocol_version } => {
+                    tracing::warn!(
+                        path = %socket_path,
+                        protocol_version,
+                        "Refusing to displace the live daemon that holds the socket path"
+                    );
+                    return Err(DaemonError::SocketPathHeld {
+                        socket_path: socket_path.clone(),
+                        protocol_version,
+                    });
+                }
+                DaemonLiveness::NotLive => {
+                    // The path holds no daemon: reclaim it once, then bind.
+                    match std::fs::remove_file(socket_path) {
+                        Ok(()) => {}
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error) => {
+                            tracing::warn!(path = %socket_path, error = %error, "Failed to remove the stale daemon socket");
+                            return Err(error.into());
+                        }
+                    }
+                    match UnixListener::bind(socket_path) {
+                        Ok(listener) => listener,
+                        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+                            tracing::warn!(
+                                path = %socket_path,
+                                "Another daemon took the socket path while this daemon was reclaiming it"
+                            );
+                            return Err(DaemonError::SocketPathTaken {
+                                socket_path: socket_path.clone(),
+                            });
+                        }
+                        Err(error) => return Err(error.into()),
+                    }
+                }
+            }
         }
-    }
-    let listener = UnixListener::bind(socket_path)?;
+        Err(error) => return Err(error.into()),
+    };
 
     // Restrict the socket to its owner. With a permissive umask the socket
     // inherits world-connectable permissions, which would let any local user
@@ -229,11 +345,7 @@ async fn handle_client(
         let cmd: ClientCommand = match serde_json::from_str(&line) {
             Ok(cmd) => cmd,
             Err(e) => {
-                let err_resp = ServerMessage::Error {
-                    request_id: String::new(),
-                    code: ErrorCode::InvalidRequest,
-                    message: format!("invalid command: {}", e),
-                };
+                let err_resp = refused_command_response(&line, &e);
                 if write_message(&mut write_half, &err_resp).await.is_err() {
                     break;
                 }
@@ -299,11 +411,7 @@ async fn handle_client(
                                 let cmd: ClientCommand = match serde_json::from_str(&line) {
                                     Ok(cmd) => cmd,
                                     Err(e) => {
-                                        let err_resp = ServerMessage::Error {
-                                            request_id: String::new(),
-                                            code: ErrorCode::InvalidRequest,
-                                            message: format!("invalid command: {}", e),
-                                        };
+                                        let err_resp = refused_command_response(&line, &e);
                                         if write_message(&mut write_half, &err_resp).await.is_err() {
                                             break;
                                         }
@@ -402,6 +510,120 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         (host, socket_path, shutdown)
+    }
+
+    /// The desktop GUI's own client path, end to end against a live daemon
+    /// host over the real Unix socket.
+    ///
+    /// This is the GUI crate's boundary exercised from the daemon's side:
+    /// the GUI cannot depend on the daemon crate, so the test that proves
+    /// the two fit together lives here. It covers the client's own identity
+    /// — its `Gui` kind, its `gui-` request-id namespace, and its
+    /// `DesktopGuiManual` session — and the catalog the GUI renders.
+    #[tokio::test]
+    async fn the_gui_client_path_works_end_to_end() {
+        use eggsec_frontend_client::{ClientIdentity, DaemonRuntimeClient, RuntimeClient};
+
+        let store = std::sync::Arc::new(
+            crate::store::SqliteStore::new_in_memory().expect("an in-memory store"),
+        );
+        let socket_path = format!("/tmp/eggsec-gui-test-{}.sock", uuid::Uuid::new_v4());
+        let host = Arc::new(DaemonHost::new(
+            DaemonConfig {
+                socket_path: socket_path.clone(),
+                enable_persistence: true,
+                ..Default::default()
+            },
+            TestExecutor,
+            store.clone(),
+        ));
+        let shutdown = CancellationToken::new();
+
+        let host_clone = host.clone();
+        let shutdown_clone = shutdown.clone();
+        tokio::spawn(async move {
+            run_server(host_clone, shutdown_clone).await.unwrap();
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let client = DaemonRuntimeClient::connect(
+            &socket_path,
+            ClientIdentity {
+                kind: eggsec_daemon_protocol::client_registry::ClientKind::Gui,
+                label: "eggsec-gui".to_owned(),
+                request_prefix: "gui-".to_owned(),
+            },
+        )
+        .await
+        .expect("the GUI client connects");
+
+        // The daemon accepts the GUI's declaration and answers its
+        // handshake.
+        let health = client.health().await.expect("the daemon answers health");
+        assert_eq!(
+            health.protocol_version,
+            eggsec_daemon_protocol::protocol::DAEMON_PROTOCOL_VERSION
+        );
+
+        let capabilities = client
+            .daemon_capabilities()
+            .await
+            .expect("the daemon answers capabilities");
+        assert!(
+            capabilities.operation_schema,
+            "the daemon publishes the operation schema the GUI renders"
+        );
+
+        let catalog = client
+            .describe_operations()
+            .await
+            .expect("the daemon publishes the catalog");
+        assert_eq!(catalog.task_kinds.len(), 30);
+        assert!(!catalog.operations.is_empty());
+
+        // The GUI opens its own surface, with the scope it constructs
+        // itself.
+        let session_id = client
+            .create_session(
+                eggsec_runtime::RuntimeSurface::DesktopGuiManual,
+                Some(eggsec_runtime::session::SessionScope {
+                    is_explicit: false,
+                    source: "gui-default".to_owned(),
+                    path: None,
+                }),
+                vec![],
+            )
+            .await
+            .expect("the daemon opens a desktop-GUI session");
+
+        let snapshot = client
+            .snapshot(session_id)
+            .await
+            .expect("the GUI session resolves");
+        assert_eq!(snapshot.session_id, session_id);
+
+        // The audit trail records the GUI's surface label, not a blanket
+        // "daemon".
+        let mut surfaces: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            surfaces = store.audit_surfaces();
+            if surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual")
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(
+            surfaces
+                .iter()
+                .any(|surface| surface == "desktop-gui-manual"),
+            "a GUI session must be auditable as desktop-gui-manual, got {surfaces:?}"
+        );
+
+        shutdown.cancel();
+        let _ = std::fs::remove_file(&socket_path);
     }
 
     async fn connect(
@@ -537,6 +759,166 @@ mod tests {
         }
 
         shutdown.cancel();
+    }
+
+    /// A command the daemon does not know is refused as
+    /// `UnsupportedCommand`, and the refusal carries the request id the
+    /// client asked with.
+    ///
+    /// The request id matters as much as the code: the client routes
+    /// responses by request id, so a refusal without one never resolves the
+    /// pending request and the client waits out its timeout instead of
+    /// learning that its command was refused.
+    #[tokio::test]
+    async fn server_unknown_command_is_refused_with_its_request_id() {
+        let (_host, socket_path, shutdown) = start_server().await;
+        let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        write_half
+            .write_all(b"{\"type\":\"NoSuchCommand\",\"request_id\":\"gui-42\"}\n")
+            .await
+            .unwrap();
+        write_half.flush().await.unwrap();
+
+        let line = read_lines
+            .next_line()
+            .await
+            .unwrap()
+            .expect("expected error response");
+        let resp: ServerMessage = serde_json::from_str(&line).unwrap();
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(
+                    request_id, "gui-42",
+                    "the refusal must echo the request id so the client can route it"
+                );
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+                assert!(
+                    message.contains("unsupported command: NoSuchCommand"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        shutdown.cancel();
+    }
+
+    /// A command the daemon *does* know, sent with a payload that does not
+    /// fit, is a malformed request rather than an unknown command — and its
+    /// request id is recovered all the same.
+    #[tokio::test]
+    async fn server_malformed_known_command_is_an_invalid_request() {
+        let (_host, socket_path, shutdown) = start_server().await;
+        let (mut write_half, mut read_lines) = connect(&socket_path).await;
+
+        // `GetSnapshot` needs a session id; without one the line does not
+        // deserialize, but the command itself is one this daemon knows.
+        write_half
+            .write_all(b"{\"type\":\"GetSnapshot\",\"request_id\":\"gui-43\"}\n")
+            .await
+            .unwrap();
+        write_half.flush().await.unwrap();
+
+        let line = read_lines
+            .next_line()
+            .await
+            .unwrap()
+            .expect("expected error response");
+        let resp: ServerMessage = serde_json::from_str(&line).unwrap();
+
+        match resp {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "gui-43");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+                assert!(
+                    message.contains("invalid command"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        shutdown.cancel();
+    }
+
+    /// The refusal classification, as a unit: an unknown command type is
+    /// `UnsupportedCommand`, everything else is `InvalidRequest`, and the
+    /// request id is recovered whenever the line carries a usable one.
+    #[test]
+    fn refused_command_response_classifies_the_failure() {
+        let parse_error = |line: &str| {
+            serde_json::from_str::<ClientCommand>(line).expect_err("the line must not deserialize")
+        };
+
+        let unknown = refused_command_response(
+            r#"{"type":"NoSuchCommand","request_id":"r-1"}"#,
+            &parse_error(r#"{"type":"NoSuchCommand","request_id":"r-1"}"#),
+        );
+        match unknown {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "r-1");
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+                assert_eq!(message, "unsupported command: NoSuchCommand");
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        let known_but_malformed =
+            refused_command_response(r#"{"type":"Health"}"#, &parse_error(r#"{"type":"Health"}"#));
+        match known_but_malformed {
+            ServerMessage::Error {
+                request_id,
+                code,
+                message,
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+                assert!(message.contains("invalid command"));
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        // A line that is not JSON at all has no type and no request id.
+        let not_json = refused_command_response("not json", &parse_error("not json"));
+        match not_json {
+            ServerMessage::Error {
+                request_id, code, ..
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::InvalidRequest);
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+
+        // A non-string request id cannot be recovered, so the refusal
+        // carries an empty one rather than a wrong one.
+        let non_string_request_id = refused_command_response(
+            r#"{"type":"NoSuchCommand","request_id":7}"#,
+            &parse_error(r#"{"type":"NoSuchCommand","request_id":7}"#),
+        );
+        match non_string_request_id {
+            ServerMessage::Error {
+                request_id, code, ..
+            } => {
+                assert_eq!(request_id, "");
+                assert_eq!(code, ErrorCode::UnsupportedCommand);
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
     }
 
     #[tokio::test]
