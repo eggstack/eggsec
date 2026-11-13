@@ -106,6 +106,10 @@ jobs:
           # maintain a separate license allowlist, so no deny-licenses is
           # set here — contradictory allowlists are a Phase F violation.
           fail-on-severity: moderate
+          # This is the GTK 0.18 advisory already reviewed and documented in
+          # deny.toml and docs/DEPENDENCY_EXCEPTIONS.md. Tauri currently pins
+          # this Linux shell dependency closure upstream.
+          allow-ghsas: GHSA-wrw7-89jp-8q8g
 
   python:
     name: Python
