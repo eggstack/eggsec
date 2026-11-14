@@ -1573,17 +1573,14 @@ impl WebSocketSessionPy {
         let result = runtime_sync::block_on(py, async move {
             let mut request_builder = tokio_tungstenite::tungstenite::http::Request::builder();
 
-            // Set headers
             for (k, v) in &headers {
                 request_builder = request_builder.header(k.as_str(), v.as_str());
             }
 
-            // Set origin
             if let Some(ref o) = origin {
                 request_builder = request_builder.header("Origin", o.as_str());
             }
 
-            // Set subprotocols
             if !subprotocols.is_empty() {
                 let subprotocols_str = subprotocols.join(", ");
                 request_builder =

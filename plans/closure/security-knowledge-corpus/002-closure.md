@@ -4,7 +4,7 @@ Status: closed
 
 Source implementation plan:
 
-- `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md`
+- `plans/archive/security-knowledge-corpus/002-service-fingerprint-db-extraction.md`
 
 Source subsystem roadmap:
 
@@ -285,4 +285,4 @@ blocked on M002+M003+M004 plus a maintainer decision that is not a code question
 
 - `plans/subsystems/security-knowledge-corpus-roadmap.md` — milestone 2 status → closed; §7 milestone 2 outcome; §5 target architecture notes `eggsec-service-db` as landed.
 - `plans/registry.md` — milestone 2 status → closed; `eggsec-service-db` recorded as an extracted corpus crate with guards 114/148.
-- `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` — status → closed with the closure reference.
+- `plans/archive/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` — status → closed with the closure reference.

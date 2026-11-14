@@ -115,15 +115,6 @@ pub fn approve_run_request_execution(
     }
 }
 
-/// Error type for runtime bridge conversions.
-///
-/// This extends the base `RuntimeBridgeError` with enforcement-specific variants.
-// Note: The `RuntimeBridgeError` in surface.rs already defines the core variants.
-// We add `EnforcementDenied` here for the approval path.
-
-// We need to extend RuntimeBridgeError. Since it's defined in surface.rs,
-// we re-export and extend it. Actually, let's add the variant there.
-
 #[cfg(test)]
 mod tests {
     use super::*;

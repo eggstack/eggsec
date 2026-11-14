@@ -1,6 +1,6 @@
 # Eggsec - Rust Security Assessment Engine
 
-Eggsec is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing: reconnaissance, port scanning, web fuzzing, WAF evaluation, load testing, and repeatable pipeline assessments with structured JSON/SARIF/JUnit/HTML/CSV output.
+Eggsec is a Rust security assessment and defense-validation toolkit for authorized testing. It supports reconnaissance, port scanning, web testing, WAF evaluation, and repeatable scans with JSON, SARIF, JUnit, HTML, and CSV output.
 
 For authorized testing of systems you own or have explicit written permission to test. See [Safety](#safety) below.
 
@@ -36,10 +36,10 @@ Example output (your open ports will differ):
 ```bash
 eggsec scan example.com --profile quick        # port scan + fingerprinting
 eggsec scan example.com --profile web          # endpoint discovery + fuzzing
-eggsec scan example.com --profile full         # all stages including load testing
+eggsec scan example.com --profile full         # all stages, subject to policy
 eggsec fuzz https://example.com/search?q=test -t xss   # fuzz with security payloads
 eggsec recon example.com                       # DNS, WHOIS, subdomains, tech detection
-eggsec waf https://example.com                 # WAF detection (34 products) + evasion resistance
+eggsec waf https://example.com --detect-only  # WAF detection only
 eggsec doctor                                  # hermetic dependency/platform check
 ```
 
@@ -47,7 +47,7 @@ Full command reference: [`docs/USAGE.md`](docs/USAGE.md). Pipeline profiles: [`d
 
 ## Safety
 
-Every scan runs through `EnforcementContext::evaluate()` before dispatch. Scope files restrict targets; execution profiles separate manual operator discretion from hard enforcement in automated modes:
+Eggsec checks scope and operation policy before dispatch. Scope files restrict targets. Manual commands may allow operator confirmation, while automated modes enforce policy without overrides:
 
 ```bash
 # Manual strict (hard enforcement)
@@ -61,7 +61,7 @@ Details: [`docs/SAFETY.md`](docs/SAFETY.md) (authorization, risk tiers, scope ru
 
 ## Feature-gated builds
 
-The default build covers scanning, fuzzing, recon, WAF, pipelines, and reporting. These need explicit features (see [`docs/BUILD.md`](docs/BUILD.md) and [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md)):
+The default build includes core scanning, fuzzing, recon, WAF, pipelines, and reporting. Optional features add specialized capabilities (see [`docs/BUILD.md`](docs/BUILD.md) and [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md)):
 
 ```bash
 cargo build --release -p eggsec-cli --features daemon-client  # eggsec daemon/session/task
@@ -73,25 +73,16 @@ NSE compatibility notes: [`docs/NSE_COMPATIBILITY.md`](docs/NSE_COMPATIBILITY.md
 
 ## Python bindings
 
-Pre-1.0 release candidate (22 stable operations, not yet on PyPI):
-
-```python
-import eggsec
-
-scope = eggsec.Scope.allow_hosts(["127.0.0.1"])
-result = eggsec.scan_ports("127.0.0.1", [22, 80, 443], scope)
-for port in result.open_ports:
-    print(f"  {port.port}: {port.service}")
-```
-
-Full docs: [`docs/python/quickstart.md`](docs/python/quickstart.md) and [`docs/python/api-reference.md`](docs/python/api-reference.md).
+See the [Python quickstart](docs/python/quickstart.md) and [API reference](docs/python/api-reference.md) for installation and supported operations.
 
 ## Documentation
 
 | Document | Contents |
 |----------|----------|
-| [Usage Guide](docs/USAGE.md) | Command examples and flags |
-| [Safety](docs/SAFETY.md) | Authorization, risk tiers, scope rules |
+| [Usage Guide](docs/USAGE.md) | Common CLI workflows |
+| [Build and Install](docs/BUILD.md) | Build steps, optional features, prerequisites |
+| [Safety](docs/SAFETY.md) | Authorization and enforcement modes |
+| [Scope Model](docs/scope.md) | Scope file format and target matching |
 | [Capability Matrix](docs/CAPABILITY_MATRIX.md) | Operations, risk tiers, feature gates |
 | [Architecture](docs/ARCHITECTURE.md) | Crate ownership, enforcement model |
 | [Verification](docs/VERIFICATION.md) | Mandatory vs optional CI checks |

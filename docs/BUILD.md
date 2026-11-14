@@ -1,179 +1,74 @@
-# Build Features and System Dependencies
+# Build and Install
 
-See also: [PLATFORM.md](PLATFORM.md) (Phase F capability/prerequisite matrix,
-fixture vs live commands, and privilege containment) and `eggsec doctor`.
+Eggsec requires Rust 1.89 or newer. The workspace root is a virtual Cargo
+manifest, so build or install the CLI by naming `eggsec-cli`.
 
-## Native Dependency Inventory
-
-Each native or external runtime requirement is documented with its owning
-feature/artifact, platform scope, build vs runtime requirement, fallback
-behavior, and reason for retention.
-
-| Dependency | Owning Feature/Artifact | Platforms | Build-time | Runtime | Fallback | Reason for Retention |
-|-----------|------------------------|-----------|------------|---------|----------|---------------------|
-| `libpcap` | `packet-inspection` | Linux, macOS | Yes (`libpcap-dev`) | Yes | Compilation fails without dev package | Live packet capture requires pcap bindings |
-| `wireless-tools` | `wireless` | Linux | No | Yes (`iwlist`) | WiFi scan commands fail | WiFi scanning needs `iwlist` scanner |
-| `libssl-dev` | `nse` | All | Yes | No | NSE TLS scripts fail at runtime | OpenSSL needed for NSE TLS protocol scripts |
-| `libssh2-1-dev` | `nse-ssh2` | All | Yes | No | NSE SSH scripts fail at compile time | libssh2 needed for NSE SSH2 support (Ubuntu noble package name; `libssh2-dev` does not exist there) |
-| `protobuf-compiler` | `grpc-api` | All | Yes (descriptor only) | No | tonic-reflection descriptor not generated | protoc generates reflection descriptor set; Rust code is checked-in |
-| `ring` | `rustls` (via tokio-rustls) | All | Yes (Rust) | No | TLS compilation fails | Rust TLS library; pure Rust with assembly |
-| `aws-lc-rs` | (not used) | — | — | — | — | Explicitly excluded; ring-only TLS policy |
-
-### Build System Notes
-
-- **libpcap**: `pnet` and `pnet_packet` require `libpcap-dev` at build time. Feature-gated behind `packet-inspection`.
-- **OpenSSL**: required by the NSE runtime's TLS scripts, reached through the published `eggsec-nse` crates.io dependency (optional behind the engine `nse` feature). The engine manifest itself declares no `openssl`/`native-tls` dependency — the TLS binding and any vendoring live in the runtime crate, which is versioned and released independently.
-- **libssh2**: Required for `ssh2` crate. Optional behind `nse-ssh2` feature. System library required.
-- **protoc**: Only needed when `grpc-api` feature is enabled, and only for generating the tonic-reflection descriptor set (`tool_descriptor.bin`). The Rust proto code is checked in at `crates/eggsec/src/generated/eggsec.tool.v1.rs` and compiled via `include!()` — no protoc needed for ordinary builds.
-
-### Retained protoc requirement justification (acceptance criterion 12)
-
-The `grpc-api` feature retains a `protoc` build dependency because tonic-reflection
-requires a binary file descriptor set (`tool_descriptor.bin`) that cannot be
-checked in as Rust source. The descriptor is a protobuf-encoded binary that
-tonic-reflection loads at runtime to serve gRPC server reflection. Generating
-it from `.proto` source is the only supported path. This is a build-time-only
-requirement — it does not affect CI compilation of unchecked-in code, and the
-Rust proto code is checked in separately. The descriptor is regenerated only
-when the proto schema changes (a maintainer task).
-
-## System Dependencies
-
-| Feature | Required Packages | Install (Ubuntu/Debian) | Live prerequisite (fixture needs none) |
-|---------|-------------------|--------------------------|----------------------------------------|
-| `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` | Linux + `CAP_NET_RAW`/root + `ip` (netns fixture); see `scripts/setup_packet_netns.sh --check` |
-| `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) | Linux + `CAP_NET_ADMIN`/root + managed/up lab interface; `--dry-run` needs nothing |
-| `mobile-dynamic` | Android SDK platform-tools (`adb`) | SDK platform-tools | Lab AVD/device you own; fixture (mock ADB) needs nothing; see `scripts/setup_android_emulator.sh --check` |
-| `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` | none (local fixtures) |
-| `nse-ssh2` | `libssh2-1-dev` | `sudo apt-get install libssh2-1-dev` | none beyond `nse` |
-| `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) | none |
+## Build from source
 
 ```bash
-# Ubuntu/Debian (all features)
-sudo apt-get install libpcap-dev libssl-dev wireless-tools libssh2-1-dev protobuf-compiler
-
-# Fedora/RHEL
-sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protobuf-compiler
-```
-
-## Build Features
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| `stress-testing` | SYN/UDP/ICMP floods, proxy management, IP spoofing | Lab-only |
-| `packet-inspection` | Live packet capture, traceroute | Experimental |
-| `nse` | Nmap NSE script compatibility | Experimental |
-| `nse-ssh2` | NSE with SSH2/libssh2 support | Experimental |
-| `nse-sandbox` | Restrict dangerous Lua operations | Experimental |
-| `api-schema` | OpenAPI v3 schema-based fuzzing | Stable |
-| `sbom` | SBOM generation (CycloneDX, SPDX) | Stable |
-| `rest-api` | REST API server for agent integration | Experimental |
-| `grpc-api` | gRPC API server | Experimental |
-| `ws-api` | WebSocket pub/sub | Experimental |
-| `ai-integration` | AI planner, script generation, autonomous agent | Experimental |
-| `websocket` | WebSocket security testing | Stable |
-| `headless-browser` | DOM XSS and SPA crawling | Stable |
-| `web-proxy` | MITM proxy for HTTP/HTTPS traffic interception in authorized lab environments | Stable |
-| `web-proxy-mcp` | MCP tool exposure for web proxy (registers the `proxy` tool). Requires `web-proxy`. | Stable |
-| `database` | SQLx-based PostgreSQL persistence | Stable |
-| `container` | Kubernetes/Docker security scanning | Stable |
-| `mobile` | Mobile app static analysis (APK/IPA) | Stable |
-| `mobile-dynamic` | Mobile dynamic testing (ADB + Frida). Requires `mobile`. | Stable |
-| `cloud` | AWS/GCP/Azure asset discovery | Marker-only |
-| `git-secrets` | Git secrets scanning | Marker-only |
-| `wireless` | WiFi passive recon and security analysis | Stable |
-| `wireless-advanced` | Wireless active attacks (deauth, disassoc). Requires `wireless`. | Stable |
-| `evasion` | Evasion technique detection (MITRE ATT&CK mapped) | Stable |
-| `postex` | Post-exploitation and LOTL simulation | Stable |
-| `c2` | C2 framework for purple teaming. Depends on postex + evasion. | Stable |
-| `c2-mcp` | MCP tool exposure for C2. Requires `c2`. | Marker-only |
-| `db-pentest-mssql-tiberius` | MSSQL driver for db-pentest. Requires `db-pentest`. | Stable |
-| `db-pentest-mongodb` | MongoDB driver for db-pentest. Requires `db-pentest`. | Stable |
-| `db-pentest-redis` | Redis driver for db-pentest. Requires `db-pentest`. | Stable |
-| `db-pentest-mcp` | MCP tool exposure for db-pentest. Requires `db-pentest`. | Marker-only |
-| `transparent-proxy` | Transparent proxy mode for web-proxy | Stable |
-| `dynamic-plugins` | Dynamic plugin loading system | Stable |
-| `pdf` | PDF report generation | Report output |
-| `advanced-hunting` | Advanced threat hunting | Marker-only |
-| `compliance` | Compliance scanning (OWASP, PCI, HIPAA, SOC2) | Marker-only |
-| `external-integrations` | Jira, GitHub, GitLab connectors | Marker-only |
-| `finding-workflow` | Finding lifecycle management | Marker-only |
-| `vuln-management` | Vulnerability triage and CVSS scoring | Marker-only |
-| `full` | Curated developer/lab aggregate (28 pinned members; excludes test-only, security-risk, `*-mcp` exposure markers, backend drivers, platform modes, separate serving surfaces, and special output/plugin modes — see `FULL_EXCLUDED_WITH_REASON` in `crates/eggsec/src/config/feature_registry.rs`; exhaustive oracle is `make check-features-individual`) | — |
-
-### CLI-Level Features
-
-These process-host features are declared on the `eggsec-cli` crate (in
-addition to its forwards of the engine features above — see
-[`eggsec-cli` feature forwarding](#eggsec-cli-feature-forwarding)):
-
-| Feature | Description | Default |
-|---------|-------------|---------|
-| `tui` | Terminal UI adapter (`eggsec-tui`) | Yes |
-| `daemon-client` | Daemon client CLI commands (`eggsec-daemon` client library) | No |
-| `headless` | Marker for headless/CI builds (no TUI, no daemon client) | No |
-
-## Build Examples
-
-```bash
-# Default build - load testing, scanning, fuzzing, WAF testing
+git clone https://github.com/eggstack/eggsec.git
+cd eggsec
 cargo build --release -p eggsec-cli
-
-# With stress testing (controlled flood testing, proxy pool)
-cargo build --release -p eggsec-cli --features stress-testing
-
-# With packet inspection (live capture)
-cargo build --release -p eggsec-cli --features packet-inspection
-
-# With NSE support
-cargo build --release -p eggsec-cli --features nse
-
-# With mobile static analysis
-cargo build --release -p eggsec-cli --features mobile
-
-# With wireless passive recon
-cargo build --release -p eggsec-cli --features wireless
-
-# With wireless active attacks (requires wireless feature)
-cargo build --release -p eggsec-cli --features wireless-advanced
-
-# Curated lab build - 28 pinned members (not exhaustive; see docs/FEATURE_MATRIX.md §1.3)
-cargo build --release -p eggsec-cli --features full
-
-# Headless build - no TUI, no daemon client (CI/scripting)
-cargo build --release -p eggsec-cli --no-default-features
-
-# Daemon client build - CLI commands without TUI
-cargo install --path crates/eggsec-cli --no-default-features --features daemon-client
-
-# Daemon with HTTP/SSE transport
-cargo build --release -p eggsec-daemon --features http-api
 ```
 
-## Installing to PATH
+The CLI binary is `target/release/eggsec`. The default build includes the
+terminal UI and the core scanning, fuzzing, reconnaissance, WAF, pipeline, and
+reporting commands.
+
+To install the CLI in `~/.cargo/bin`:
 
 ```bash
-# Install to ~/.cargo/bin/eggsec
 cargo install --path crates/eggsec-cli
-
-# With all features
-cargo install --path crates/eggsec-cli --features full
-
-# Verify
 eggsec --version
 ```
 
-Note: `cargo install` must use `--path crates/eggsec-cli` because the workspace root is a virtual manifest.
+## Optional features
 
-## `eggsec-cli` feature forwarding
+Add features only when you need them. For example:
 
-The examples above only use flags `eggsec-cli` actually declares. The CLI
-crate's `[features]` table is the authority (`crates/eggsec-cli/Cargo.toml`):
-besides the process-host features below, each entry forwards to the same-named
-engine feature. Engine features that the CLI does **not** forward — `evasion`,
-`postex`, `c2`, `c2-mcp`, `db-pentest-mcp`, `web-proxy-mcp`,
-`transparent-proxy`, `dynamic-plugins`, `nse-ssh2`, `nse-sandbox`, and the
-`db-pentest-*` driver features — reach the binary through `full` (where
-applicable) or by adding an explicit forwarding entry. Passing a non-forwarded
-feature to `cargo build -p eggsec-cli --features ...` is a hard error, not a
-silent no-op.
+```bash
+# Headless CLI, without the terminal UI
+cargo build --release -p eggsec-cli --no-default-features
+
+# Daemon client commands
+cargo build --release -p eggsec-cli --features daemon-client
+
+# REST, MCP, and agent serving commands
+cargo build --release -p eggsec-cli --features rest-api
+
+# NSE script support
+cargo build --release -p eggsec-cli --features nse
+
+# Mobile analysis, wireless analysis, or database assessment
+cargo build --release -p eggsec-cli --features mobile,wireless,db-pentest
+```
+
+The `full` feature is a curated developer and lab build, not an exhaustive
+"enable everything" option:
+
+```bash
+cargo build --release -p eggsec-cli --features full
+```
+
+## Feature prerequisites
+
+Some optional features need system libraries, platform tools, privileges, or
+compatible hardware:
+
+| Feature | Additional requirement |
+|---------|------------------------|
+| `packet-inspection` | libpcap development package to build; Linux and `CAP_NET_RAW` or root for live capture |
+| `wireless` | Linux, `wireless-tools` (`iwlist`), and a managed lab interface; live scans need `CAP_NET_ADMIN` or root |
+| `nse` | `libssl-dev` to build |
+| `grpc-api` | `protobuf-compiler` when regenerating the reflection descriptor |
+| `mobile-dynamic` | `adb` and an owned lab device or emulator for live testing |
+
+This is a short list of common requirements, not a complete matrix. See the
+[feature matrix](FEATURE_MATRIX.md) and [platform guide](PLATFORM.md) for details.
+`eggsec doctor` checks local platform prerequisites.
+
+To build the daemon with its HTTP/SSE transport, use the daemon package:
+
+```bash
+cargo build --release -p eggsec-daemon --features http-api
+```

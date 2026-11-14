@@ -4,7 +4,7 @@ Status: closed
 
 Source implementation plan:
 
-- `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md`
+- `plans/archive/security-knowledge-corpus/001-redaction-dead-code-disposition.md`
 
 Source subsystem roadmap:
 

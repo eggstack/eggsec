@@ -4,7 +4,7 @@ Status: closed
 
 Source implementation plan:
 
-- `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md`
+- `plans/archive/security-knowledge-corpus/003-secret-detection-extraction.md`
 
 Source subsystem roadmap:
 
@@ -286,4 +286,4 @@ maintainer decision that is not a code question.
 
 - `plans/subsystems/security-knowledge-corpus-roadmap.md` — milestone 3 status → closed; §7 milestone 3 outcome; pattern count corrected to 25.
 - `plans/registry.md` — milestone 3 status → closed; `eggsec-secrets` recorded with guards 148/149.
-- `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` — status → closed with the closure reference; pattern count corrected to 25.
+- `plans/archive/security-knowledge-corpus/003-secret-detection-extraction.md` — status → closed with the closure reference; pattern count corrected to 25.

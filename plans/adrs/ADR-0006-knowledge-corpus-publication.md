@@ -22,7 +22,7 @@ Related decisions:
 
 Implements:
 
-- `plans/implementation/security-knowledge-corpus/005-publication-qualification.md`
+- `plans/archive/security-knowledge-corpus/005-publication-qualification.md`
 - closure: `plans/closure/security-knowledge-corpus/005-closure.md`
 
 ## Context

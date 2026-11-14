@@ -282,13 +282,13 @@ new graph node. `pnet`/`pnet_packet` are deliberately **not** used — a raw or
 datagram ICMP socket is a plain BSD socket, so pulling in `pnet` would drag the
 `libpcap-dev` system dependency in for no benefit.
 
-## Phase G — Knowledge-corpus modules (2026-10-05): PROPOSED, 3 leaf crates
+## Phase G — Knowledge-corpus modules (2026-10-05): CLOSED
 
 Full decision: `plans/adrs/ADR-0005-knowledge-corpus-crate-ownership.md`.
 Roadmap: `plans/subsystems/security-knowledge-corpus-roadmap.md`.
-Implementation plans: `plans/implementation/security-knowledge-corpus/001…005`.
+Implementation plans: `plans/archive/security-knowledge-corpus/001…005`.
 
-**Status: proposed — not implemented.** Nothing in this section is a code change yet.
+**Status: closed.** All five milestones are complete; publication is deferred by ADR-0006. The corpus now has four internal leaf crates. See `architecture/knowledge_corpus.md` for the current inventory.
 
 ### Why this category is new
 
@@ -300,7 +300,7 @@ than to reach outward. The engine's large modules (`fuzzer`, `recon`, `scanner`,
 `distributed`) are *not* in this category: they are executor bodies whose coupling is
 their function, and Phase C/D/WS4's rejections of them stand unchanged.
 
-### Dependency delta (measured, not assumed)
+### Proposal baseline (2026-10-05)
 
 | Module | Lines | `crate::` coupling | Workspace deps after | Tests |
 |---|---|---|---|---|
@@ -318,7 +318,7 @@ zero-internal-dependency leaf (`crates/eggsec/src/types.rs:16` re-exports it). A
 whose only engine reference is `Severity` is one import away from being a leaf crate —
 the same rationale that justified `eggsec-policy` in Phase C.
 
-### Proposals
+### Initial crate boundaries
 
 | Crate | Contents | Rationale |
 |---|---|---|

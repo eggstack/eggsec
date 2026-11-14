@@ -4,7 +4,7 @@ Status: closed
 
 Source implementation plan:
 
-- `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md`
+- `plans/archive/security-knowledge-corpus/004-payload-corpus-extraction.md`
 
 Source subsystem roadmap:
 
@@ -322,4 +322,4 @@ question.
 
 - `plans/subsystems/security-knowledge-corpus-roadmap.md` — milestone 4 status → closed; §5 target architecture marks `eggsec-payloads` landed; §7 milestone 4 outcome recorded.
 - `plans/registry.md` — milestone 4 status → closed; `eggsec-payloads` recorded with guards 148/150 and the seam suite.
-- `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` — status → closed with the closure reference.
+- `plans/archive/security-knowledge-corpus/004-payload-corpus-extraction.md` — status → closed with the closure reference.

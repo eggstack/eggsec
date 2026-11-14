@@ -473,8 +473,8 @@ The subsystem is closed when (all conditions met as of 2026-10-05):
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
 |---|---|---|---|---|
-| 1 | **closed** | `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
-| 2 | **closed** | `plans/implementation/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
-| 3 | **closed** | `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` | `plans/closure/security-knowledge-corpus/003-closure.md` | — (M001 discharged) |
-| 4 | **closed** | `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` | `plans/closure/security-knowledge-corpus/004-closure.md` | — |
-| 5 | **closed (deferral)** | `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` | `plans/closure/security-knowledge-corpus/005-closure.md` | — (M002–M004 closed; decision = defer) |
+| 1 | **closed** | `plans/archive/security-knowledge-corpus/001-redaction-dead-code-disposition.md` | `plans/closure/security-knowledge-corpus/001-closure.md` | — |
+| 2 | **closed** | `plans/archive/security-knowledge-corpus/002-service-fingerprint-db-extraction.md` | `plans/closure/security-knowledge-corpus/002-closure.md` | — |
+| 3 | **closed** | `plans/archive/security-knowledge-corpus/003-secret-detection-extraction.md` | `plans/closure/security-knowledge-corpus/003-closure.md` | — (M001 discharged) |
+| 4 | **closed** | `plans/archive/security-knowledge-corpus/004-payload-corpus-extraction.md` | `plans/closure/security-knowledge-corpus/004-closure.md` | — |
+| 5 | **closed (deferral)** | `plans/archive/security-knowledge-corpus/005-publication-qualification.md` | `plans/closure/security-knowledge-corpus/005-closure.md` | — (M002–M004 closed; decision = defer) |

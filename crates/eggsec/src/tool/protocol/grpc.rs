@@ -1,4 +1,3 @@
-// This file provides the gRPC service implementation
 // The proto-generated code is in eggsec.tool.v1 module
 
 use rustc_hash::FxHashSet;

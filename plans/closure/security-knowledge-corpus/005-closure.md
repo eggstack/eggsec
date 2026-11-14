@@ -4,7 +4,7 @@ Status: closed (deferral)
 
 Source implementation plan:
 
-- `plans/implementation/security-knowledge-corpus/005-publication-qualification.md`
+- `plans/archive/security-knowledge-corpus/005-publication-qualification.md`
 
 Source subsystem roadmap:
 
@@ -191,7 +191,7 @@ API on a security corpus is itself a small quality/hygiene concern, independent 
   status → closed; ADR-0006 added to related ADRs; milestone 5 outcome recorded.
 - `plans/registry.md` — subsystem row → **closed**; M005 row → closed (deferral) with the
   decision path; `crate-boundary-ownership` row updated from "proposes" to "delivered".
-- `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` — status
+- `plans/archive/security-knowledge-corpus/005-publication-qualification.md` — status
   → closed (deferral).
 
 No operator-facing change: no command, flag, output, or diagnostic differs.

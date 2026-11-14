@@ -19,7 +19,7 @@ Applicable ADRs:
 
 Primary class: infrastructure
 
-Blocked by: `plans/implementation/security-knowledge-corpus/001-redaction-dead-code-disposition.md`
+Blocked by: `plans/archive/security-knowledge-corpus/001-redaction-dead-code-disposition.md`
 (interface dependency — M001's disposition decides whether `utils/redaction.rs` joins
 this crate).
 
