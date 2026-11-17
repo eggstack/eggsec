@@ -185,6 +185,21 @@ Every retained advisory ignore must include:
 | Review-by | 2026-12-12 |
 | Blocker | **Corrected 2026-10-06.** The previous note — "tiberius 0.12.3 is latest; requires tiberius upstream to upgrade its rustls stack" — is no longer accurate: upstream has since released **tiberius 0.13.0**, which does move to `tokio-rustls` 0.26 / rustls 0.23 / rustls-webpki 0.103. It was trialled and **reverted**: 0.13.0 depends on `tokio-rustls ^0.26.4` with default features, which enables rustls' `aws-lc-rs` crypto provider, and `[bans] deny = ["aws-lc-rs"]` forbids it under the repo's ring-only TLS policy. Feature unification would apply that provider to the whole build, not just MSSQL. So this is now blocked by **policy**, not by upstream. Clearing it requires either tiberius exposing a ring-only path or a maintainer decision to relax the ring-only rule |
 
+### RUSTSEC-2026-0543 — chrono unmaintained
+
+| Field | Value |
+|-------|-------|
+| Advisory | RUSTSEC-2026-0543 (unmaintained; all versions affected) |
+| Path | `chrono` 0.4.45 is a shared workspace dependency; `chrono-tz` 0.10.4 also depends on it |
+| Feature | Workspace-wide date/time and timezone APIs |
+| API used | Yes — direct `chrono` / `chrono-tz` APIs appear across 134 Rust source files (473 matching lines) |
+| Exploitability | The advisory classifies the crate as unmaintained; it does not report a vulnerability in this release |
+| Compensating control | No technical mitigation is claimed; this is a temporary maintenance-status exception pending migration |
+| Owner | eggsec (workspace time/date API) |
+| Created | 2026-11-17 |
+| Review-by | 2026-12-12 |
+| Blocker | All `chrono` versions are affected, with no safe version-only upgrade. Replacing `chrono` and `chrono-tz` with `jiff`/`time` plus timezone support requires a coordinated workspace API migration. |
+
 ## License exception
 
 | Crate | License | Scope | Owner | Review-by | Rationale |
