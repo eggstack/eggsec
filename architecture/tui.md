@@ -426,7 +426,7 @@ pub struct EnforcementFacade {
 }
 ```
 
-Phase 0.1 exact binding: cached reuse requires `ApprovedOperation::matches_descriptor()` (derived `PartialEq`, future fields automatic) plus unchanged scope fingerprint, policy hash, surface/profile, and manual-override state. Stale tokens are discarded for fresh evaluation; engine `validate_request_binding` remains the final gate. `toggle_posture()` and override changes invalidate the cache; `invalidate_cached_approval()` covers future live reload.
+Phase 0.1 exact binding: cached reuse requires `ApprovedOperation::matches_descriptor()` (derived `PartialEq`, future fields automatic) plus unchanged scope fingerprint, policy hash, surface/profile, and manual-override state. Stale tokens are discarded for fresh evaluation; `spawn_task()` requires an `ApprovedOperation` and calls the engine-owned `validate_run_request_binding()` synchronously before opening channels or submitting to the runtime. `toggle_posture()` and override changes invalidate the cache; `invalidate_cached_approval()` covers future live reload.
 
 Methods: `try_approve(desc)`, `evaluate_and_try_approve(desc)`, `take_cached_approval(desc)`, `set_cached_approval(approved)`, `clear_cached_approval()`, `invalidate_cached_approval()`, `confirm_override(descriptor, classes, reason)`, `audit_confirmed_override(...)`, plus delegation and read accessors: `state()`, `state_mut()`, `toggle_posture()`, `mode_label()`, `status_string()`, `scope_label()`, `allow_rule_count()`, `exclusion_rule_count()`, `is_guarded()`, `preflight()`, `enforcement()`, `loaded_scope()`.
 

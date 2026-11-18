@@ -41,8 +41,11 @@ The public entry points are:
   exact operation/target/descriptor binding (`matches_descriptor`), validates through
   canonical contracts, checks features, emits frontend-neutral `ExecutionEvent`s.
 - `execute_canonical()` (`canonical_execution.rs`) — the single-owner executor match
-  over `CanonicalOperationRequest`. `dispatch_inner()` and the TUI dispatcher both
-  delegate here; neither owns a second mapping.
+  over `CanonicalOperationRequest`. It remains `pub` only for the legacy integration
+  test and manual TUI path, is `#[doc(hidden)]`, and its callers are statically
+  restricted to the dispatch shim, TUI adapter, and tests. It is not general API.
+- `dispatch_inner()` (`mod.rs`) — crate-visible legacy manual shim. It is not
+  reachable from outside the engine crate.
 - `dispatch_task()` (`mod.rs`) — creates per-task progress + result channels, calls
   `dispatch_inner()`, and forwards the result. Returns `(progress_rx, result_rx)`.
 - `dispatch_inner()` (`mod.rs`) — legacy manual shim over `execute_canonical`

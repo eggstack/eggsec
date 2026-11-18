@@ -214,9 +214,10 @@ canonical dispatcher). Reference implementations: `recon`
 ### Preflight
 
 The same `build_descriptor_for_command()` path is used by the CLI `preflight`
-command, REST `POST /api/v1/tools/{tool_id}/preflight`, and MCP
-`eggsec_preflight` tool. This ensures that preflight evaluation uses the same
-metadata source as dispatch.
+command and REST `POST /api/v1/tools/{tool_id}/preflight`, ensuring that these
+advisory previews use the same metadata source as dispatch. MCP does not expose
+a synthetic preflight tool: MCP discovery and calls are limited to operator-selected,
+active registry entries with MCP exposure metadata.
 
 ## Tests
 

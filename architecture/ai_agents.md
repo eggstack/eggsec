@@ -526,13 +526,13 @@ pub struct ToolRegistration {
 | Function | Filter |
 |----------|--------|
 | `mcp_tool_registrations("ops-agent")` | All tools with `mcp_metadata_exposable = true` |
-| `mcp_tool_registrations("coding-agent")` | Hardcoded narrow allowlist (scan, scan-ports, fingerprint, scan-endpoints, endpoints, waf-detect, search) |
+| `mcp_tool_registrations("coding-agent")` | Every metadata-exposable tool; runtime selection intersects the operator's explicit IDs with registry and profile controls |
 | `mcp_tool_registrations_default_visible()` | Tools with `mcp_default_visible = true` (passive/safe-active, no feature gate) |
 | `rest_tool_registrations()` | `rest_exposable = true` |
 | `grpc_tool_registrations()` | `grpc_exposable = true` |
 | `agent_tool_registrations()` | `agent_exposable = true` |
 
-**MCP exposure model** (`registration.rs:43-49`):
+**MCP exposure model** (`registration.rs:43-49`): The registration function supplies the metadata-exposable superset; live visibility is the operator-selected intersection described above.
 
 ```
 default_mcp_visible_for_operation(meta) =
@@ -621,7 +621,7 @@ cargo test --lib -p eggsec tool::
 
 4. **Fail-closed binding**: `validate_request_binding()` rejects any mismatch between approval and request (tool name, target normalization, typed-vs-parameter agreement).
 
-5. **MCP exposure vocabulary**: Use `mcp_metadata_exposable` for tools allowed under expanded profile listing, `mcp_default_visible` for the conservative default subset. The OpsAgent profile returns all `mcp_metadata_exposable` tools — this is profile-expanded, not the conservative default.
+5. **MCP exposure vocabulary**: Use `mcp_metadata_exposable` for the compiled exposure boundary and `mcp_default_visible` for the conservative default subset. Both MCP profiles require explicit operator `--allow-tool` selections; the running server intersects them with registry exposure and profile risk controls. Selection is not authorization: strict `LoadedScope`/`EnforcementContext` approval remains mandatory at call time.
 
 6. **FxHashMap everywhere**: Performance-critical paths use `rustc_hash::FxHashMap`/`FxHashSet`, not `std::collections::HashMap`. Verified in: `ToolRegistry`, `AiCache`, `AiPlanner`, `AgentRegistry`, `ResultAggregator`, `MultiAgentCoordinator`, `LongitudinalMemory`, `Finding.metadata`, `RateLimitConfig`.
 

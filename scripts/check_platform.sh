@@ -15,7 +15,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "=== [1/5] doctor (centralized prerequisites) ==="
-cargo run -q -p eggsec-cli -- doctor 2>&1 | head -n 60
+# sed drains the stream; head would SIGPIPE cargo under pipefail when output is longer.
+cargo run -q -p eggsec-cli -- doctor 2>&1 | sed -n '1,60p'
 
 echo
 echo "=== [2/5] packet fixtures (no privilege) ==="

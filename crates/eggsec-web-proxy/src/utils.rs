@@ -22,6 +22,20 @@ pub fn ensure_rustls_provider() {
     });
 }
 
+/// Create a reqwest client with standard TLS certificate verification,
+/// a custom timeout, and optional builder customization.
+pub fn create_client_with_options<F>(timeout_secs: u64, builder_fn: F) -> Result<reqwest::Client>
+where
+    F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
+{
+    ensure_rustls_provider();
+    let builder = reqwest::Client::builder().timeout(Duration::from_secs(timeout_secs));
+    let builder = builder_fn(builder);
+    builder
+        .build()
+        .map_err(|e| WebProxyError::Network(format!("Failed to build HTTP client: {}", e)))
+}
+
 /// Create an insecure (skip certificate verification) reqwest client
 /// with a custom timeout and optional builder customization.
 pub fn create_insecure_client_with_options<F>(

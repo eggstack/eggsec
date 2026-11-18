@@ -55,6 +55,8 @@ The `sbom` feature is enabled via `sbom = ["cyclonedx-bom", "spdx", "walkdir"]`.
 | `generate_from_npm()` | `package.json` + `package-lock.json` | npm | `dependencies` object, lockfile `packages` map | `sbom.rs:122-` |
 | `generate_from_requirements()` | `requirements.txt` | pypi | Lines with `==`, `===`, `~=`, `!=`, `>=`, `<=`, `>`, `<` operators | `sbom.rs:209-` |
 
+The repository root intentionally has no npm manifest: the former empty root `package.json` and `package-lock.json` were accidental artifacts, not project inputs. npm parser tests create temporary manifests; if a future test needs checked-in npm inputs, keep them under a documented test-fixture directory rather than the workspace root. The unrelated root `config.toml` (an `eggpool` model-router configuration with commented placeholders) was also removed after confirming no code or CI path referenced it. None of these artifacts was needed by tests, so no fixture copy was retained.
+
 #### Cargo.toml Parsing (`sbom.rs:376-416`)
 
 Custom line-by-line parser, **not** using a TOML library. Extracts `name` and `version` from the `[package]` section by matching `name = "..."` or `name="..."` patterns. Stops at the next `[section]` header. `[dependencies]` parsing (`sbom.rs:465-487`) similarly scans for `name = value` lines.

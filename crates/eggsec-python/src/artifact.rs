@@ -151,10 +151,12 @@ impl ArtifactPy {
         match &slf.content {
             Some(data) => {
                 let ptr = data.as_ptr() as *const c_void;
+                let len = slf.shape;
+                // `slf.shape` must remain a pointer into the live object.
+                let shape = std::ptr::addr_of!(slf.shape) as *mut _;
 
-                (*view).obj = std::ptr::null_mut();
                 (*view).buf = ptr as *mut c_void;
-                (*view).len = slf.shape;
+                (*view).len = len;
                 // The `Vec<u8>` is owned by `&self` and reachable only through
                 // a shared borrow: advertising a writable buffer would let
                 // Python write through a `&self` alias.
@@ -162,12 +164,12 @@ impl ArtifactPy {
                 (*view).itemsize = 1;
                 (*view).format = b"b\0".as_ptr() as *mut _;
                 (*view).ndim = 1;
-                // `slf.shape` is a field that outlives the call; a local would
-                // leave `shape` pointing at a dead stack slot.
-                (*view).shape = std::ptr::addr_of!(slf.shape) as *mut _;
+                (*view).shape = shape;
                 (*view).strides = std::ptr::null_mut();
                 (*view).suboffsets = std::ptr::null_mut();
                 (*view).internal = std::ptr::null_mut();
+                // PEP 3118 requires `obj` to own a reference to the exporter.
+                (*view).obj = slf.into_ptr();
                 Ok(())
             }
             None => Err(pyo3::exceptions::PyBufferError::new_err(

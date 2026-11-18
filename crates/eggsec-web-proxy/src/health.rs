@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::utils::create_insecure_client_with_options;
+use crate::utils::create_client_with_options;
 use std::time::Instant;
 
 use super::config::{HealthCheckConfig, ProxyEntry};
@@ -34,8 +34,11 @@ impl ProxyHealth {
 ///
 /// Health means an HTTP(S) request through the selected proxy to the
 /// configured `test_url` returning `2xx` — never mere proxy-connect
-/// success. Reqwest is retained explicitly as the health-only owner: the
-/// production dial path migrated to Eggress, but rebuilding HTTPS
+/// success. The client uses Reqwest's normal TLS certificate verification;
+/// untrusted targets fail closed. A proxy `407` is not `2xx` and is therefore
+/// unhealthy (the boolean result does not distinguish auth-required from
+/// other failures). Reqwest is retained explicitly as the health-only owner:
+/// the production dial path migrated to Eggress, but rebuilding HTTPS
 /// verification, redirect, timeout, and body-cap semantics over raw Eggress
 /// streams would recreate a general HTTP client to remove a dependency
 /// line. See `architecture/egress_reuse_decision.md` and `outbound.rs`.
@@ -120,9 +123,8 @@ impl HealthChecker {
         };
 
         let timeout_secs = (self.config.timeout_ms / 1000).max(1);
-        let client = create_insecure_client_with_options(timeout_secs, |builder| {
-            builder.proxy(reqwest_proxy)
-        })?;
+        let client =
+            create_client_with_options(timeout_secs, |builder| builder.proxy(reqwest_proxy))?;
 
         let response = client.get(&self.config.test_url).send().await?;
 

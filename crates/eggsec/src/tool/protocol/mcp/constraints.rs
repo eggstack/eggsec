@@ -92,17 +92,21 @@ impl McpConstraintContext {
             .any(|rule| rule.matches(&target_scope))
     }
 
-    pub fn get_allowed_tools(&self) -> HashSet<String> {
-        let mut tools = HashSet::new();
-        tools.insert("scan".to_string());
-        tools.insert("fuzz".to_string());
-        tools.insert("recon".to_string());
-        tools.insert("waf".to_string());
+    /// Filter the operator-selected tool IDs through any explicitly configured
+    /// action exclusions. No source-coded tool catalog is maintained here.
+    pub fn filter_selected_tools(&self, selected_tools: &[String]) -> HashSet<String> {
+        selected_tools
+            .iter()
+            .filter(|tool_id| self.is_action_allowed(tool_id))
+            .cloned()
+            .collect()
+    }
 
-        for action in &self.disallowed_actions {
-            tools.remove(action);
-        }
-        tools
+    /// Legacy fail-closed accessor. Use `filter_selected_tools` with the
+    /// operator's explicit MCP selection instead of relying on a built-in list.
+    #[deprecated(note = "MCP tools must come from explicit operator selection")]
+    pub fn get_allowed_tools(&self) -> HashSet<String> {
+        HashSet::new()
     }
 }
 
@@ -137,11 +141,17 @@ mod tests {
     }
 
     #[test]
-    fn test_allowed_tools() {
+    fn test_selected_tools_are_filtered_without_a_builtin_catalog() {
         let ctx = McpConstraintContext::new().with_disallowed_actions(vec!["waf".to_string()]);
+        let selected = vec![
+            "scan".to_string(),
+            "waf".to_string(),
+            "db-pentest".to_string(),
+        ];
 
-        let tools = ctx.get_allowed_tools();
+        let tools = ctx.filter_selected_tools(&selected);
         assert!(tools.contains("scan"));
         assert!(!tools.contains("waf"));
+        assert!(tools.contains("db-pentest"));
     }
 }

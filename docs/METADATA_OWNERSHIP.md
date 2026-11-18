@@ -76,11 +76,14 @@ The MCP surface distinguishes between two layers of visibility:
   `mcp_tool_registrations_default_visible()`. Restricts to passive/safe-active
   operations with no feature gate and `mcp_metadata_exposable = true`.
 
-OpsAgent is **profile-expanded**, not conservative default. It lists every
-`mcp_metadata_exposable` tool, including high-risk operations. Strict runtime
-policy (`EnforcementContext::evaluate()` + `ApprovedOperation`) is still
-required before any listed tool executes. See `docs/TOOL_REGISTRATION.md` for
-the full protocol-by-protocol listing behavior.
+Both MCP profiles use the profile-expanded metadata-exposable set as their
+compiled exposure boundary. The running server intersects it with the operator's
+explicit `--allow-tool` selections, the active registry, and profile controls.
+OpsAgent is **profile-expanded**, not conservative default; it can list
+high-risk operations only when selected and MCP-exposable. Strict runtime policy
+(`EnforcementContext::evaluate()` + `LoadedScope` provenance + approved dispatch)
+is still required before any listed tool executes. See
+`docs/TOOL_REGISTRATION.md` for the full protocol-by-protocol listing behavior.
 
 ## Tool Registration (Phase 7)
 
@@ -95,7 +98,7 @@ Each `ToolRegistration` carries:
 Builder functions filter registrations by protocol:
 - `all_tool_registrations()` — full inventory
 - `mcp_tool_registrations("ops-agent")` — Model A profile-expanded listing: every `mcp_metadata_exposable` tool
-- `mcp_tool_registrations("coding-agent")` — hardcoded narrow allowlist
+- `mcp_tool_registrations("coding-agent")` — every `mcp_metadata_exposable` tool; runtime operator selection and profile controls narrow the live set
 - `mcp_tool_registrations_default_visible()` — conservative default subset (passive/safe-active, no feature gate)
 - `rest_tool_registrations()` — tools with `rest_exposable = true`
 - `grpc_tool_registrations()` — tools with `grpc_exposable = true`

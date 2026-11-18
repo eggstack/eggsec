@@ -43,12 +43,17 @@ fn enter_tab(app: &mut crate::App, tab: &Tab) {
 /// - `Settings` opens on its section list, which renders its own focus
 ///   indicator (a `▶` marker plus the shared focus border on the pane), so
 ///   the operator can see and drive the focus with `Enter`/`Right`.
+/// - `Intercept` opens on its flow list and navigates among the flow list,
+///   detail view, and action bar; it intentionally has no text input.
 ///
 /// Selector-first tabs (Load, Cluster, Report, Packet, Proxy) are *not* in this
 /// list: they report the focused selector through `is_input_focused()`, which
 /// is why they are covered by the assertion below.
 fn opens_on_non_input_control(tab: &Tab) -> bool {
-    matches!(*tab, Tab::Dashboard | Tab::History | Tab::Settings)
+    matches!(
+        *tab,
+        Tab::Dashboard | Tab::History | Tab::Settings | Tab::Intercept
+    )
 }
 
 #[test]

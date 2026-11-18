@@ -134,12 +134,17 @@ Note: `Task::payload` is serializable with `#[serde(default)]` for backward comp
 
 ## Command Execution Security
 
-`CommandExecutor` in `command.rs` enforces:
-- Only `eggsec` binary allowed
-- Max 50 arguments, 1000 chars each
-- Forbidden patterns: `../`, path traversal, sensitive paths (`/etc/`, `~/.ssh/`, `.pem`, `.key`)
+`CommandExecutor` in `command.rs` accepts operator-selected programs and arguments
+without an executable allowlist or argument-pattern filter. It retains these
+resource/input bounds:
+- Up to 50 arguments plus the program; 1000 bytes per token
+- Timeout defaults to 300 seconds and is clamped to 1–300 seconds
 - No custom environment variables
-- 10MB output limit
+- 10 MB output limit
+
+Trust boundary: any peer with the listener PSK can execute arbitrary programs as
+the listener account. Use TLS and a dedicated host reachable only by trusted
+operators; this is not a command sandbox.
 
 ## Testing
 

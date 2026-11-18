@@ -190,7 +190,7 @@ fn hotspot_facades_match_legacy_paths() {
     // Policy catalog facade.
     assert!(operation_metadata("scan-ports").is_some());
     assert!(metadata_for_tool_id("scan").is_some());
-    assert!(operation_matches_tool_id("scan", "scan-ports"));
+    assert!(operation_matches_tool_id("scan", "pipeline"));
     assert!(!all_operation_metadata().is_empty());
 
     // Scope facades.

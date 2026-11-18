@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use eggsec::config::ApprovedOperation;
+use eggsec::dispatch::binding::validate_run_request_binding;
 use eggsec_runtime::dispatcher::TaskDispatcher;
 use eggsec_runtime::event::TaskOutcome;
 use eggsec_runtime::request::RunRequest;
@@ -223,15 +224,46 @@ impl super::App {
     /// Submit a task to the runtime via the real executor.
     ///
     /// Creates per-task channels, updates the executor context, and
-    /// submits a `RunRequest` to the runtime. The runtime's executor
-    /// calls `TuiTaskDispatcher::dispatch()` which runs the engine
-    /// functions and sends typed `TaskResult` through the channels.
-    pub(crate) fn spawn_task(
-        &mut self,
-        request: Option<RunRequest>,
-        _approved: Option<ApprovedOperation>,
-    ) {
+    /// submits a `RunRequest` to the runtime. Before any task state or runtime
+    /// submission changes, the request is bound to its mandatory approval.
+    /// The runtime's executor calls `TuiTaskDispatcher::dispatch()` which runs
+    /// the engine functions and sends typed `TaskResult` through the channels.
+    pub(crate) fn spawn_task(&mut self, request: Option<RunRequest>, approved: ApprovedOperation) {
         if let Some(request) = request {
+            let effective_target = if let eggsec_runtime::request::TaskKind::Resume(params) =
+                &request.task_kind
+            {
+                if self.tabs.resume.selected_path().as_deref() == Some(params.session_path.as_str())
+                {
+                    self.tabs.resume.selected_target()
+                } else {
+                    None
+                }
+            } else {
+                request.task_kind.canonical_target()
+            };
+            if let Err(error) =
+                validate_run_request_binding(&approved, &request, effective_target.as_deref())
+            {
+                tracing::warn!(
+                    operation = request.task_kind.operation_id(),
+                    "rejected TUI task because request does not match its approval"
+                );
+                self.set_error_for_current_tab(crate::app::tab_error::TabError::Target(format!(
+                    "Task was not submitted: {error}"
+                )));
+                return;
+            }
+
+            if let eggsec_runtime::request::TaskKind::Storage(params) = &request.task_kind {
+                if let Err(error) =
+                    validate_storage_password_env(params, self.runtime_client.is_none())
+                {
+                    self.set_error_for_current_tab(crate::app::tab_error::TabError::Config(error));
+                    return;
+                }
+            }
+
             if self.has_active_task() {
                 tracing::warn!(
                     "A task is already running. Aborting previous task before starting new one."
@@ -401,10 +433,199 @@ impl super::App {
     }
 }
 
+fn validate_storage_password_env(
+    params: &eggsec_runtime::request::StorageParams,
+    check_local_environment: bool,
+) -> Result<(), String> {
+    let normalized = eggsec::operation_request::runtime_adapters::storage_from_runtime(params)
+        .normalize()
+        .map_err(|error| format!("Invalid storage credential configuration: {error}"))?;
+
+    if check_local_environment {
+        if let Some(env_name) = normalized.password_env {
+            if std::env::var_os(&env_name).is_none() {
+                return Err(format!(
+                    "Storage password environment variable '{env_name}' is not set; \
+                     set it in the environment before starting the TUI."
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use super::validate_storage_password_env;
     use crate::app::create_test_app;
     use crate::tabs::{AppState, Tab};
+    use eggsec::config::{
+        ApprovedOperation, EnforcementContext, ExecutionPolicy, ExecutionSurface, IntendedUse,
+        LoadedScope, ManualOverride, OperationDescriptor, OperationMode, OperationRisk,
+    };
+    use eggsec_runtime::request::{
+        PipelineParams, RunRequest, RuntimeSurface, StorageParams, TaskKind,
+    };
+
+    fn approved(operation: &str, target: Option<&str>) -> ApprovedOperation {
+        let surface = ExecutionSurface::TuiManual;
+        let descriptor = OperationDescriptor::new(
+            operation.to_string(),
+            OperationMode::StandardAssessment,
+            OperationRisk::SafeActive,
+            vec![IntendedUse::WebAssessment],
+            target.map(str::to_string),
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Vec::new(),
+        );
+        let enforcement = EnforcementContext::for_surface(
+            surface,
+            ExecutionPolicy::default(),
+            LoadedScope::default_empty(),
+        );
+        let override_ = ManualOverride {
+            assume_yes: true,
+            allow_out_of_scope: true,
+            ..ManualOverride::default()
+        };
+        enforcement
+            .approve_manual(surface, descriptor, Some(&override_))
+            .expect("test approval is manually authorized")
+    }
+
+    #[tokio::test]
+    async fn spawn_task_rejects_mismatched_approval_before_runtime_submit() {
+        use eggsec_runtime::request::PortScanParams;
+
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        let request = RunRequest {
+            task_kind: TaskKind::PortScan(PortScanParams {
+                target: "127.0.0.1".into(),
+                ports: Some("80".into()),
+                ..PortScanParams::default()
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: Vec::new(),
+        };
+
+        app.spawn_task(Some(request), approved("recon", Some("127.0.0.1")));
+
+        assert!(app.task_state.progress_rx.is_none());
+        assert!(app.task_state.result_rx.is_none());
+        assert!(app.task_state.tab.is_none());
+        assert!(app.runtime_pending_session_id.is_none());
+        assert!(app.runtime_binding.runtime.list_sessions().await.is_empty());
+        assert!(app.tabs.scan_ports.core.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn storage_with_unset_password_env_fails_before_runtime_submit() {
+        let env_name = format!("EGGSEC_TUI_TEST_PASSWORD_{}", std::process::id());
+        assert!(std::env::var_os(&env_name).is_none());
+
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        let request = RunRequest {
+            task_kind: TaskKind::Storage(StorageParams {
+                storage_type: "postgres".into(),
+                password_env: Some(env_name.clone()),
+                ..StorageParams::default()
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: Vec::new(),
+        };
+
+        app.spawn_task(Some(request), approved("storage", None));
+
+        assert!(
+            std::env::var_os(&env_name).is_none(),
+            "TUI must not publish a storage secret into the process environment"
+        );
+        assert!(app.task_state.progress_rx.is_none());
+        assert!(app.task_state.result_rx.is_none());
+        assert!(app.task_state.tab.is_none());
+        assert!(app.runtime_pending_session_id.is_none());
+        assert!(app.runtime_binding.runtime.list_sessions().await.is_empty());
+        let message = app
+            .tabs
+            .recon
+            .core
+            .error
+            .as_ref()
+            .map(|error| error.message());
+        assert!(message
+            .as_deref()
+            .is_some_and(|message| { message.contains(&env_name) && message.contains("not set") }));
+    }
+
+    #[test]
+    fn daemon_storage_credential_check_does_not_require_client_environment() {
+        let env_name = format!("EGGSEC_TUI_REMOTE_PASSWORD_{}", std::process::id());
+        assert!(std::env::var_os(&env_name).is_none());
+        let params = StorageParams {
+            storage_type: "postgres".into(),
+            password_env: Some(env_name.clone()),
+            ..StorageParams::default()
+        };
+
+        assert!(validate_storage_password_env(&params, false).is_ok());
+        let local_error = validate_storage_password_env(&params, true)
+            .expect_err("embedded execution still requires its local environment value");
+        assert!(local_error.contains(&env_name));
+        assert!(local_error.contains("not set"));
+    }
+
+    #[tokio::test]
+    async fn spawn_task_submits_a_matching_approval() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Scan;
+        let target = "example.invalid";
+        let request = RunRequest {
+            task_kind: TaskKind::Pipeline(PipelineParams {
+                target: target.to_string(),
+                profile: None,
+                output_format: None,
+                // Invalid output path fails canonical validation before any
+                // assessment network activity, while still exercising runtime submission.
+                output_file: Some("../not-written.json".into()),
+                session_path: None,
+            }),
+            requested_by: None,
+            surface: RuntimeSurface::TuiManual,
+            labels: Vec::new(),
+        };
+
+        app.spawn_task(Some(request), approved("pipeline", Some(target)));
+
+        assert_eq!(app.task_state.tab, Some(Tab::Scan));
+        assert!(app.task_state.progress_rx.is_some());
+        assert!(app.task_state.result_rx.is_some());
+
+        let observed_submission = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let sessions = app.runtime_binding.runtime.list_sessions().await;
+                if sessions
+                    .iter()
+                    .any(|session| session.active_count + session.completed_count > 0)
+                {
+                    break true;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(
+            observed_submission.is_ok(),
+            "matching request was not submitted"
+        );
+    }
 
     #[test]
     fn terminal_lifecycle_event_releases_active_task_state() {

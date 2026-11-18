@@ -111,9 +111,13 @@ fn scan_ports_identity_binding_and_route_agree() {
         validate_tool_request_params("scan-ports", &params_alias).unwrap(),
         "scan-ports"
     );
-    assert!(eggsec::config::operation_matches_tool_id(
+    // `scan` aliases to `pipeline`, not this `scan-ports` task kind.
+    assert!(!eggsec::config::operation_matches_tool_id(
         "scan",
         "scan-ports"
+    ));
+    assert!(eggsec::config::operation_matches_tool_id(
+        "scan", "pipeline"
     ));
     // Executor route is single-owned.
     assert_eq!(executor_route_for("scan-ports"), "scanner");

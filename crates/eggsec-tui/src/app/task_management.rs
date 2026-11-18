@@ -8,15 +8,6 @@ pub trait TaskBuilder {
     fn build_run_request(&self) -> Option<RunRequest>;
 }
 
-/// Environment variable the engine resolves the storage password from.
-///
-/// The password is deliberately not a wire field: `RunRequest` is persisted
-/// verbatim into the daemon's SQLite snapshot store, so anything on the wire
-/// ends up at rest in plaintext. The TUI publishes its password field into this
-/// variable in the current process and sends only the name.
-#[cfg(feature = "database")]
-pub(crate) const EGGSEC_STORAGE_PASSWORD_ENV: &str = "EGSEC_STORAGE_PASSWORD";
-
 /// Normalise an editable text input into a request value.
 ///
 /// A blank or whitespace-only field is *absent* rather than an empty string:
@@ -539,7 +530,6 @@ impl TaskBuilder for super::tabs::ComplianceTab {
 #[cfg(feature = "database")]
 impl TaskBuilder for super::tabs::StorageTab {
     fn build_run_request(&self) -> Option<RunRequest> {
-        let config = self.get_config();
         let mode = self.get_mode();
         // `query_id` is a scan id for `list_findings` and a CVE id for
         // `search_cve`; the engine validates the pairing.
@@ -553,18 +543,18 @@ impl TaskBuilder for super::tabs::StorageTab {
             task_kind: TaskKind::Storage(eggsec_runtime::request::StorageParams {
                 storage_type: "postgres".to_string(),
                 path: None,
-                host: non_blank(&config.host),
-                port: Some(config.port),
-                database: non_blank(&config.database),
-                username: non_blank(&config.username),
-                max_connections: Some(config.max_connections),
+                host: non_blank(self.host()),
+                port: Some(self.port()),
+                database: non_blank(self.database()),
+                username: non_blank(self.username()),
+                max_connections: Some(5),
                 mode: Some(mode.to_string()),
                 scan_id,
                 cve_id,
                 severity_filter: self.severity_filter().and_then(non_blank),
-                // Never the password itself — only the name of the variable
-                // the engine resolves it from. See `password_env`.
-                password_env: non_blank(EGGSEC_STORAGE_PASSWORD_ENV),
+                // This editable field is an environment-variable name, never
+                // a password value. The engine resolves it locally.
+                password_env: non_blank(self.password_env()),
             }),
             requested_by: None,
             surface: RuntimeSurface::TuiManual,
@@ -1701,17 +1691,15 @@ mod tests {
         assert_eq!(canonical.output_file.as_deref(), Some("reports/scan.sarif"));
     }
 
-    /// The storage tab's connection fields must reach the request, and its
-    /// password field must not.
+    /// Storage connection fields and the password environment-variable name
+    /// reach the request; no secret value is collected or serialized.
     ///
-    /// Regression guard: the tab hardcoded `storage_type: "sqlite"` with no
-    /// host, mode or query, so every storage run dialled the engine default
-    /// host. And because `RunRequest` is persisted verbatim into the daemon's
-    /// SQLite snapshot store, a password field on the wire would sit at rest
-    /// in plaintext — only the variable name may cross.
+    /// Regression guard: `RunRequest` is persisted verbatim into the daemon's
+    /// SQLite snapshot store, so the credential value must remain in the
+    /// operator's process environment and only its name may cross the wire.
     #[cfg(feature = "database")]
     #[test]
-    fn storage_builder_carries_config_but_never_the_password() {
+    fn storage_builder_carries_password_env_name_without_secret_value() {
         use crate::tabs::StorageTab;
 
         let mut tab = StorageTab::new();
@@ -1728,7 +1716,7 @@ mod tests {
             f.value = "analyst".to_string();
         }
         if let Some(f) = tab.config_inputs.fields.get_mut(4) {
-            f.value = "hunter2-plaintext".to_string();
+            f.value = "CUSTOM_STORAGE_PASSWORD".to_string();
         }
         if let Some(f) = tab.query_inputs.fields.first_mut() {
             f.value = "scan-7".to_string();
@@ -1738,11 +1726,11 @@ mod tests {
         // The serialized wire form is the real assertion: this is exactly what
         // the daemon persists to disk.
         let wire = serde_json::to_string(&req).expect("serialize request");
-        assert!(
-            !wire.contains("hunter2-plaintext"),
-            "password leaked onto the wire: {wire}"
-        );
         assert!(wire.contains("password_env"), "no password_env in {wire}");
+        assert!(
+            wire.contains("CUSTOM_STORAGE_PASSWORD"),
+            "env name missing from {wire}"
+        );
 
         match req.task_kind {
             TaskKind::Storage(p) => {
@@ -1751,10 +1739,7 @@ mod tests {
                 assert_eq!(p.database.as_deref(), Some("findings_db"));
                 assert_eq!(p.username.as_deref(), Some("analyst"));
                 assert_eq!(p.mode.as_deref(), Some(tab.get_mode()));
-                assert_eq!(
-                    p.password_env.as_deref(),
-                    Some(crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV)
-                );
+                assert_eq!(p.password_env.as_deref(), Some("CUSTOM_STORAGE_PASSWORD"));
             }
             other => panic!("expected Storage, got {other:?}"),
         }

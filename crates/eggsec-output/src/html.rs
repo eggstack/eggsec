@@ -1,6 +1,9 @@
 use super::escape::escape_html;
 use serde::{Deserialize, Serialize};
 
+// Vendored from the pinned Chart.js v4.5.1 release; see the adjacent MIT license.
+const CHART_JS: &str = include_str!("../assets/chart.umd.min.js");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HtmlConfig {
     pub title: String,
@@ -55,6 +58,49 @@ impl HtmlReport {
             .collect::<Vec<_>>()
             .join("\n");
 
+        let chart_library = if self.config.include_charts {
+            format!("<script>{CHART_JS}</script>")
+        } else {
+            String::new()
+        };
+        let chart_canvas = if self.config.include_charts {
+            r#"<div class="chart-container"><canvas id="severityChart"></canvas></div>"#
+        } else {
+            ""
+        };
+        let chart_script = if self.config.include_charts {
+            format!(
+                r#"<script>
+        const ctx = document.getElementById('severityChart');
+        if (ctx && typeof Chart !== 'undefined') {{
+            new Chart(ctx, {{
+                type: 'doughnut',
+                data: {{
+                    labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
+                    datasets: [{{
+                        data: [{}, {}, {}, {}, {}],
+                        backgroundColor: ['#ff4444', '#ff8800', '#ffcc00', '#4488ff', '#888888']
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{
+                        legend: {{ position: 'bottom' }}
+                    }}
+                }}
+            }});
+        }}
+    </script>"#,
+                self.summary.critical_count,
+                self.summary.high_count,
+                self.summary.medium_count,
+                self.summary.low_count,
+                self.summary.info_count,
+            )
+        } else {
+            String::new()
+        };
+
         format!(
             r#"<!DOCTYPE html>
 <html lang="en">
@@ -65,7 +111,7 @@ impl HtmlReport {
     <style>
         {}
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {}
 </head>
 <body>
     <div class="container">
@@ -102,6 +148,7 @@ impl HtmlReport {
                 <div class="severity-card low">🔵 <span>{}</span></div>
                 <div class="severity-card info">⚪ <span>{}</span></div>
             </div>
+            {}
         </section>
 
         <section class="findings">
@@ -114,31 +161,12 @@ impl HtmlReport {
         </footer>
     </div>
 
-    <script>
-        const ctx = document.getElementById('severityChart');
-        if (ctx) {{
-            new Chart(ctx, {{
-                type: 'doughnut',
-                data: {{
-                    labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
-                    datasets: [{{
-                        data: [{}, {}, {}, {}, {}],
-                        backgroundColor: ['#ff4444', '#ff8800', '#ffcc00', '#4488ff', '#888888']
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    plugins: {{
-                        legend: {{ position: 'bottom' }}
-                    }}
-                }}
-            }});
-        }}
-    </script>
+    {}
 </body>
 </html>"#,
             escape_html(&self.config.title),
             theme,
+            chart_library,
             escape_html(&self.summary.timestamp),
             escape_html(&self.summary.target),
             escape_html(&self.summary.scan_type),
@@ -149,14 +177,11 @@ impl HtmlReport {
             self.summary.medium_count,
             self.summary.low_count,
             self.summary.info_count,
+            chart_canvas,
             self.findings.len(),
             findings_html,
             escape_html(&self.summary.timestamp),
-            self.summary.critical_count,
-            self.summary.high_count,
-            self.summary.medium_count,
-            self.summary.low_count,
-            self.summary.info_count,
+            chart_script,
         )
     }
 
@@ -322,4 +347,50 @@ pub fn generate_html_report(
 ) -> String {
     let report = HtmlReport::new(summary, findings);
     report.generate()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HtmlConfig, HtmlReport};
+    use crate::markdown::ScanSummary;
+
+    fn sample_summary() -> ScanSummary {
+        ScanSummary {
+            target: "example.test".to_string(),
+            scan_type: "full".to_string(),
+            timestamp: "2026-11-17T00:00:00Z".to_string(),
+            duration_seconds: 12,
+            total_requests: 42,
+            findings_count: 3,
+            critical_count: 3,
+            high_count: 0,
+            medium_count: 0,
+            low_count: 0,
+            info_count: 0,
+        }
+    }
+
+    #[test]
+    fn summary_renders_without_chart_assets_or_scripts() {
+        let html = HtmlReport::new(sample_summary(), Vec::new())
+            .with_config(HtmlConfig {
+                include_charts: false,
+                ..HtmlConfig::default()
+            })
+            .generate();
+
+        assert!(html.contains("<div class=\"value\">example.test</div>"));
+        assert!(html.contains("<span>3</span>"));
+        assert!(!html.contains("<canvas"));
+        assert!(!html.contains("<script"));
+    }
+
+    #[test]
+    fn chart_initialization_is_guarded_by_library_presence() {
+        let html = HtmlReport::new(sample_summary(), Vec::new()).generate();
+
+        assert!(html.contains("if (ctx && typeof Chart !== 'undefined')"));
+        assert!(html.contains("<canvas id=\"severityChart\"></canvas>"));
+        assert!(!html.contains("<script src=\"https://"));
+    }
 }

@@ -18,9 +18,15 @@ fn test_intercept_tab_start_stop() {
     assert_eq!(tab.state, AppState::Running);
     assert!(tab.session.is_some());
 
+    // Give finalization a deterministic earlier start; RFC 3339 formatting can
+    // otherwise serialize an immediate start/stop to the same second.
+    tab.session.as_mut().unwrap().started_at = "2000-01-01T00:00:00Z".to_string();
     tab.stop_session();
     assert_eq!(tab.state, AppState::Idle);
-    assert!(tab.session.as_ref().unwrap().ended_at != tab.session.as_ref().unwrap().started_at);
+    let session = tab.session.as_ref().unwrap();
+    let started = chrono::DateTime::parse_from_rfc3339(&session.started_at).unwrap();
+    let ended = chrono::DateTime::parse_from_rfc3339(&session.ended_at).unwrap();
+    assert!(ended > started);
 }
 
 #[test]
@@ -61,6 +67,47 @@ fn test_intercept_tab_focus_navigation() {
     assert_eq!(tab.focus_area, InterceptFocusArea::ActionBar);
     tab.handle_focus_next();
     assert_eq!(tab.focus_area, InterceptFocusArea::FlowList);
+}
+
+#[test]
+fn navigation_controls_do_not_change_while_intercept_is_running() {
+    let mut tab = InterceptTab::new();
+    tab.start_session();
+
+    // Focus and detail navigation must leave the selected control untouched.
+    tab.focus_area = InterceptFocusArea::DetailView;
+    tab.detail_pane = DetailPane::Body;
+    tab.selected_flow = Some(2);
+    tab.table_state.select(Some(2));
+    tab.handle_focus_prev();
+    assert_eq!(tab.focus_area, InterceptFocusArea::DetailView);
+    tab.handle_focus_next();
+    assert_eq!(tab.focus_area, InterceptFocusArea::DetailView);
+    tab.handle_up();
+    assert_eq!(tab.detail_pane, DetailPane::Body);
+    tab.handle_down();
+    assert_eq!(tab.detail_pane, DetailPane::Body);
+    tab.handle_top();
+    assert_eq!(tab.focus_area, InterceptFocusArea::DetailView);
+    assert_eq!(tab.selected_flow, Some(2));
+    tab.handle_bottom();
+    assert_eq!(tab.focus_area, InterceptFocusArea::DetailView);
+    assert_eq!(tab.selected_flow, Some(2));
+
+    // Action-bar and flow-list navigation are also frozen during capture.
+    tab.focus_area = InterceptFocusArea::ActionBar;
+    tab.action_bar_index = 2;
+    assert!(!tab.handle_left());
+    assert!(!tab.handle_right());
+    assert_eq!(tab.action_bar_index, 2);
+
+    tab.focus_area = InterceptFocusArea::FlowList;
+    tab.handle_up();
+    assert_eq!(tab.selected_flow, Some(2));
+    tab.page_up(1);
+    assert_eq!(tab.selected_flow, Some(2));
+    tab.page_down(1);
+    assert_eq!(tab.selected_flow, Some(2));
 }
 
 #[test]

@@ -901,7 +901,7 @@ pub static ALL_OPERATION_METADATA: &[OperationMetadata] = &[
 ///
 /// REST and MCP tool IDs that resolve to the same canonical operation.
 pub static ALL_OPERATION_METADATA_ALIASES: &[(&str, &str)] = &[
-    ("scan", "scan-ports"),
+    ("scan", "pipeline"),
     ("endpoints", "scan-endpoints"),
     ("waf", "waf-detect"),
     ("waf_detect", "waf-detect"),
@@ -1161,7 +1161,7 @@ mod operation_metadata_tests {
 
     #[test]
     fn operation_matches_tool_id_alias_to_canonical() {
-        assert!(operation_matches_tool_id("scan", "scan-ports"));
+        assert!(operation_matches_tool_id("scan", "pipeline"));
         assert!(operation_matches_tool_id("load", "load-test"));
         assert!(operation_matches_tool_id("waf", "waf-detect"));
         assert!(operation_matches_tool_id("stress", "stress-test"));
@@ -1206,7 +1206,7 @@ mod operation_metadata_tests {
             "waf-detect",
             "waf-bypass",
             "waf-stress",
-            "pipeline",
+            "scan",
             "search",
         ];
 

@@ -22,7 +22,7 @@ use crate::tool::protocol::mcp::handlers::helpers::{
 };
 use crate::tool::protocol::mcp::policy::{
     operation_descriptor_for_mcp_call, policy_decision_for_mcp_call_with_enforcement,
-    McpProfilePolicy,
+    McpProfilePolicy, ToolSelector,
 };
 use crate::tool::protocol::mcp::profile::McpProfile;
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
@@ -56,6 +56,20 @@ pub struct McpServer {
     services: crate::tool::service::EngineServices,
 }
 
+enum McpApproval {
+    Token(crate::config::ApprovedOperation),
+    Execution(crate::config::ApprovedExecution),
+}
+
+impl McpApproval {
+    fn operation(&self) -> &crate::config::ApprovedOperation {
+        match self {
+            Self::Token(operation) => operation,
+            Self::Execution(execution) => execution.approved(),
+        }
+    }
+}
+
 impl McpServer {
     /// Basic constructor for tests or minimal non-networked initialization.
     ///
@@ -73,8 +87,20 @@ impl McpServer {
     }
 
     pub fn with_profile(mut self, profile: McpProfile) -> Self {
+        let selected_ids = match self.policy.allowed_tool_ids.clone() {
+            ToolSelector::Exact(ids) => ids,
+            _ => Vec::new(),
+        };
         self.profile = profile;
-        self.policy = McpProfilePolicy::for_profile(self.profile);
+        self.policy =
+            McpProfilePolicy::for_profile(self.profile).with_allowed_tool_ids(selected_ids);
+        self
+    }
+
+    /// Restrict this server to the exact tool IDs selected by the operator.
+    /// Constructors default to an empty list, which exposes no executable tools.
+    pub fn with_allowed_tool_ids(mut self, tool_ids: Vec<String>) -> Self {
+        self.policy = self.policy.with_allowed_tool_ids(tool_ids);
         self
     }
 
@@ -112,7 +138,7 @@ impl McpServer {
 
         let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
         let completed_results = Arc::new(RwLock::new(FxHashMap::default()));
-        let mcp_policy = McpProfilePolicy::for_profile(profile);
+        let mcp_policy = McpProfilePolicy::for_profile(profile).with_allowed_tool_ids(Vec::new());
 
         let server = Self {
             registry,
@@ -221,6 +247,26 @@ impl McpServer {
     #[cfg(feature = "ai-integration")]
     pub fn ai_client(&self) -> Option<&AiClient> {
         self.ai_client.as_ref()
+    }
+
+    pub(crate) fn visible_tools(&self) -> Vec<crate::tool::ToolInfo> {
+        let mcp_exposable_operations: FxHashSet<&str> =
+            mcp_tool_registrations(self.profile.as_str())
+                .into_iter()
+                .map(|registration| registration.operation_id)
+                .collect();
+        self.policy
+            .filter_tools(self.registry.list())
+            .into_iter()
+            .filter(|tool| {
+                crate::config::metadata_for_tool_id(&tool.id)
+                    .is_some_and(|metadata| mcp_exposable_operations.contains(metadata.id))
+            })
+            .collect()
+    }
+
+    pub(crate) fn plan_endpoint_enabled(&self) -> bool {
+        self.policy.allow_plan_endpoint
     }
 
     pub fn validate_auth(&self, headers: &axum::http::HeaderMap) -> Result<(), McpError> {
@@ -366,24 +412,8 @@ impl McpServer {
     }
 
     async fn handle_tools_list(&self, req: McpRequest) -> McpResponse {
-        let all_tools = self.registry.list();
-        let tools = self.policy.filter_tools(all_tools);
-
-        // Profile-expanded listing (Model A): MCP profile policy filters the runtime
-        // registry first, then `ToolRegistration` restricts by profile visibility.
-        // For OpsAgent this returns all `mcp_metadata_exposable` tools; CodingAgent
-        // uses a hardcoded allowlist. Conservative defaults are available through
-        // `mcp_tool_registrations_default_visible()`. See docs/TOOL_REGISTRATION.md.
-        let profile_name = self.profile.as_str();
-        let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
-            .iter()
-            .map(|r| r.tool_id)
-            .collect();
-
-        let tools: Vec<_> = tools
-            .into_iter()
-            .filter(|info| mcp_exposable.contains(info.id.as_str()))
-            .collect();
+        // Operator selection intersects the metadata exposure boundary.
+        let tools = self.visible_tools();
 
         let mcp_tools: Vec<McpTool> = tools
             .into_iter()
@@ -400,36 +430,7 @@ impl McpServer {
             })
             .collect();
 
-        let mut all_tools = mcp_tools;
-        if matches!(
-            self.profile,
-            crate::tool::protocol::mcp::profile::McpProfile::OpsAgent
-        ) {
-            all_tools.push(McpTool {
-                name: "eggsec_preflight".to_string(),
-                description: "Check what would happen before executing an operation — returns enforcement outcome, scope match, required confirmations, and suggested CLI flags without dispatching the tool".to_string(),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "required": ["target_tool"],
-                    "properties": {
-                        "target_tool": {
-                            "type": "string",
-                            "description": "ID of the tool to evaluate (e.g. 'scan', 'fuzz', 'stress')"
-                        },
-                        "target": {
-                            "type": "string",
-                            "description": "Target URL, IP, or domain for the operation"
-                        },
-                        "target_type": {
-                            "type": "string",
-                            "enum": ["url", "ip", "domain", "cidr"],
-                            "default": "url"
-                        }
-                    }
-                }),
-                capabilities: None,
-            });
-        }
+        let all_tools = mcp_tools;
 
         let result = serde_json::json!({
             "tools": all_tools,
@@ -440,24 +441,8 @@ impl McpServer {
     }
 
     async fn handle_tools_list_by_category(&self, req: McpRequest) -> McpResponse {
-        let all_tools = self.registry.list();
-        let tools = self.policy.filter_tools(all_tools);
-
-        // Profile-expanded listing (Model A): MCP profile policy filters the runtime
-        // registry first, then `ToolRegistration` restricts by profile visibility.
-        // For OpsAgent this returns all `mcp_metadata_exposable` tools; CodingAgent
-        // uses a hardcoded allowlist. Conservative defaults are available through
-        // `mcp_tool_registrations_default_visible()`. See docs/TOOL_REGISTRATION.md.
-        let profile_name = self.profile.as_str();
-        let mcp_exposable: FxHashSet<&str> = mcp_tool_registrations(profile_name)
-            .iter()
-            .map(|r| r.tool_id)
-            .collect();
-
-        let tools: Vec<_> = tools
-            .into_iter()
-            .filter(|info| mcp_exposable.contains(info.id.as_str()))
-            .collect();
+        // Operator selection intersects the metadata exposure boundary.
+        let tools = self.visible_tools();
 
         let total_tools = tools.len();
 
@@ -506,10 +491,6 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing tool name")),
         };
 
-        if name == "eggsec_preflight" {
-            return self.handle_preflight(req).await;
-        }
-
         let arguments = params
             .get("arguments")
             .cloned()
@@ -530,6 +511,17 @@ impl McpServer {
                 )))
             }
         };
+
+        if !self.visible_tools().iter().any(|tool| tool.id == tool_id) {
+            return req.error_response(McpError {
+                code: -32020,
+                message: format!(
+                    "Tool '{}' is not selected or exposed by this MCP server",
+                    tool_id
+                ),
+                data: None,
+            });
+        }
 
         if let Err(violation) =
             self.policy
@@ -589,18 +581,29 @@ impl McpServer {
             });
         };
 
-        let approved = match self
-            .services
-            .approve(ExecutionSurface::McpServer, descriptor.clone())
-        {
+        let use_execution_bundle =
+            descriptor.requires_explicit_scope && descriptor.target.is_some();
+        let approval_result = if use_execution_bundle {
+            self.services
+                .approve_execution(ExecutionSurface::McpServer, descriptor.clone())
+                .map(McpApproval::Execution)
+        } else {
+            self.services
+                .approve(ExecutionSurface::McpServer, descriptor.clone())
+                .map(McpApproval::Token)
+        };
+        let approved = match approval_result {
             Ok(approved) => {
                 // Emit audit event for allow outcome
+                let approved_operation = approved.operation();
                 let correlation_id = req.id.as_ref().and_then(|v| v.as_str());
                 let audit_event = audit_event_from_enforcement_outcome(
                     ExecutionSurface::McpServer,
                     self.services.enforcement(),
-                    approved.descriptor(),
-                    &crate::config::EnforcementOutcome::Allow(approved.decision().clone()),
+                    approved_operation.descriptor(),
+                    &crate::config::EnforcementOutcome::Allow(
+                        approved_operation.decision().clone(),
+                    ),
                     false, // confirmed: MCP never confirms
                     false, // override_ignored: MCP never accepts overrides
                     None,  // manual_override: MCP never has manual overrides
@@ -692,7 +695,16 @@ impl McpServer {
             .with_params(request_args)
             .with_options(options);
 
-        match self.services.dispatch_checked(&approved, request).await {
+        let dispatch_result = match &approved {
+            McpApproval::Execution(execution) => {
+                self.services.dispatch_execution(execution, request).await
+            }
+            McpApproval::Token(operation) => {
+                self.services.dispatch_checked(operation, request).await
+            }
+        };
+
+        match dispatch_result {
             Ok(response) => {
                 let content = if self.profile.is_coding_agent() {
                     let output = self.build_coding_agent_output(&target_value, &response);
@@ -722,67 +734,6 @@ impl McpServer {
                 req.error_response(error)
             }
         }
-    }
-
-    async fn handle_preflight(&self, req: McpRequest) -> McpResponse {
-        let params = match &req.params {
-            Some(p) => p,
-            None => return req.error_response(McpError::invalid_params("Missing params")),
-        };
-
-        let arguments = params
-            .get("arguments")
-            .cloned()
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-
-        let target_tool = match arguments.get("target_tool").and_then(|v| v.as_str()) {
-            Some(t) => t,
-            None => return req.error_response(McpError::invalid_params("Missing target_tool")),
-        };
-
-        let tool_id = target_tool.to_string();
-
-        let Some(descriptor) =
-            operation_descriptor_for_mcp_call(&self.policy, &tool_id, None, &arguments)
-        else {
-            return req.error_response(McpError {
-                code: -32025,
-                message: format!(
-                    "missing operation metadata for tool '{}' — cannot build preflight",
-                    tool_id
-                ),
-                data: None,
-            });
-        };
-
-        let result = crate::config::preflight_operation(
-            crate::config::ExecutionSurface::McpServer,
-            self.services.enforcement(),
-            descriptor,
-            None,
-        );
-
-        let outcome_label = result.outcome_kind.label().to_string();
-        let allowed = matches!(
-            result.outcome_kind,
-            crate::config::PreflightOutcomeKind::Allow | crate::config::PreflightOutcomeKind::Warn
-        );
-
-        let response = serde_json::json!({
-            "tool": tool_id,
-            "outcome": outcome_label,
-            "allowed": allowed,
-            "profile": result.profile,
-            "surface": result.surface,
-            "descriptor": result.descriptor,
-            "decision": result.decision,
-            "required_confirmation_classes": result.required_confirmation_classes,
-            "scope_source": result.scope_source,
-            "scope_path": result.scope_path,
-            "suggested_cli_flags": result.suggested_cli_flags,
-        });
-
-        req.success_response(response)
     }
 
     fn resolve_tool_id(&self, name: &str) -> Option<(String, Option<String>)> {
@@ -913,7 +864,7 @@ impl McpServer {
 
         match uri {
             "eggsec://tools" => {
-                let tools = self.registry.list();
+                let tools = self.visible_tools();
                 let result = serde_json::json!({
                     "contents": [
                         {
@@ -1167,7 +1118,7 @@ impl McpServer {
     }
 
     fn build_manifest(&self) -> serde_json::Value {
-        let tools = self.registry.list();
+        let tools = self.visible_tools();
 
         let mut attack_surfaces: FxHashMap<String, Vec<String>> = FxHashMap::default();
 
@@ -1205,90 +1156,80 @@ impl McpServer {
     }
 
     fn build_coding_agent_manifest(&self) -> serde_json::Value {
+        let selected_tools = self.visible_tools();
+        let selected_tool_ids: Vec<String> =
+            selected_tools.iter().map(|tool| tool.id.clone()).collect();
+        let tools: Vec<serde_json::Value> = selected_tools
+            .into_iter()
+            .map(|tool| {
+                serde_json::json!({
+                    "tool_id": tool.id,
+                    "name": tool.name,
+                    "category": format!("{:?}", tool.category).to_lowercase(),
+                    "description": tool.description,
+                    "capabilities": tool.capabilities.iter().map(|capability| serde_json::json!({
+                        "name": capability.name,
+                        "description": capability.description,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+
         serde_json::json!({
             "profile": "coding-agent",
-            "description": "Bounded live security validation tools for coding agents",
-            "tools": [
-                {
-                    "name": "prepare_validation_target",
-                    "description": "Validate and normalize a local or explicitly scoped live application target before running coding-agent security checks"
-                },
-                {
-                    "name": "validate_live_web_app",
-                    "description": "Run bounded, low-volume live validation of a running web application for headers, cookies, CORS, unsafe methods, error leakage, and lightweight input handling issues"
-                },
-                {
-                    "name": "validate_auth_boundaries",
-                    "description": "Validate authentication and authorization boundaries across supplied routes and test sessions"
-                },
-                {
-                    "name": "validate_api_surface",
-                    "description": "Validate an explicit API surface or supplied API schema for method handling, content-type handling, malformed input behavior, and error leakage"
-                },
-                {
-                    "name": "validate_file_surface",
-                    "description": "Validate explicitly supplied upload, download, import, or export endpoints for safe path handling, content-type behavior, and size limits"
-                },
-                {
-                    "name": "run_targeted_probe",
-                    "description": "Run one narrow hypothesis-driven validation probe against one explicit endpoint and parameter"
-                },
-                {
-                    "name": "retest_finding",
-                    "description": "Rerun the minimal validation recipe for a previous coding-agent finding to determine whether it is fixed, still present, inconclusive, or changed"
-                }
-            ],
-            "safe_defaults": {
-                "allowed_hosts": ["localhost", "127.0.0.1", "::1"],
-                "allowed_schemes": ["http", "https"],
-                "allow_external_network": false,
-                "max_requests": 100,
-                "max_duration_ms": 60000,
-                "max_concurrency": 5,
-                "max_depth": 1
+            "description": "MCP tools selected by the operator and exposed by the active registry",
+            "tool_selection": {
+                "source": "operator --allow-tool selections intersected with registry and MCP exposure metadata",
+                "tool_ids": selected_tool_ids,
             },
-            "hard_caps": {
-                "max_requests": 500,
-                "max_duration_ms": 300000,
-                "max_concurrency": 10
+            "tools": tools,
+            "scope_authority": {
+                "source": "strict EnforcementContext loaded scope",
+                "requires_explicit_scope": self.policy.require_explicit_scope,
+            },
+            "limits": {
+                "max_concurrency": self.policy.max_concurrency,
+                "max_timeout_ms": self.policy.max_timeout_ms,
+                "max_batch_size": self.policy.max_batch_size,
+                "allow_external_network_within_scope": self.policy.allow_external_network,
             },
             "workflow": [
-                "1. Call prepare_validation_target to establish safe target context",
-                "2. Call appropriate validation tool based on change type",
-                "3. Review structured findings with evidence",
-                "4. Patch source code based on findings",
-                "5. Call retest_finding to verify fix"
+                "1. Confirm the requested target is covered by the operator-loaded scope.",
+                "2. Choose a task-appropriate tool from the listed operator-selected tools.",
+                "3. Review structured results and evidence before drawing conclusions.",
+                "4. After a code change, use an available selected tool for a focused retest."
             ]
         })
     }
 
     fn build_coding_agent_safety_policy(&self) -> serde_json::Value {
+        let selected_tool_ids: Vec<String> = self
+            .visible_tools()
+            .into_iter()
+            .map(|tool| tool.id)
+            .collect();
+
         serde_json::json!({
             "profile": "coding-agent",
-            "default_allowlist": ["localhost", "127.0.0.1", "[::1]"],
-            "default_deny": [
-                "broad CIDRs",
-                "arbitrary external domains",
-                "production-looking hosts unless explicitly allowed",
-                "stress testing",
-                "WAF bypass tooling",
-                "proxy/Tor pools",
-                "cluster mode",
-                "high request volume",
-                "SYN/UDP/ICMP/TCP flood tools",
-                "destructive payloads",
-                "credential brute force",
-                "key brute force",
-                "arbitrary crawl depth"
-            ],
-            "budgets": {
-                "default_max_requests": 100,
-                "hard_max_requests": 500,
-                "default_max_duration_ms": 60000,
-                "hard_max_duration_ms": 300000,
-                "default_max_concurrency": 5,
-                "hard_max_concurrency": 10
-            }
+            "tool_selection": {
+                "source": "operator-selected IDs intersected with compiled registry and MCP exposure metadata",
+                "tool_ids": selected_tool_ids,
+            },
+            "target_authority": {
+                "source": "MCP-strict EnforcementContext and operator-loaded LoadedScope",
+                "requires_explicit_scope": self.policy.require_explicit_scope,
+                "profile_local_host_allowlist": false,
+            },
+            "limits": {
+                "max_concurrency": self.policy.max_concurrency,
+                "max_timeout_ms": self.policy.max_timeout_ms,
+                "max_batch_size": self.policy.max_batch_size,
+                "allow_external_network_within_scope": self.policy.allow_external_network,
+                "allow_stress_testing": self.policy.allow_stress_testing,
+                "allow_packet_features": self.policy.allow_packet_features,
+                "allow_broad_recon": self.policy.allow_broad_recon,
+            },
+            "denied_argument_keys": self.policy.denied_argument_keys,
         })
     }
 
@@ -1368,23 +1309,11 @@ impl McpServer {
     }
 
     fn build_ops_agent_safety_policy(&self) -> serde_json::Value {
-        let allowed_tools = match &self.policy.allowed_tool_ids {
-            crate::tool::protocol::mcp::policy::ToolSelector::All => {
-                serde_json::json!("all")
-            }
-            crate::tool::protocol::mcp::policy::ToolSelector::None => {
-                serde_json::json!("none")
-            }
-            crate::tool::protocol::mcp::policy::ToolSelector::Exact(ids) => {
-                serde_json::json!(ids)
-            }
-            crate::tool::protocol::mcp::policy::ToolSelector::Category(cats) => {
-                serde_json::json!({"categories": cats})
-            }
-            crate::tool::protocol::mcp::policy::ToolSelector::Capability(caps) => {
-                serde_json::json!({"capabilities": caps})
-            }
-        };
+        let allowed_tools: Vec<String> = self
+            .visible_tools()
+            .into_iter()
+            .map(|tool| tool.id)
+            .collect();
 
         let denied_tools = match &self.policy.denied_tool_ids {
             crate::tool::protocol::mcp::policy::ToolSelector::None => {
@@ -1547,63 +1476,48 @@ impl McpServer {
 
     fn build_coding_agent_workflow(&self) -> serde_json::Value {
         let tool_names: Vec<String> = self
-            .policy
-            .filter_tools(self.registry.list())
+            .visible_tools()
             .into_iter()
-            .map(|t| t.id)
+            .map(|tool| tool.id)
             .collect();
 
         serde_json::json!({
             "profile": "coding-agent",
-            "description": "Recommended validation workflow for coding agents",
+            "description": "Workflow constrained to operator-selected MCP tools",
             "steps": [
                 {
                     "order": 1,
-                    "name": "establish_target",
-                    "tool": "scan",
-                    "purpose": "Fingerprint the target and confirm it is within allowed scope",
-                    "required": true,
-                    "summarization": "Extract technologies, framework, and target status"
+                    "name": "confirm_scope",
+                    "instruction": "Use only targets authorized by the operator-loaded scope.",
+                    "required": true
                 },
                 {
                     "order": 2,
-                    "name": "validate_headers_and_cookies",
-                    "tool": "scan",
-                    "purpose": "Check security headers, cookie flags, and CORS configuration",
-                    "required": true,
-                    "summarization": "List missing headers and insecure cookie attributes"
+                    "name": "choose_selected_tool",
+                    "instruction": "Choose a task-appropriate tool from the operator-selected tools listed below.",
+                    "tool_options": tool_names.clone(),
+                    "required": true
                 },
                 {
                     "order": 3,
-                    "name": "validate_endpoints",
-                    "tool": "endpoints",
-                    "purpose": "Discover and validate API endpoints for method handling and error behavior",
-                    "required": false,
-                    "summarization": "Summarize endpoint count, methods, and error patterns"
+                    "name": "review_results",
+                    "instruction": "Review findings and evidence, and treat missing or inconclusive evidence explicitly.",
+                    "required": true
                 },
                 {
                     "order": 4,
-                    "name": "check_waf",
-                    "tool": "waf-detect",
-                    "purpose": "Detect WAF presence that may affect further testing",
-                    "required": false,
-                    "summarization": "Report WAF vendor if detected, else 'none'"
-                },
-                {
-                    "order": 5,
-                    "name": "retest_findings",
-                    "tool": "scan",
-                    "purpose": "Re-run targeted checks after code changes to verify fixes",
-                    "required": false,
-                    "summarization": "Compare before/after for each finding"
+                    "name": "retest_after_change",
+                    "instruction": "After a code change, use an available selected tool for a focused retest.",
+                    "tool_options": tool_names.clone(),
+                    "required": false
                 }
             ],
             "allowed_tools": tool_names,
             "constraints": {
-                "max_requests": self.policy.max_batch_size * 10,
                 "max_concurrency": self.policy.max_concurrency,
-                "max_duration_ms": self.policy.max_timeout_ms,
-                "allow_external_network": self.policy.allow_external_network,
+                "max_timeout_ms": self.policy.max_timeout_ms,
+                "max_batch_size": self.policy.max_batch_size,
+                "allow_external_network_within_scope": self.policy.allow_external_network,
             },
             "summarization_strategy": {
                 "max_output_tokens": 4096,
@@ -1616,7 +1530,7 @@ impl McpServer {
     }
 
     fn build_coding_agent_tool_contracts(&self) -> serde_json::Value {
-        let tools = self.policy.filter_tools(self.registry.list());
+        let tools = self.visible_tools();
 
         let contracts: Vec<serde_json::Value> = tools
             .iter()
