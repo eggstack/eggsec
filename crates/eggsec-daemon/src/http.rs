@@ -1,14 +1,22 @@
-use std::net::SocketAddr;
+//! Dormant HTTP/SSE adapter: not wired or a supported surface. An ADR is
+//! required before exposing or connecting this adapter to a listener.
+
+use std::fmt;
+use std::net::{AddrParseError, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{FromRequestParts, Path, State};
+use axum::extract::{FromRequestParts, Path, Request, State};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::uri::Authority;
+use axum::http::{header, HeaderMap, StatusCode, Uri};
+use axum::middleware::{from_fn_with_state, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use futures::stream::Stream;
+use subtle::ConstantTimeEq;
+use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
 use crate::host::DaemonHost;
@@ -19,36 +27,101 @@ use crate::protocol::{
 /// HTTP header carrying the caller-declared client id.
 pub const CLIENT_ID_HEADER: &str = "x-eggsec-client-id";
 
-pub struct HttpConfig {
-    pub bind_addr: String,
-    /// When true, every request must carry a non-empty `X-Eggsec-Client-Id`
-    /// header; otherwise the daemon rejects the request with HTTP 401
-    /// before the command is dispatched.
-    pub require_auth: bool,
-    pub allow_public_bind: bool,
+const AUTHORIZATION_HEADER: &str = "authorization";
+
+/// Errors returned when constructing HTTP authentication or bind config.
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("invalid HTTP bind address")]
+    InvalidBindAddress(#[source] AddrParseError),
+    #[error("HTTP bearer token must not be empty or contain whitespace")]
+    InvalidToken,
+    #[error("LoopbackTrust authentication is only allowed for loopback binds")]
+    LoopbackTrustRequiresLoopback,
+    #[error("non-loopback HTTP bind requires allow_public_bind and token authentication")]
+    PublicBindRequiresOptIn,
 }
 
-impl Default for HttpConfig {
-    fn default() -> Self {
-        Self {
-            bind_addr: "127.0.0.1:9876".into(),
-            require_auth: false,
-            allow_public_bind: false,
+/// A bearer credential. Its value is never included in `Debug` or `Display`.
+pub struct AuthToken(String);
+
+impl AuthToken {
+    /// Construct a bearer token accepted by the HTTP adapter.
+    pub fn new(token: impl Into<String>) -> Result<Self, ConfigError> {
+        let token = token.into();
+        if token.is_empty() || token.bytes().any(|byte| byte.is_ascii_whitespace()) {
+            return Err(ConfigError::InvalidToken);
         }
+        Ok(Self(token))
+    }
+
+    fn matches(&self, presented: &[u8]) -> bool {
+        bool::from(self.0.as_bytes().ct_eq(presented))
+    }
+}
+
+impl fmt::Debug for AuthToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AuthToken([REDACTED])")
+    }
+}
+
+/// Authentication policy for the dormant HTTP adapter.
+#[derive(Debug)]
+pub enum AuthMode {
+    /// A bearer token is required on every route except `/health` and `/capabilities`.
+    Token(AuthToken),
+    /// Trust the loopback boundary; this mode cannot bind a non-loopback address.
+    LoopbackTrust,
+}
+
+/// Validated configuration for the dormant HTTP adapter.
+#[derive(Debug)]
+pub struct HttpConfig {
+    bind_addr: SocketAddr,
+    auth: AuthMode,
+    allow_public_bind: bool,
+}
+
+impl HttpConfig {
+    /// Validate bind intent and authentication policy before the adapter starts.
+    pub fn new(
+        bind_addr: impl Into<String>,
+        auth: AuthMode,
+        allow_public_bind: bool,
+    ) -> Result<Self, ConfigError> {
+        let bind_addr = bind_addr
+            .into()
+            .parse::<SocketAddr>()
+            .map_err(ConfigError::InvalidBindAddress)?;
+        if bind_addr.ip().is_loopback() {
+            // Both explicit token auth and loopback trust are valid here.
+        } else {
+            match &auth {
+                AuthMode::LoopbackTrust => {
+                    return Err(ConfigError::LoopbackTrustRequiresLoopback);
+                }
+                AuthMode::Token(_) if !allow_public_bind => {
+                    return Err(ConfigError::PublicBindRequiresOptIn);
+                }
+                AuthMode::Token(_) => {}
+            }
+        }
+        Ok(Self {
+            bind_addr,
+            auth,
+            allow_public_bind,
+        })
     }
 }
 
 struct HttpState {
     host: Arc<DaemonHost>,
-    require_auth: bool,
+    bind_addr: SocketAddr,
+    auth: AuthMode,
 }
 
 /// Per-request client identity derived from the `X-Eggsec-Client-Id` header.
-///
-/// `client_id` is `None` when the header is absent; per the daemon protocol
-/// this is only acceptable for unauthenticated sub-commands (e.g.
-/// `DeclareClient`, `Health`, `Capabilities`) on hosts that have not enabled
-/// `require_auth`.
 #[derive(Clone)]
 struct AuthenticatedClientId(Option<eggsec_runtime::ClientId>);
 
@@ -64,10 +137,7 @@ where
             .get(CLIENT_ID_HEADER)
             .and_then(|v| v.to_str().ok())
             .map(|s| s.trim().to_string());
-        let parsed = value.and_then(|raw| match raw.parse::<eggsec_runtime::ClientId>() {
-            Ok(id) => Some(id),
-            Err(_) => None,
-        });
+        let parsed = value.and_then(|raw| raw.parse::<eggsec_runtime::ClientId>().ok());
         Ok(Self(parsed))
     }
 }
@@ -84,21 +154,152 @@ fn auth_required_response() -> Response {
     error_response(
         StatusCode::UNAUTHORIZED,
         ErrorCode::InvalidRequest,
-        format!(
-            "authentication required: missing or invalid '{}' header",
-            CLIENT_ID_HEADER
-        ),
+        "authentication required".to_string(),
     )
 }
 
-/// Reject the request when `require_auth` is enabled and no caller identity
-/// was presented. Returns `Ok(())` for callers that may proceed.
-fn enforce_auth(state: &HttpState, auth: &AuthenticatedClientId) -> Result<(), Response> {
-    if state.require_auth && auth.0.is_none() {
-        Err(auth_required_response())
-    } else {
-        Ok(())
+fn enforce_client_identity(auth: &AuthenticatedClientId) -> Option<Response> {
+    auth.0.is_none().then(auth_required_response)
+}
+
+fn reject_request(status: StatusCode, route: &str, rule: &'static str) -> Response {
+    tracing::warn!(route, rule, "rejected HTTP request");
+    error_response(
+        status,
+        ErrorCode::InvalidRequest,
+        "request rejected by HTTP adapter security policy".to_string(),
+    )
+}
+
+fn is_session_route(path: &str) -> bool {
+    path == "/sessions" || path.starts_with("/sessions/")
+}
+
+fn has_valid_client_id(headers: &HeaderMap) -> bool {
+    headers
+        .get(CLIENT_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim().parse::<eggsec_runtime::ClientId>().is_ok())
+}
+
+fn bearer_token(headers: &HeaderMap) -> Option<&[u8]> {
+    let value = headers.get(AUTHORIZATION_HEADER)?.to_str().ok()?;
+    let (scheme, token) = value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("Bearer")
+        || token.is_empty()
+        || token.bytes().any(|byte| byte.is_ascii_whitespace())
+    {
+        return None;
     }
+    Some(token.as_bytes())
+}
+
+fn authority_matches(authority: &Authority, bind_addr: SocketAddr, default_port: u16) -> bool {
+    if authority.as_str().contains('@') {
+        return false;
+    }
+    let port = match authority.port() {
+        Some(_) => match authority.port_u16() {
+            Some(port) => port,
+            None => return false,
+        },
+        None => default_port,
+    };
+    if port != bind_addr.port() {
+        return false;
+    }
+
+    let host = authority.host();
+    let host = host
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .unwrap_or(host);
+    let bound_host = bind_addr.ip().to_string();
+    if host.eq_ignore_ascii_case(&bound_host) {
+        return true;
+    }
+    if !bind_addr.ip().is_loopback() || !host.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+    matches!(
+        bind_addr.ip(),
+        std::net::IpAddr::V4(ip) if ip == std::net::Ipv4Addr::LOCALHOST
+    ) || matches!(
+        bind_addr.ip(),
+        std::net::IpAddr::V6(ip) if ip == std::net::Ipv6Addr::LOCALHOST
+    )
+}
+
+fn host_matches(headers: &HeaderMap, bind_addr: SocketAddr) -> bool {
+    let mut hosts = headers.get_all(header::HOST).iter();
+    let Some(host) = hosts.next() else {
+        return false;
+    };
+    if hosts.next().is_some() {
+        return false;
+    }
+    host.to_str()
+        .ok()
+        .and_then(|value| value.parse::<Authority>().ok())
+        .is_some_and(|authority| authority_matches(&authority, bind_addr, 80))
+}
+
+fn origin_matches(headers: &HeaderMap, bind_addr: SocketAddr) -> bool {
+    let mut origins = headers.get_all(header::ORIGIN).iter();
+    let Some(origin) = origins.next() else {
+        return true;
+    };
+    if origins.next().is_some() {
+        return false;
+    }
+    let Some(origin) = origin
+        .to_str()
+        .ok()
+        .and_then(|value| value.parse::<Uri>().ok())
+    else {
+        return false;
+    };
+    let Some(scheme) = origin.scheme_str() else {
+        return false;
+    };
+    // This adapter serves plain HTTP only; matching authority is insufficient
+    // if a browser Origin claims the HTTPS scheme for the same host and port.
+    if !scheme.eq_ignore_ascii_case("http") {
+        return false;
+    }
+    let default_port = 80;
+    if (!origin.path().is_empty() && origin.path() != "/") || origin.query().is_some() {
+        return false;
+    }
+    origin
+        .authority()
+        .is_some_and(|authority| authority_matches(authority, bind_addr, default_port))
+}
+
+async fn enforce_request_security(
+    State(state): State<Arc<HttpState>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let route = request.uri().path();
+    if !host_matches(request.headers(), state.bind_addr) {
+        return reject_request(StatusCode::FORBIDDEN, route, "host");
+    }
+    if !origin_matches(request.headers(), state.bind_addr) {
+        return reject_request(StatusCode::FORBIDDEN, route, "origin");
+    }
+
+    if !matches!(route, "/health" | "/capabilities") {
+        if let AuthMode::Token(token) = &state.auth {
+            if !bearer_token(request.headers()).is_some_and(|presented| token.matches(presented)) {
+                return reject_request(StatusCode::UNAUTHORIZED, route, "bearer_token");
+            }
+        }
+    }
+    if is_session_route(route) && !has_valid_client_id(request.headers()) {
+        return reject_request(StatusCode::UNAUTHORIZED, route, "client_id");
+    }
+    next.run(request).await
 }
 
 fn error_response(status: StatusCode, code: ErrorCode, message: String) -> Response {
@@ -145,19 +346,8 @@ async fn capabilities(State(state): State<Arc<HttpState>>) -> Response {
 
 async fn declare_client(
     State(state): State<Arc<HttpState>>,
-    headers: HeaderMap,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if state.require_auth {
-        let presented = headers
-            .get(CLIENT_ID_HEADER)
-            .and_then(|v| v.to_str().ok())
-            .map(|s| !s.trim().is_empty())
-            .unwrap_or(false);
-        if !presented {
-            return auth_required_response();
-        }
-    }
     let kind = match body
         .get("kind")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -185,7 +375,7 @@ async fn list_sessions(
     State(state): State<Arc<HttpState>>,
     auth: AuthenticatedClientId,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let cmd = ClientCommand::ListSessions {
@@ -200,7 +390,7 @@ async fn create_session(
     auth: AuthenticatedClientId,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let surface = body
@@ -229,7 +419,7 @@ async fn get_snapshot(
     auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -256,7 +446,7 @@ async fn submit_task(
     Path(session_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -296,7 +486,7 @@ async fn get_task_result(
     auth: AuthenticatedClientId,
     Path((session_id, task_id)): Path<(String, String)>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -333,7 +523,7 @@ async fn cancel_task(
     auth: AuthenticatedClientId,
     Path((session_id, task_id)): Path<(String, String)>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -370,7 +560,7 @@ async fn cancel_active(
     auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -396,7 +586,7 @@ async fn subscribe_events(
     auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, Response> {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return Err(resp);
     }
     let session_id: eggsec_runtime::SessionId = session_id.parse().map_err(|_| {
@@ -457,7 +647,7 @@ async fn approve_policy(
     Path((session_id, task_id)): Path<(String, String)>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -504,7 +694,7 @@ async fn close_session(
     auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -529,7 +719,7 @@ async fn list_persisted_sessions(
     State(state): State<Arc<HttpState>>,
     auth: AuthenticatedClientId,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let cmd = ClientCommand::ListPersistedSessions {
@@ -544,7 +734,7 @@ async fn get_persisted_snapshot(
     auth: AuthenticatedClientId,
     Path(session_id): Path<String>,
 ) -> Response {
-    if let Err(resp) = enforce_auth(&state, &auth) {
+    if let Some(resp) = enforce_client_identity(&auth) {
         return resp;
     }
     let session_id = match session_id.parse() {
@@ -565,47 +755,8 @@ async fn get_persisted_snapshot(
     json_response(&resp)
 }
 
-fn validate_bind_addr(addr: &SocketAddr, allow_public: bool) -> Result<(), String> {
-    if !addr.ip().is_loopback() && !allow_public {
-        return Err(format!(
-            "refusing to bind to non-loopback address {}; \
-             set allow_public_bind = true to override",
-            addr
-        ));
-    }
-    Ok(())
-}
-
-pub async fn run_http_server(
-    host: Arc<DaemonHost>,
-    config: HttpConfig,
-    shutdown: CancellationToken,
-) -> Result<(), crate::error::DaemonError> {
-    let addr: SocketAddr = config
-        .bind_addr
-        .parse()
-        .map_err(|e| crate::error::DaemonError::Protocol(format!("invalid bind address: {}", e)))?;
-
-    validate_bind_addr(&addr, config.allow_public_bind).map_err(|e| {
-        tracing::warn!("{}", e);
-        crate::error::DaemonError::Protocol(e)
-    })?;
-
-    if addr.ip().is_loopback() {
-        tracing::info!("HTTP API listening on {}", addr);
-    } else {
-        tracing::warn!(
-            "HTTP API binding to non-loopback address {} — ensure network access is intentional",
-            addr
-        );
-    }
-
-    let state = Arc::new(HttpState {
-        host,
-        require_auth: config.require_auth,
-    });
-
-    let app = Router::new()
+fn http_router(state: Arc<HttpState>) -> Router {
+    Router::new()
         .route("/health", get(health))
         .route("/capabilities", get(capabilities))
         .route("/clients/declare", post(declare_client))
@@ -632,11 +783,43 @@ pub async fn run_http_server(
             "/sessions/persisted/{session_id}",
             get(get_persisted_snapshot),
         )
-        .with_state(state);
+        .layer(from_fn_with_state(state.clone(), enforce_request_security))
+        .with_state(state)
+}
 
-    let listener = tokio::net::TcpListener::bind(addr)
+pub async fn run_http_server(
+    host: Arc<DaemonHost>,
+    config: HttpConfig,
+    shutdown: CancellationToken,
+) -> Result<(), crate::error::DaemonError> {
+    let HttpConfig {
+        bind_addr,
+        auth,
+        allow_public_bind,
+    } = config;
+
+    if bind_addr.ip().is_loopback() {
+        tracing::info!("HTTP API listening on {}", bind_addr);
+    } else {
+        debug_assert!(allow_public_bind);
+        tracing::warn!(
+            "HTTP API binding to non-loopback address {} — ensure network access is intentional",
+            bind_addr
+        );
+    }
+
+    let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .map_err(|e| crate::error::DaemonError::Protocol(format!("failed to bind: {}", e)))?;
+    let bound_addr = listener.local_addr().map_err(|e| {
+        crate::error::DaemonError::Protocol(format!("failed to read bound address: {}", e))
+    })?;
+    let state = Arc::new(HttpState {
+        host,
+        bind_addr: bound_addr,
+        auth,
+    });
+    let app = http_router(state);
 
     // Leaked intentionally: axum's graceful shutdown future requires 'static
     // and the token lives for the remainder of the process. One leak per HTTP
@@ -656,12 +839,13 @@ mod tests {
     use super::*;
     use crate::config::DaemonConfig;
     use crate::host::DaemonHost;
-    use crate::store::NoopStore;
+    use axum::body::Body;
     use eggsec_runtime::{
         CancellationToken, RuntimeEventSink, RuntimeTaskExecutor, TaskId, TaskOutcome,
     };
     use std::future::Future;
     use std::pin::Pin;
+    use tower::ServiceExt;
 
     struct TestExecutor;
 
@@ -715,32 +899,10 @@ mod tests {
         tokio::spawn(async move {
             let state = Arc::new(HttpState {
                 host: host_clone,
-                require_auth: false,
+                bind_addr: addr,
+                auth: AuthMode::LoopbackTrust,
             });
-            let app = Router::new()
-                .route("/health", get(health))
-                .route("/capabilities", get(capabilities))
-                .route("/clients/declare", post(declare_client))
-                .route("/sessions", get(list_sessions).post(create_session))
-                .route("/sessions/{session_id}/snapshot", get(get_snapshot))
-                .route("/sessions/{session_id}/tasks", post(submit_task))
-                .route(
-                    "/sessions/{session_id}/tasks/{task_id}/cancel",
-                    post(cancel_task),
-                )
-                .route("/sessions/{session_id}/cancel-active", post(cancel_active))
-                .route("/sessions/{session_id}/events", get(subscribe_events))
-                .route(
-                    "/sessions/{session_id}/policy/approve",
-                    post(approve_policy),
-                )
-                .route("/sessions/{session_id}", delete(close_session))
-                .route("/sessions/persisted", get(list_persisted_sessions))
-                .route(
-                    "/sessions/persisted/{session_id}",
-                    get(get_persisted_snapshot),
-                )
-                .with_state(state);
+            let app = http_router(state);
 
             axum::serve(listener, app)
                 .with_graceful_shutdown(shutdown_static.cancelled())
@@ -749,6 +911,34 @@ mod tests {
         });
 
         (bind_addr, shutdown)
+    }
+
+    async fn request_router(
+        auth: AuthMode,
+        method: axum::http::Method,
+        uri: &str,
+        headers: &[(&str, &str)],
+        body: Body,
+    ) -> Response {
+        let host = Arc::new(DaemonHost::new(
+            DaemonConfig::default(),
+            TestExecutor,
+            crate::store::noop_store(),
+        ));
+        let bind_addr = "127.0.0.1:9876".parse().unwrap();
+        let state = Arc::new(HttpState {
+            host,
+            bind_addr,
+            auth,
+        });
+        let mut builder = Request::builder().method(method).uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        http_router(state)
+            .oneshot(builder.body(body).unwrap())
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -931,37 +1121,241 @@ mod tests {
     #[tokio::test]
     async fn http_invalid_session_id() {
         let (addr, shutdown) = start_server().await;
-        let resp = reqwest::get(format!("http://{}/sessions/not-a-uuid/snapshot", addr))
+        let client_id = declare_client_id(&addr, "invalid-session-id").await;
+        let (name, value) = auth_header(&client_id);
+        let resp = reqwest::Client::new()
+            .get(format!("http://{}/sessions/not-a-uuid/snapshot", addr))
+            .header(name, value)
+            .send()
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         shutdown.cancel();
     }
 
-    #[tokio::test]
-    async fn validate_bind_addr_loopback() {
-        let addr: SocketAddr = "127.0.0.1:9876".parse().unwrap();
-        assert!(validate_bind_addr(&addr, false).is_ok());
+    #[test]
+    fn http_config_admission_matrix_and_redaction() {
+        assert!(HttpConfig::new("127.0.0.1:9876", AuthMode::LoopbackTrust, false).is_ok());
+        assert!(HttpConfig::new(
+            "[::1]:9876",
+            AuthMode::Token(AuthToken::new("local-token").unwrap()),
+            false,
+        )
+        .is_ok());
+        assert!(HttpConfig::new("0.0.0.0:9876", AuthMode::LoopbackTrust, true,).is_err());
+        assert!(HttpConfig::new(
+            "[::]:9876",
+            AuthMode::Token(AuthToken::new("public-token").unwrap()),
+            false,
+        )
+        .is_err());
+        assert!(HttpConfig::new(
+            "[::]:9876",
+            AuthMode::Token(AuthToken::new("public-token").unwrap()),
+            true,
+        )
+        .is_ok());
+        assert!(HttpConfig::new(
+            "192.168.1.10:9876",
+            AuthMode::Token(AuthToken::new("lan-token").unwrap()),
+            true,
+        )
+        .is_ok());
+        assert!(AuthToken::new("").is_err());
+
+        let config = HttpConfig::new(
+            "127.0.0.1:9876",
+            AuthMode::Token(AuthToken::new("secret-token").unwrap()),
+            false,
+        )
+        .unwrap();
+        assert!(!format!("{config:?}").contains("secret-token"));
     }
 
     #[tokio::test]
-    async fn validate_bind_addr_public_denied() {
-        let addr: SocketAddr = "0.0.0.0:9876".parse().unwrap();
-        assert!(validate_bind_addr(&addr, false).is_err());
+    async fn host_and_origin_security_middleware_matrix() {
+        use axum::http::Method;
+
+        let auth = || AuthMode::LoopbackTrust;
+        let valid_host = [("host", "127.0.0.1:9876")];
+        assert_eq!(
+            request_router(auth(), Method::GET, "/health", &valid_host, Body::empty())
+                .await
+                .status(),
+            StatusCode::OK,
+        );
+        assert_eq!(
+            request_router(auth(), Method::GET, "/health", &[], Body::empty())
+                .await
+                .status(),
+            StatusCode::FORBIDDEN,
+        );
+        assert_eq!(
+            request_router(
+                auth(),
+                Method::GET,
+                "/health",
+                &[("host", "attacker.example:9876")],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN,
+        );
+        assert_eq!(
+            request_router(
+                auth(),
+                Method::GET,
+                "/health",
+                &[
+                    ("host", "127.0.0.1:9876"),
+                    ("origin", "http://attacker.example:9876")
+                ],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN,
+        );
+        assert_eq!(
+            request_router(
+                auth(),
+                Method::GET,
+                "/health",
+                &[("host", "127.0.0.1:9876"), ("origin", "null")],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN,
+        );
+        assert_eq!(
+            request_router(
+                auth(),
+                Method::GET,
+                "/health",
+                &[
+                    ("host", "localhost:9876"),
+                    ("origin", "http://localhost:9876")
+                ],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::OK,
+        );
+        assert_eq!(
+            request_router(
+                auth(),
+                Method::GET,
+                "/health",
+                &[
+                    ("host", "localhost:9876"),
+                    ("origin", "https://localhost:9876")
+                ],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::FORBIDDEN,
+        );
     }
 
     #[tokio::test]
-    async fn validate_bind_addr_public_allowed() {
-        let addr: SocketAddr = "0.0.0.0:9876".parse().unwrap();
-        assert!(validate_bind_addr(&addr, true).is_ok());
-    }
+    async fn token_auth_and_session_identity_fail_closed() {
+        use axum::http::Method;
 
-    #[tokio::test]
-    async fn http_default_config() {
-        let config = HttpConfig::default();
-        assert_eq!(config.bind_addr, "127.0.0.1:9876");
-        assert!(!config.require_auth);
-        assert!(!config.allow_public_bind);
+        let body = || Body::from(r#"{"kind":{"type":"Tui"},"label":"test"}"#);
+        let host = [("host", "127.0.0.1:9876")];
+        let token_auth = || AuthMode::Token(AuthToken::new("expected-token").unwrap());
+        assert_eq!(
+            request_router(
+                token_auth(),
+                Method::POST,
+                "/clients/declare",
+                &host,
+                body()
+            )
+            .await
+            .status(),
+            StatusCode::UNAUTHORIZED,
+        );
+        assert_eq!(
+            request_router(
+                token_auth(),
+                Method::POST,
+                "/clients/declare",
+                &[("host", "127.0.0.1:9876"), ("authorization", "Bearer x")],
+                body(),
+            )
+            .await
+            .status(),
+            StatusCode::UNAUTHORIZED,
+        );
+        assert_eq!(
+            request_router(
+                token_auth(),
+                Method::POST,
+                "/clients/declare",
+                &[
+                    ("host", "127.0.0.1:9876"),
+                    ("authorization", "Bearer expected-token"),
+                    ("content-type", "application/json"),
+                ],
+                body(),
+            )
+            .await
+            .status(),
+            StatusCode::OK,
+        );
+        assert_eq!(
+            request_router(token_auth(), Method::GET, "/health", &host, Body::empty())
+                .await
+                .status(),
+            StatusCode::OK,
+        );
+        assert_eq!(
+            request_router(
+                token_auth(),
+                Method::GET,
+                "/capabilities",
+                &host,
+                Body::empty()
+            )
+            .await
+            .status(),
+            StatusCode::OK,
+        );
+
+        let anonymous_response = request_router(
+            AuthMode::LoopbackTrust,
+            Method::GET,
+            "/sessions",
+            &host,
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(anonymous_response.status(), StatusCode::UNAUTHORIZED);
+        let error_bytes = axum::body::to_bytes(anonymous_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&error_bytes).unwrap();
+        assert_eq!(error["code"]["type"], "InvalidRequest");
+        assert_eq!(
+            request_router(
+                AuthMode::LoopbackTrust,
+                Method::GET,
+                "/sessions",
+                &[
+                    ("host", "127.0.0.1:9876"),
+                    ("x-eggsec-client-id", "00000000-0000-0000-0000-000000000000"),
+                ],
+                Body::empty(),
+            )
+            .await
+            .status(),
+            StatusCode::OK,
+        );
     }
 
     #[tokio::test]
@@ -1050,9 +1444,7 @@ mod tests {
             .send()
             .await
             .unwrap();
-        let body: serde_json::Value = resp.json().await.unwrap();
-        assert_eq!(body["type"], "Error");
-        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         shutdown.cancel();
     }
 
@@ -1113,11 +1505,7 @@ mod tests {
             .send()
             .await
             .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        // The HTTP error_response helper emits {code, message} without the
-        // protocol envelope's "type" tag.
-        let body: serde_json::Value = resp.json().await.unwrap();
-        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         shutdown.cancel();
     }
 
@@ -1151,10 +1539,7 @@ mod tests {
             .send()
             .await
             .unwrap();
-        assert!(resp.status().is_success());
-        let body: serde_json::Value = resp.json().await.unwrap();
-        assert_eq!(body["type"], "Error");
-        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         shutdown.cancel();
     }
 
@@ -1190,17 +1575,19 @@ mod tests {
             .send()
             .await
             .unwrap();
-        assert!(resp.status().is_success());
-        let body: serde_json::Value = resp.json().await.unwrap();
-        assert_eq!(body["type"], "Error");
-        assert_eq!(body["code"]["type"], "ClientNotDeclared");
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         shutdown.cancel();
     }
 
     #[tokio::test]
     async fn http_get_persisted_snapshot_invalid_id() {
         let (addr, shutdown) = start_server().await;
-        let resp = reqwest::get(format!("http://{}/sessions/persisted/not-a-uuid", addr))
+        let client_id = declare_client_id(&addr, "invalid-persisted-id").await;
+        let (name, value) = auth_header(&client_id);
+        let resp = reqwest::Client::new()
+            .get(format!("http://{}/sessions/persisted/not-a-uuid", addr))
+            .header(name, value)
+            .send()
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);

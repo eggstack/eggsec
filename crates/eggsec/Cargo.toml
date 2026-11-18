@@ -457,6 +457,7 @@ proptest = "1"
 eggsec-transport = { workspace = true, features = ["test-util"] }
 eggsec-transport-eggfetch = { workspace = true }
 http = { workspace = true }
+tower = { version = "0.4", features = ["util"] }
 
 [[bench]]
 name = "proxy_benchmarks"

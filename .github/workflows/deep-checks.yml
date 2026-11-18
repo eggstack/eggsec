@@ -88,8 +88,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: platform-integration
+      # Wireless fixtures need no hardware; wireless-tools is runtime-only and unavailable on current Ubuntu.
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y ripgrep libpcap-dev wireless-tools iproute2 python3
+        run: sudo apt-get update && sudo apt-get install -y ripgrep libpcap-dev iproute2 python3
       - name: Doctor (centralized prerequisites)
         run: cargo run -q -p eggsec-cli -- doctor
       - name: Fixture layer (hermetic)

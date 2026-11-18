@@ -5,6 +5,8 @@ Manage scan results and findings in PostgreSQL.
 Connection defaults to localhost:5432 database 'eggsec' as user 'postgres'.
 The password is read from the EGGSEC_STORAGE_PASSWORD environment variable --
 never from a flag, so it does not land in shell history or `ps` output.
+The storage TUI field takes this environment-variable name, not the password;
+set the variable before launching Eggsec (default: EGGSEC_STORAGE_PASSWORD).
 
 Examples:
   eggsec storage stats
@@ -60,7 +62,7 @@ pub struct StorageConnectionArgs {
 
 impl StorageConnectionArgs {
     /// Build the engine config, resolving the password from the environment.
-    pub fn resolve(&self) -> crate::storage::StorageConfig {
+    pub fn resolve(&self) -> crate::error::Result<crate::storage::StorageConfig> {
         crate::storage::resolve_config(
             self.host.clone(),
             self.port,

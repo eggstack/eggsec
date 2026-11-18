@@ -1128,6 +1128,7 @@ pub fn task_result_envelope(result: &TaskResult) -> eggsec_runtime::TaskResultEn
 /// [`execute_canonical_with_scope`] (manual) or
 /// [`execute_approved_execution`] (strict) with the enforcement-scope
 /// snapshot. No wildcard scope is synthesized.
+#[doc(hidden)]
 pub async fn execute_canonical(
     request: CanonicalOperationRequest,
     sink: &ExecutionSink,
@@ -1693,7 +1694,11 @@ async fn execute_canonical_inner(
                     n.username,
                     n.password_env.as_deref(),
                     n.max_connections,
-                );
+                )
+                .map_err(|error| ExecutionError::ExecutionFailed {
+                    operation_id: operation_id.clone(),
+                    message: error.to_string(),
+                })?;
                 super::security::run_storage_task(
                     config,
                     n.mode,

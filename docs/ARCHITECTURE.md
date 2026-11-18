@@ -247,7 +247,7 @@ JSON-RPC tools/call → handle_tools_call()
 
 **Surface**: `McpServer` → `McpStrict`. Always strict. No overrides.
 **Profile filtering**: `McpProfilePolicy` controls tool visibility per profile (OpsAgent vs CodingAgent).
-**Preflight**: `eggsec_preflight` MCP tool.
+**Preflight**: MCP does not expose a synthetic preflight tool; its callable tools are only operator-selected, active registry entries with MCP exposure metadata. Use the CLI `preflight` command or REST `POST /api/v1/tools/{tool_id}/preflight` for advisory previews.
 
 ### 4.5 gRPC API
 

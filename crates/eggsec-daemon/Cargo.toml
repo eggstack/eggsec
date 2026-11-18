@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 default = []
-http-api = ["dep:axum", "dep:async-stream", "dep:futures"]
+http-api = ["dep:axum", "dep:async-stream", "dep:futures", "dep:subtle"]
 # Full executor needs engine CLI types (`runtime_bridge` is cli-gated).
 # Phase E WS2: engine default is empty, so enable `cli` explicitly here.
 full-executor = ["dep:eggsec", "eggsec/cli"]
@@ -39,6 +39,7 @@ clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", optional = true }
 async-stream = { version = "0.3", optional = true }
 futures = { version = "0.3", optional = true }
+subtle = { version = "2", optional = true }
 
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["json", "rustls-no-provider"], default-features = false }
@@ -46,3 +47,4 @@ eggsec = { path = "../eggsec", version = "0.1.0" }
 # Ring provider for the reqwest test client (`rustls-no-provider` requires an
 # explicitly installed process-level crypto provider).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tower = { version = "0.5", features = ["util"] }

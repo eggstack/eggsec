@@ -58,7 +58,9 @@ impl Debug for StorageConfig {
 /// Shared by the canonical executor and the `eggsec storage` CLI so the two
 /// cannot disagree about how a credential is supplied. `password_env` carries
 /// a variable name, never a secret: the value is read here, at the last
-/// moment, and never reaches a wire DTO, a `TaskSnapshot` or a log line.
+/// moment, and never reaches a wire DTO, a `TaskSnapshot` or a log line. An
+/// explicitly named but unset variable is an error, never an anonymous
+/// passwordless fallback. `None` retains the no-password behavior.
 pub fn resolve_config(
     host: String,
     port: u16,
@@ -66,26 +68,23 @@ pub fn resolve_config(
     username: String,
     password_env: Option<&str>,
     max_connections: u32,
-) -> StorageConfig {
+) -> Result<StorageConfig> {
     let password = match password_env {
-        Some(var) => std::env::var(var).unwrap_or_else(|e| {
-            tracing::warn!(
-                env_var = var,
-                error = %e,
-                "storage password_env is unset; connecting without a password"
-            );
-            String::new()
-        }),
+        Some(var) => std::env::var(var).map_err(|_| {
+            crate::error::EggsecError::Config(format!(
+                "storage password environment variable '{var}' is not set"
+            ))
+        })?,
         None => String::new(),
     };
-    StorageConfig {
+    Ok(StorageConfig {
         host,
         port,
         database,
         username,
         password: SensitiveString::new(password),
         max_connections,
-    }
+    })
 }
 
 #[cfg(feature = "database")]
@@ -98,4 +97,42 @@ pub async fn init_storage(_config: &StorageConfig) -> Result<postgres::Database>
     Err(crate::error::EggsecError::Config(
         "database feature not enabled".to_string(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicitly_named_missing_password_variable_fails_closed() {
+        let env_name = format!("EGGSEC_STORAGE_MISSING_TEST_{}", std::process::id());
+        assert!(std::env::var_os(&env_name).is_none());
+
+        let error = resolve_config(
+            "localhost".into(),
+            5432,
+            "eggsec".into(),
+            "postgres".into(),
+            Some(&env_name),
+            5,
+        )
+        .expect_err("an explicitly named missing credential must fail");
+
+        assert!(error.to_string().contains(&env_name));
+        assert!(!error.to_string().contains("password value"));
+    }
+
+    #[test]
+    fn absent_password_environment_name_preserves_passwordless_semantics() {
+        let config = resolve_config(
+            "localhost".into(),
+            5432,
+            "eggsec".into(),
+            "postgres".into(),
+            None,
+            5,
+        )
+        .expect("no configured password remains valid");
+        assert!(config.password.expose_secret().is_empty());
+    }
 }

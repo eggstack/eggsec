@@ -8,8 +8,15 @@
 | `testing` | eggsec + dvwa + juice-shop + webhook-receiver | Test against vulnerable containers |
 | `storage` | elasticsearch + kibana | Store/visualize results from external eggsec |
 | `full` | everything | Complete testing environment |
+| `db-lab` | postgres-lab + mysql-lab + mssql-lab | Intentionally misconfigured database test targets |
 
 ---
+
+## Required Credentials and Exposure
+
+Before `docker compose config` or any `up` command, provide non-empty, lab-specific values for `REDIS_PASSWORD`, `ELASTIC_PASSWORD`, `TOR_PASSWORD`, `POSTGRES_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, and `MSSQL_SA_PASSWORD`. Set them in your shell or a local untracked `.env` file; there are no hardcoded/default passwords, and Compose intentionally errors if a required value is unset or empty. The SQL Server value must meet its password-complexity policy.
+
+Every published service and vulnerable-lab port binds to `127.0.0.1`, not all host interfaces. Elasticsearch security remains disabled for existing lab behavior; it is loopback-bound and must not be exposed to untrusted networks.
 
 ## Quick Start
 

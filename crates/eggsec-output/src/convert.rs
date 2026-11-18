@@ -309,6 +309,31 @@ mod tests {
     }
 
     #[test]
+    fn html_has_no_remote_script_source_and_renders_summary() {
+        let report = sample_report_with_severity("Critical");
+        let html = convert_to_html(&report);
+
+        assert!(!html.contains("<script src=\"https://"));
+        assert!(html.contains("<div class=\"value\">example.com</div>"));
+        assert!(html.contains("<span>1</span>"));
+        assert!(html.contains("Test finding"));
+    }
+
+    #[test]
+    fn html_escapes_hostile_target_and_finding_title() {
+        let mut report = sample_report_with_severity("High");
+        report.target = "<script>alert(1)</script>".to_string();
+        report.findings[0].title = "<img src=x onerror=alert(1)>".to_string();
+
+        let html = convert_to_html(&report);
+
+        assert!(!html.contains("<script>alert(1)</script>"));
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(!html.contains("<img src=x onerror=alert(1)>"));
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+    }
+
+    #[test]
     fn markdown_wireless_table_escapes_newlines_and_pipes() {
         let mut report = sample_report_with_severity("Low");
         report.wireless_networks = vec![WirelessNetworkReportData {

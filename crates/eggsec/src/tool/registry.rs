@@ -122,6 +122,27 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Creates an independent registry view containing only the supplied tool IDs.
+    ///
+    /// The registered tool instances are shared by `Arc`, while mutations to the
+    /// returned registry do not affect this registry. This is useful for discovery
+    /// surfaces that must reflect an operator-selected subset without changing the
+    /// engine's full execution registry.
+    pub fn filtered_by_ids(&self, ids: &[String]) -> Self {
+        let selected_ids: std::collections::HashSet<&str> =
+            ids.iter().map(String::as_str).collect();
+        let tools = self.tools.read();
+        let filtered_tools = tools
+            .iter()
+            .filter(|(id, _)| selected_ids.contains(id.as_str()))
+            .map(|(id, tool)| (id.clone(), Arc::clone(tool)))
+            .collect();
+
+        Self {
+            tools: Arc::new(RwLock::new(filtered_tools)),
+        }
+    }
+
     /// Lists all tools in a specific category.
     ///
     /// # Arguments

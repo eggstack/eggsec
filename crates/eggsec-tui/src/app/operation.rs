@@ -113,7 +113,7 @@ impl App {
             Tab::Waf => self.tabs.waf.primary_target(),
             Tab::WafStress => self.tabs.waf_stress.primary_target(),
             Tab::Scan => self.tabs.scan.primary_target(),
-            Tab::Resume => self.tabs.resume.primary_target(),
+            Tab::Resume => self.tabs.resume.selected_target(),
             Tab::Load => self.tabs.load.primary_target(),
             Tab::Stress => self.tabs.stress.primary_target(),
             Tab::Packet => self.tabs.packet.primary_target(),

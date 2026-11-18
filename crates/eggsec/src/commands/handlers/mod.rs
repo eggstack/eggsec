@@ -516,8 +516,10 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
                 port: args.port,
                 bind: args.bind,
                 api_key: args.api_key,
+                allow_public_bind: args.allow_public_bind,
                 stdio: args.stdio,
                 profile: args.profile,
+                allow_tools: args.allow_tools,
             };
             handle_mcp_serve(ctx, mcp_args).await
         }
@@ -577,6 +579,7 @@ mod tests {
         Capability, ExecutionPolicy, ExecutionProfile, IntendedUse, OperationDescriptor,
         OperationMode, OperationRisk, Scope, ScopeRule,
     };
+    use clap::Parser;
 
     fn make_ctx(policy: ExecutionPolicy, scope: Scope, json: bool) -> CommandContext {
         let config = EggsecConfig {
@@ -614,6 +617,48 @@ mod tests {
             false,
             Vec::new(),
         )
+    }
+
+    #[cfg(feature = "rest-api")]
+    #[tokio::test]
+    async fn codegg_public_bind_opt_in_is_forwarded_before_bind() {
+        let occupied_listener = tokio::net::TcpListener::bind("0.0.0.0:0")
+            .await
+            .expect("test listener must bind");
+        let port = occupied_listener
+            .local_addr()
+            .expect("test listener address must be available")
+            .port()
+            .to_string();
+
+        let mut cli = Cli::try_parse_from([
+            "eggsec",
+            "codegg-mcp",
+            "--allow-tool",
+            "scan-ports",
+            "--bind",
+            "0.0.0.0",
+            "--port",
+            &port,
+            "--allow-public-bind",
+        ])
+        .expect("codegg-mcp arguments must parse");
+        let Some(Commands::CodeggMcp(args)) = cli.command.as_mut() else {
+            panic!("expected codegg-mcp command");
+        };
+        args.stdio = false;
+
+        let ctx = make_ctx(ExecutionPolicy::default(), Scope::default(), false);
+        let error = handle_command(cli, &ctx)
+            .await
+            .expect_err("public bind without an API key must fail admission")
+            .to_string();
+        assert_eq!(
+            error,
+            format!(
+                "Refusing non-loopback MCP bind at 0.0.0.0:{port}: --allow-public-bind requires a non-empty --api-key; public exposure risks remote task submission and session access."
+            )
+        );
     }
 
     #[test]

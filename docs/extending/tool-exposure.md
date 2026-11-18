@@ -120,7 +120,7 @@ listing). This is implemented in `mcp_tool_registrations(profile)`:
 | Profile | Behavior |
 |---------|----------|
 | `"ops-agent"` | Returns every tool with `mcp_metadata_exposable == true` (profile-expanded) |
-| `"coding-agent"` | Returns a hardcoded narrow allowlist (scan-ports, fingerprint, scan-endpoints, endpoints, waf-detect, search) |
+| `"coding-agent"` | Returns every tool with `mcp_metadata_exposable == true`; the running MCP server applies the operator's explicit selection and profile controls |
 | Any other | Returns empty list |
 
 **Critical distinction**: OpsAgent is **not** the conservative default listing.
@@ -138,24 +138,21 @@ conservative default is a proper subset.
 with `mcp_default_visible` (conservative listing). The former is a per-operation
 declaration; the latter is a curated safe subset. OpsAgent uses the former.
 
-## 5. CodingAgent Allowlist Behavior
+## 5. MCP Operator Selection and Runtime Intersection
 
-The coding-agent MCP profile uses a hardcoded allowlist rather than a
-metadata-driven filter:
+Both MCP profiles use the metadata-exposable registry as the compiled exposure
+boundary. At startup, the operator must select one or more IDs with repeated
+`--allow-tool TOOL_ID` arguments. The server intersects that selection with the
+active `ToolRegistry`, `mcp_tool_registrations(profile)`, and the profile's
+visibility/risk rules. Unknown, unregistered, or non-exposable IDs are rejected
+at startup; empty selections fail closed.
 
-```rust
-let coding_agent_ids = [
-    "scan", "scan-ports", "fingerprint", "scan-endpoints",
-    "endpoints", "waf-detect", "search",
-];
-```
-
-This is intentionally narrow: coding agents receive only passive and safe-active
-scanning tools. High-risk, feature-gated, and domain-specific tools are excluded
-regardless of their metadata flags.
-
-The coding-agent allowlist is a subset of the ops-agent listing (validated by
-`coding_agent_registrations_are_subset_of_mcp`).
+The same effective set drives MCP discovery, tool calls, OpenAPI, and planning
+(the `/plan` route exists only for ops-agent and its planner receives the
+filtered registry). Call-time checks remain mandatory: profile argument/risk and
+resource limits are checked, then `EnforcementContext` requires strict
+`LoadedScope` approval before dispatch. Operator selection is not authorization.
+There is no source-coded fixed MCP tool-ID allowlist or denylist.
 
 ## 6. REST and gRPC: Listing vs. Execution Checks
 

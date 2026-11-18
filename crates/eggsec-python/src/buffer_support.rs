@@ -78,18 +78,21 @@ impl BinaryBufferPy {
         let ptr = buf.as_ptr() as *const c_void;
         let len = buf.len() as isize;
 
-        // Fill the buffer info
-        (*view).obj = std::ptr::null_mut(); // PyO3 will set this
+        let shape = std::ptr::addr_of!(slf.shape) as *mut _;
+
+        // Fill the buffer info before transferring ownership to the consumer.
         (*view).buf = ptr as *mut c_void;
         (*view).len = len;
         (*view).readonly = 1; // `data` is reachable only via `&self`: not writable
         (*view).itemsize = 1;
         (*view).format = b"b\0".as_ptr() as *mut _; // signed char
         (*view).ndim = 1;
-        (*view).shape = std::ptr::addr_of!(slf.shape) as *mut _;
+        (*view).shape = shape;
         (*view).strides = std::ptr::null_mut(); // contiguous
         (*view).suboffsets = std::ptr::null_mut();
         (*view).internal = std::ptr::null_mut();
+        // PEP 3118 requires `obj` to own a reference to the exporting object.
+        (*view).obj = slf.into_ptr();
 
         Ok(())
     }

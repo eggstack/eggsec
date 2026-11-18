@@ -5,7 +5,7 @@ use crate::components::{
 use crate::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::tc;
 use eggsec::findings::lifecycle::StoredFinding;
-use eggsec::storage::{models::StoredScan, StorageConfig};
+use eggsec::storage::models::StoredScan;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -51,7 +51,10 @@ impl StorageTab {
             .add(InputField::new("Port").with_value("5432"))
             .add(InputField::new("Database"))
             .add(InputField::new("Username"))
-            .add(InputField::new("Password"));
+            .add(
+                InputField::new("Password Environment Variable")
+                    .with_value("EGGSEC_STORAGE_PASSWORD"),
+            );
 
         let query_inputs = InputGroup::new()
             .add(InputField::new("Scan ID / CVE ID"))
@@ -111,7 +114,7 @@ impl StorageTab {
             .unwrap_or("")
     }
 
-    pub fn password(&self) -> &str {
+    pub fn password_env(&self) -> &str {
         self.config_inputs
             .fields
             .get(4)
@@ -133,17 +136,6 @@ impl StorageTab {
             .get(1)
             .map(|f| f.value.as_str())
             .filter(|v| !v.is_empty())
-    }
-
-    pub fn get_config(&self) -> StorageConfig {
-        StorageConfig {
-            host: self.host().to_string(),
-            port: self.port(),
-            database: self.database().to_string(),
-            username: self.username().to_string(),
-            password: self.password().to_string().into(),
-            max_connections: 5,
-        }
     }
 
     pub fn get_mode(&self) -> &str {
@@ -256,6 +248,9 @@ impl TabState for StorageTab {
         }
         if let Some(f) = self.config_inputs.fields.get_mut(1) {
             f.value = "5432".to_string();
+        }
+        if let Some(f) = self.config_inputs.fields.get_mut(4) {
+            f.value = "EGGSEC_STORAGE_PASSWORD".to_string();
         }
         self.query_inputs.blur();
         for field in &mut self.query_inputs.fields {
@@ -377,7 +372,9 @@ impl TabRender for StorageTab {
             }
         }
 
-        if self.state == AppState::Running {
+        if let Some(error) = &self.error {
+            crate::tabs::core::render_error_block(f, *results_area, "Storage - Error", error);
+        } else if self.state == AppState::Running {
             let gauge = ratatui::widgets::Gauge::default()
                 .block(
                     Block::default()

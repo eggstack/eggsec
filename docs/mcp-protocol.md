@@ -6,19 +6,22 @@ Eggsec's MCP (Model Context Protocol) server provides AI agents with secure, str
 
 ```bash
 # Start MCP server (ops-agent profile, default)
-eggsec mcp-serve --port 8081
+eggsec mcp-serve --port 8081 --allow-tool scan-ports
 
 # Or with authentication
-eggsec mcp-serve --port 8081 --api-key your-secret-key
+eggsec mcp-serve --port 8081 --allow-tool scan-ports --api-key your-secret-key
+
+# Expose HTTP beyond loopback (requires both flags and a non-empty API key)
+eggsec mcp-serve --bind 0.0.0.0 --allow-public-bind --api-key your-secret-key --allow-tool scan-ports
 
 # STDIO mode for direct AI integration
-eggsec mcp-serve --stdio
+eggsec mcp-serve --stdio --allow-tool scan-ports
 
 # Coding agent profile (stdio + restricted tools)
-eggsec mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent --allow-tool scan-ports
 
 # Shorthand for coding agent via codegg-mcp subcommand (alias: mcp-codegg)
-eggsec codegg-mcp
+eggsec codegg-mcp --allow-tool scan-ports
 ```
 
 ## MCP Profiles
@@ -27,15 +30,14 @@ Eggsec has **one** MCP implementation with multiple profiles that control availa
 
 | Profile | Server Name | Description |
 |---------|-------------|-------------|
-| `ops-agent` | `eggsec-tool-api` | Full security testing toolkit for AI agents. All tools, unconstrained. |
-| `coding-agent` | `eggsec-coding-agent-mcp` | Bounded live security validation tools for coding agents. Restricted tools, enforced safety. |
+| `ops-agent` | `eggsec-tool-api` | Operator-selected MCP tools with ops-agent limits and strict scope enforcement. |
+| `coding-agent` | `eggsec-coding-agent-mcp` | Operator-selected MCP tools with coding-agent risk/resource limits and strict scope enforcement. |
 
 ### Ops-Agent Profile
 
-The default profile. Provides full access to all registered MCP-exposable tools.
-Designed for AI agents operating in controlled environments with human oversight.
+The default policy profile. The operator must explicitly select one or more tools; the visible set is intersected with the compiled registry and MCP exposure metadata. Designed for AI agents operating in controlled environments with human oversight.
 
-- **Target policy:** `ScopeOrLocalDevOnly` default, external network allowed
+- **Target policy:** `AnyWithScopeEngine`; network operations still require the operator-loaded strict scope
 - **Concurrency:** Up to 50 concurrent scans
 - **Timeout:** Up to 600 seconds per tool
 - **Stress testing:** Allowed
@@ -49,24 +51,18 @@ Designed for AI agents operating in controlled environments with human oversight
 
 Optimized for AI coding assistants that need to validate security while writing code. Enforces strict safety defaults.
 
-- **Target policy:** Localhost, loopback, and private IPs only (`ScopeOrLocalDevOnly`)
+- **Target policy:** `AnyWithScopeEngine`; no profile-local host allowlist overrides the operator-loaded scope
 - **Concurrency:** Max 5 concurrent scans
 - **Timeout:** Max 60 seconds per tool
 - **Batch size:** Max 10
 - **Stress testing:** Denied
-- **Broad recon:** Denied
-- **External network:** Denied (unless explicitly scoped)
+- **Broad recon:** Available only when the operator selects an exposed tool and strict scope/policy authorizes its call
+- **External network:** Allowed only for targets authorized by the operator-loaded scope
 - **Explicit scope:** Required
 - **Sessions:** Denied (`session/*` is rejected)
 - **`/plan` endpoint:** Denied
 
-The allowlist is a hardcoded exact match on six tool IDs:
-`scan`, `scan-ports`, `fingerprint`, `endpoints`, `waf-detect`, `search`. The
-`stress-testing` and `load-testing` categories are explicitly denied, and
-argument keys such as `stealth` are stripped.
-
-Source: `crates/eggsec/src/tool/protocol/mcp/policy.rs` (`ops_agent()` at :100,
-`coding_agent()` at :120).
+Both profiles require at least one explicit `--allow-tool TOOL_ID` argument (repeat the flag to select more). There is no source-coded MCP tool-ID allowlist: the server exposes the operator's selections only when each ID exists in the active registry and is MCP-exposable. Profile risk checks, argument restrictions, resource limits, and strict `LoadedScope` enforcement remain in force; disallowed calls are rejected. The coding-agent profile disables stress/load-test and raw-packet operations and denies exploit-adjacent and remote-execution risks. The `/plan` endpoint is available only in the ops-agent profile and plans against the selected registry view.
 
 **Coding-agent resources** (available via `resources/read`):
 
@@ -82,23 +78,23 @@ Source: `crates/eggsec/src/tool/protocol/mcp/policy.rs` (`ops_agent()` at :100,
 
 ```bash
 # Ops-agent (HTTP mode)
-eggsec mcp-serve --port 8081
+eggsec mcp-serve --port 8081 --allow-tool scan-ports
 
 # Ops-agent (STDIO mode)
-eggsec mcp-serve --stdio
+eggsec mcp-serve --stdio --allow-tool scan-ports
 
 # Coding-agent (STDIO mode)
-eggsec mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent --allow-tool scan-ports
 
 # Coding-agent shorthand
-eggsec codegg-mcp
+eggsec codegg-mcp --allow-tool scan-ports
 
 # Coding-agent with scope file (global --scope flag; mcp-serve has no --scope-file)
-eggsec mcp-serve --stdio --profile coding-agent --scope scope.toml
+eggsec mcp-serve --stdio --profile coding-agent --allow-tool scan-ports --scope scope.toml
 
 # Coding-agent with example config
 # See examples/codegg-mcp.local.toml
-eggsec mcp-serve --stdio --profile coding-agent
+eggsec mcp-serve --stdio --profile coding-agent --allow-tool scan-ports
 ```
 
 **Enforcement (2026-06-10):** MCP server forces `McpStrict` via `EnforcementContext::evaluate` (central boundary: LoadedScope provenance, explicit manifest required for networked ops, DenialClass/positive-capability checks, capabilities populated). Preferred production constructor: `McpServer::with_enforcement`. `tools/call` computes full `PolicyDecision` via `policy_decision_for_mcp_call_with_enforcement` (via `EnforcementContext`) and embeds it in error `data`.
@@ -112,7 +108,7 @@ eggsec mcp-serve --stdio --profile coding-agent
 | GET | `/mcp/stream/{request_id}` | SSE streaming (`{request_id}` or `*` for all) |
 | GET | `/openapi.json` | OpenAPI 3.1 spec (JSON) |
 | GET | `/openapi.yaml` | OpenAPI 3.1 spec (YAML) |
-| POST | `/plan` | Execution plan generator (ops-agent only) |
+| POST | `/plan` | Execution plan generator (registered only for ops-agent; uses selected tools) |
 | GET | `/health` | Health check (`"service": "eggsec-mcp"`) |
 
 Routes are registered in `crates/eggsec/src/tool/protocol/mcp/routes.rs:153`.
@@ -126,7 +122,9 @@ API key authentication is optional and compared in constant time
 - Header: `X-API-Key: your-key`
 - JSON-RPC param: `params.api_key = "your-key"`
 
-When no `--api-key` is configured, every request is authorized.
+When no `--api-key` is configured, every request is authorized. HTTP MCP
+binds to loopback by default; non-loopback binds require `--allow-public-bind`
+and a non-empty `--api-key`. Stdio mode is unaffected.
 
 ## JSON-RPC API
 

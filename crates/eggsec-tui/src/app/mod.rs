@@ -552,7 +552,6 @@ impl App {
         }
 
         if is_running {
-            self.publish_storage_password_env();
             match self.build_current_task() {
                 Some(task_config) => {
                     if let Some(desc) = self.build_current_operation_descriptor() {
@@ -587,54 +586,9 @@ impl App {
         }
     }
 
-    /// Publish the storage tab's password field into the process environment
-    /// under the name the request will reference.
-    ///
-    /// The password is kept off the wire on purpose: `RunRequest` is persisted
-    /// verbatim into the daemon's SQLite snapshot store, so a password field
-    /// would sit at rest in plaintext. Only `password_env` — the variable
-    /// *name* — crosses the wire, and the engine resolves it at execution.
-    ///
-    /// A blank field clears the variable so a previously typed password cannot
-    /// silently outlive the field that set it. When the TUI is attached to a
-    /// remote daemon the variable is set in the TUI process only, so the daemon
-    /// resolves nothing and logs a warning before connecting without it.
-    #[cfg(feature = "database")]
-    fn publish_storage_password_env(&self) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-
-        static UNSAFE_ENV_WARNED: AtomicBool = AtomicBool::new(false);
-        if !matches!(self.current_tab, Tab::Storage) {
-            return;
-        }
-        let password = self.tabs.storage.password().to_string();
-        if password.is_empty() {
-            std::env::remove_var(crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV);
-            return;
-        }
-        // Safety: the rich TUI is single-threaded, and this is set immediately
-        // before the request is built in the same call, with no other thread
-        // reading storage credentials. Rust 2024 makes `set_var` unsafe for
-        // exactly this reason, so the justification is recorded here.
-        if !UNSAFE_ENV_WARNED.swap(true, Ordering::Relaxed) {
-            tracing::debug!(
-                env_var = crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV,
-                "publishing storage password to process environment for this dispatch"
-            );
-        }
-        unsafe {
-            std::env::set_var(
-                crate::app::task_management::EGGSEC_STORAGE_PASSWORD_ENV,
-                password,
-            )
-        };
-    }
-
-    #[cfg(not(feature = "database"))]
-    fn publish_storage_password_env(&self) {}
-
-    /// Central policy evaluation + dispatch. Uses the `ApprovedOperation` token
-    /// to structurally gate `spawn_task()`. Handles `EnforcementError` variants
+    /// Central policy evaluation + dispatch. Passes the mandatory
+    /// `ApprovedOperation` token to `spawn_task()`, which verifies request
+    /// binding before runtime submission. Handles `EnforcementError` variants
     /// for confirmation/denial flows.
     ///
     /// If a cached `ApprovedOperation` from the pre-dispatch gate exists (set in
@@ -651,7 +605,7 @@ impl App {
         match approved {
             Ok(approved_op) => {
                 if let Some(req) = request {
-                    self.spawn_task(Some(req), Some(approved_op));
+                    self.spawn_task(Some(req), approved_op);
                 }
             }
             Err(EnforcementError::ConfirmationRequired {
@@ -999,7 +953,7 @@ impl App {
                         crate::app::notifications::NotificationSeverity::Warning,
                     ));
                     if let Some(req) = pending.captured_request {
-                        self.spawn_task(Some(req), Some(approved_op));
+                        self.spawn_task(Some(req), approved_op);
                     }
                 }
                 Err(EnforcementError::Denied { decision }) => {

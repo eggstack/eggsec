@@ -20,11 +20,11 @@ Two crates provide the persistent session host and its IPC wire format: `eggsec-
 | Crate | Path | Dependencies | Features |
 |-------|------|-------------|----------|
 | `eggsec-daemon-protocol` | `crates/eggsec-daemon-protocol/` | `eggsec-runtime` only (no persistence, transport, or TUI deps) | None |
-| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.32 (bundled)`, `tokio`, `tokio-util`, `serde`, `serde_json`, `tracing`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`, `anyhow`, `clap`; optional `eggsec` | `http-api` (axum + async-stream + futures), `full-executor` (`dep:eggsec` + `eggsec/cli`) |
+| `eggsec-daemon` | `crates/eggsec-daemon/` | `eggsec-runtime`, `eggsec-daemon-protocol`, `rusqlite 0.32 (bundled)`, `tokio`, `tokio-util`, `serde`, `serde_json`, `tracing`, `tracing-subscriber`, `rustc-hash`, `thiserror`, `uuid`, `async-trait`, `anyhow`, `clap`; optional `eggsec` | `http-api` (axum + async-stream + futures + subtle), `full-executor` (`dep:eggsec` + `eggsec/cli`) |
 
 Architecture guards enforce:
 - `eggsec-daemon` has no TUI dependencies (`ratatui`/`crossterm`)
-- Transport deps (`axum`, `async-stream`, `futures`) are optional behind `http-api`
+- HTTP deps (`axum`, `async-stream`, `futures`, `subtle`) are optional behind `http-api`
 - Engine dep (`eggsec`) is optional behind `full-executor`
 - Default dependencies: `eggsec-runtime` + `eggsec-daemon-protocol` only
 
@@ -125,7 +125,7 @@ first, persisted snapshot fallback, `None` outcome while active. See
 | `store/mod` | `src/store/mod.rs` | `DaemonStore` trait, `PersistedAuditEvent`, `noop_store()` |
 | `store/sqlite` | `src/store/sqlite.rs` | `SqliteStore` (WAL, foreign keys, schema version 2), `NoopStore` |
 | `client_registry` | (single source: `eggsec-daemon-protocol/src/client_registry.rs`, re-exported via `eggsec-daemon/src/lib.rs:1`) | **No orphan**: `host.rs`/`server.rs`/`client.rs` all resolve RBAC types from the protocol crate; the former duplicate `eggsec-daemon/src/client_registry.rs` has been deleted |
-| `http` | `src/http.rs` | HTTP/SSE transport (behind `http-api`): 14 axum `.route()` calls (15 method rows; `GET`+`POST /sessions` share one route), SSE streaming, auth header, bind validation |
+| `http` | `src/http.rs` | Dormant HTTP/SSE adapter (behind `http-api`): 14 axum `.route()` calls (15 method rows; `GET`+`POST /sessions` share one route), bearer/client identity checks, Host/Origin validation, and fail-closed bind config |
 
 ## Behavior & Flows
 
@@ -165,7 +165,14 @@ main.rs → host.recover_persisted_state()
 
 Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSession) fire-and-forget persistence via `tokio::spawn(persistence_with_timeout(...))` with a 30s upper bound. A background event-listener task in `main.rs` persists snapshots on terminal events (TaskCompleted, TaskFailed, TaskCancelled) plus a periodic 5s sweep for broadcast overflow recovery.
 
-### HTTP/SSE Transport (feature: `http-api`)
+### HTTP/SSE Adapter (feature: `http-api`; dormant and unwired)
+
+This adapter is present for development but is not a supported or exposed daemon
+surface: `run_http_server` has no workspace callers, and an ADR is required
+before any listener or CLI wiring is added. `HttpConfig` has no `Default` and
+can only be constructed with an explicit `AuthMode`; non-loopback binds require
+both `Token` authentication and `allow_public_bind`. `LoopbackTrust` is only
+valid for loopback addresses.
 
 | Route | Method | Maps to |
 |-------|--------|---------|
@@ -185,8 +192,10 @@ Lifecycle commands (CreateSession, SubmitTask, CancelTask, CancelActive, CloseSe
 | `/sessions/persisted` | GET | `ListPersistedSessions` |
 | `/sessions/persisted/{id}` | GET | `GetPersistedSnapshot` |
 
-- Auth via `X-Eggsec-Client-Id` header (`http.rs:20`)
-- Default bind: `127.0.0.1:9876` (loopback enforced unless `allow_public_bind`)
+- Token mode requires `Authorization: Bearer <token>` on every route except `/health` and `/capabilities`; comparisons use `subtle::ConstantTimeEq`, and token debug output is redacted.
+- Every request requires a `Host` authority matching the configured bind authority; loopback accepts `localhost` as an alias for `127.0.0.1` or `[::1]`. A present `Origin` must match; `Origin: null` and mismatches are rejected. No CORS layer is provided.
+- Every `/sessions/**` request requires a parseable `X-Eggsec-Client-Id`; anonymous session reads and mutations fail with `401` before dispatch.
+- There is no default bind configuration. The former `127.0.0.1:9876` value is not a runnable default; callers must explicitly configure a bind and auth mode.
 - SSE: `async-stream` + `futures::Stream`, `KeepAlive` default
 - `CancellationToken` leaked via `Box::leak` for axum graceful shutdown (one per process)
 
@@ -234,7 +243,7 @@ Three-tier resolution for `GetPersistedSnapshot` (`host.rs:877-930`):
 | `NoopStore` | `store/sqlite.rs` | Test/disabled stub |
 | `DaemonError` | `error.rs` | Io, Serialization, Protocol, Runtime |
 | `run_server` | `server.rs` | Unix socket accept loop |
-| `run_http_server` | `http.rs` | HTTP/SSE transport (feature-gated) |
+| `run_http_server` | `http.rs` | Dormant HTTP/SSE adapter entry point (feature-gated, no caller; ADR required before wiring) |
 
 ### DaemonStore Trait Methods (`store/mod.rs:25-52`)
 
@@ -298,7 +307,7 @@ Schema version: `2` (stored in `schema_meta`). Migration refuses to load when st
 - `daemon/host.rs`: command dispatch tests (health, capabilities, create/list/submit/snapshot/close); permission denial tests
 - `daemon/server.rs`: Unix socket round-trips, subscribe event delivery, multi-subscriber fan-out, shutdown signal, invalid JSON handling
 - `daemon/client.rs`: client library round-trips (health, create session, declare, close)
-- `daemon/http.rs`: HTTP route tests, SSE delivery, auth enforcement, bind validation
+- `daemon/http.rs`: HTTP route tests, SSE delivery, bearer and client-identity enforcement, Host/Origin checks, and `HttpConfig` admission matrix; the adapter remains unwired
 - Local smoke test: `scripts/smoke-daemon-local.sh`
 
 ## Invariants & Gotchas

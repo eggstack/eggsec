@@ -92,7 +92,15 @@ impl McpProfilePolicy {
         }
     }
 
-    /// Ops-agent: broad toolkit, subject to scope/auth/rate limits.
+    /// Replace the server-visible tool set with IDs explicitly selected by
+    /// the operator. Production MCP server constructors default to an empty
+    /// selection and fail closed until this is configured.
+    pub fn with_allowed_tool_ids(mut self, tool_ids: Vec<String>) -> Self {
+        self.allowed_tool_ids = ToolSelector::Exact(tool_ids);
+        self
+    }
+
+    /// Ops-agent: operator-selected tools, subject to scope/auth/rate limits.
     pub fn ops_agent() -> Self {
         Self {
             profile: McpProfile::OpsAgent,
@@ -116,24 +124,22 @@ impl McpProfilePolicy {
         }
     }
 
-    /// Coding-agent: deny-by-default, narrow validation tools only.
+    /// Coding-agent: operator-selected tools with the profile safety limits below.
     pub fn coding_agent() -> Self {
         Self {
             profile: McpProfile::CodingAgent,
-            default_target_policy: TargetPolicy::ScopeOrLocalDevOnly,
-            allowed_tool_ids: ToolSelector::Exact(vec![
-                "scan".to_string(),
-                "scan-ports".to_string(),
-                "fingerprint".to_string(),
-                "endpoints".to_string(),
-                "waf-detect".to_string(),
-                "search".to_string(),
-            ]),
+            // MCP authorization uses the operator-loaded scope via
+            // EnforcementContext; profile-local network blocks must not
+            // override an explicitly scoped target.
+            default_target_policy: TargetPolicy::AnyWithScopeEngine,
+            // The running MCP server replaces this with the operator-selected
+            // IDs. Keep profile construction free of a source-coded tool list.
+            allowed_tool_ids: ToolSelector::All,
             denied_tool_ids: ToolSelector::None,
             allowed_categories: ToolSelector::None,
             denied_categories: ToolSelector::Exact(vec![
-                "stresstesting".to_string(),
-                "loadtesting".to_string(),
+                "stress".to_string(),
+                "loadtest".to_string(),
             ]),
             max_concurrency: 5,
             max_timeout_ms: 60_000,
@@ -142,10 +148,12 @@ impl McpProfilePolicy {
             allow_sessions: false,
             allow_plan_endpoint: false,
             require_explicit_scope: true,
-            allow_external_network: false,
+            allow_external_network: true,
             allow_stress_testing: false,
             allow_packet_features: false,
-            allow_broad_recon: false,
+            // Operator selection and LoadedScope, not a source-coded tool list,
+            // govern the available reconnaissance surface.
+            allow_broad_recon: true,
             denied_argument_keys: vec![
                 "stealth".to_string(),
                 "proxy_rotation".to_string(),
@@ -169,6 +177,9 @@ impl McpProfilePolicy {
             return false;
         }
         if self.denied_tool_ids.matches(tool) {
+            return false;
+        }
+        if !self.is_tool_risk_allowed(&tool.id) {
             return false;
         }
         let cat_str = format!("{:?}", tool.category).to_lowercase();
@@ -197,6 +208,16 @@ impl McpProfilePolicy {
         true
     }
 
+    fn is_tool_risk_allowed(&self, tool_id: &str) -> bool {
+        match classify_tool_risk(tool_id) {
+            crate::config::OperationRisk::StressTest => self.allow_stress_testing,
+            crate::config::OperationRisk::RawPacket => self.allow_packet_features,
+            crate::config::OperationRisk::ExploitAdjacent
+            | crate::config::OperationRisk::RemoteExecution => false,
+            _ => true,
+        }
+    }
+
     /// Validate that a tool call is allowed by this policy.
     ///
     /// Returns Ok(()) if allowed, Err(McpError) if denied.
@@ -217,41 +238,12 @@ impl McpProfilePolicy {
             protocols: Vec::new(),
         };
 
-        if !self.allowed_tool_ids.matches(&synthetic) {
+        // Use the same selection and category checks as discovery so an
+        // unlisted tool cannot be invoked directly by name.
+        if !self.is_tool_visible(&synthetic) {
             return Err(PolicyViolation::ToolDenied {
                 tool_id: tool_id.to_string(),
             });
-        }
-        if self.denied_tool_ids.matches(&synthetic) {
-            return Err(PolicyViolation::ToolDenied {
-                tool_id: tool_id.to_string(),
-            });
-        }
-
-        // Check tool risk against profile budget
-        let risk = classify_tool_risk(tool_id);
-        match risk {
-            crate::config::OperationRisk::StressTest if !self.allow_stress_testing => {
-                return Err(PolicyViolation::ToolDenied {
-                    tool_id: tool_id.to_string(),
-                });
-            }
-            crate::config::OperationRisk::RawPacket if !self.allow_packet_features => {
-                return Err(PolicyViolation::ToolDenied {
-                    tool_id: tool_id.to_string(),
-                });
-            }
-            crate::config::OperationRisk::ExploitAdjacent => {
-                return Err(PolicyViolation::ToolDenied {
-                    tool_id: tool_id.to_string(),
-                });
-            }
-            crate::config::OperationRisk::RemoteExecution => {
-                return Err(PolicyViolation::ToolDenied {
-                    tool_id: tool_id.to_string(),
-                });
-            }
-            _ => {}
         }
 
         // Check denied argument keys
@@ -714,32 +706,24 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_policy_filters_tools() {
-        let policy = McpProfilePolicy::coding_agent();
+    fn test_coding_agent_policy_uses_operator_selection_and_profile_category_limits() {
+        let policy = McpProfilePolicy::coding_agent().with_allowed_tool_ids(vec![
+            "scan".to_string(),
+            "waf-bypass".to_string(),
+            "load".to_string(),
+        ]);
         let tools = vec![
             make_tool("scan", ToolCategory::Scanning),
             make_tool("fuzz", ToolCategory::Fuzzing),
-            make_tool("recon", ToolCategory::Recon),
             make_tool("load", ToolCategory::LoadTest),
-            make_tool("scan-ports", ToolCategory::Scanning),
-            make_tool("fingerprint", ToolCategory::Scanning),
-            make_tool("waf-detect", ToolCategory::Waf),
             make_tool("waf-bypass", ToolCategory::Waf),
-            make_tool("search", ToolCategory::Pipeline),
-            make_tool("endpoints", ToolCategory::Scanning),
         ];
         let filtered = policy.filter_tools(tools);
         let ids: Vec<&str> = filtered.iter().map(|t| t.id.as_str()).collect();
         assert!(ids.contains(&"scan"));
-        assert!(ids.contains(&"scan-ports"));
-        assert!(ids.contains(&"fingerprint"));
-        assert!(ids.contains(&"waf-detect"));
-        assert!(ids.contains(&"search"));
-        assert!(ids.contains(&"endpoints"));
+        assert!(ids.contains(&"waf-bypass"));
         assert!(!ids.contains(&"fuzz"));
-        assert!(!ids.contains(&"recon"));
         assert!(!ids.contains(&"load"));
-        assert!(!ids.contains(&"waf-bypass"));
     }
 
     #[test]
@@ -751,8 +735,9 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_tool_call_denied() {
-        let policy = McpProfilePolicy::coding_agent();
+    fn test_coding_agent_tool_call_denies_unselected_tool() {
+        let policy =
+            McpProfilePolicy::coding_agent().with_allowed_tool_ids(vec!["scan".to_string()]);
         let result = policy.validate_tool_call("fuzz", None, &serde_json::json!({}));
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -822,27 +807,23 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_target_public_denied() {
+    fn test_coding_agent_target_policy_defers_to_loaded_scope() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_target("https://example.com");
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            PolicyViolation::TargetDenied { target, .. } => {
-                assert_eq!(target, "https://example.com")
-            }
-            _ => panic!("Expected TargetDenied"),
-        }
+        assert!(policy.validate_target("https://example.com").is_ok());
+        assert!(policy
+            .validate_target("http://169.254.169.254/latest/meta-data")
+            .is_ok());
     }
 
     #[test]
-    fn test_coding_agent_target_metadata_denied() {
+    fn test_coding_agent_target_host_filters_are_not_a_scope_authority() {
         let policy = McpProfilePolicy::coding_agent();
         assert!(policy
             .validate_target("http://169.254.169.254/latest/meta-data")
-            .is_err());
+            .is_ok());
         assert!(policy
             .validate_target("http://metadata.google.internal")
-            .is_err());
+            .is_ok());
     }
 
     #[test]
@@ -914,7 +895,7 @@ mod tests {
 
         let coding = McpProfilePolicy::for_profile(McpProfile::CodingAgent);
         assert_eq!(coding.profile, McpProfile::CodingAgent);
-        assert!(!coding.allow_external_network);
+        assert!(coding.allow_external_network);
     }
 
     // Phase 12: Additional policy tests
@@ -1010,14 +991,14 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_target_metadata_azure_denied() {
+    fn test_coding_agent_target_metadata_is_deferred_to_loaded_scope() {
         let policy = McpProfilePolicy::coding_agent();
         assert!(policy
             .validate_target("http://169.254.169.254/latest/meta-data")
-            .is_err());
+            .is_ok());
         assert!(policy
             .validate_target("http://metadata.azure.internal")
-            .is_err());
+            .is_ok());
     }
 
     #[test]
@@ -1135,6 +1116,30 @@ mod tests {
     }
 
     #[test]
+    fn test_coding_agent_discovery_hides_profile_denied_risks() {
+        let policy = McpProfilePolicy::coding_agent().with_allowed_tool_ids(vec![
+            "stress".to_string(),
+            "packet".to_string(),
+            "db-pentest".to_string(),
+            "proxy".to_string(),
+        ]);
+        let tools = vec![
+            make_tool("stress", ToolCategory::Stress),
+            make_tool("packet", ToolCategory::Scanning),
+            make_tool("db-pentest", ToolCategory::Pipeline),
+            make_tool("proxy", ToolCategory::Scanning),
+        ];
+
+        let visible: Vec<String> = policy
+            .filter_tools(tools)
+            .into_iter()
+            .map(|tool| tool.id)
+            .collect();
+
+        assert_eq!(visible, vec!["db-pentest", "proxy"]);
+    }
+
+    #[test]
     fn test_coding_agent_risk_denies_stress() {
         let policy = McpProfilePolicy::coding_agent();
         let result = policy.validate_tool_call("stress", None, &serde_json::json!({}));
@@ -1245,16 +1250,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_target_bare_ipv6_global_denied() {
+    fn test_validate_target_bare_ipv6_is_deferred_to_loaded_scope() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_target("2001:db8::1");
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            PolicyViolation::TargetDenied { target, .. } => {
-                assert_eq!(target, "2001:db8::1");
-            }
-            _ => panic!("Expected TargetDenied"),
-        }
+        assert!(policy.validate_target("2001:db8::1").is_ok());
     }
 
     #[test]
@@ -1340,11 +1338,12 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_denies_db_pentest() {
-        let policy = McpProfilePolicy::coding_agent();
+    fn test_coding_agent_allows_operator_selected_db_pentest() {
+        let policy =
+            McpProfilePolicy::coding_agent().with_allowed_tool_ids(vec!["db-pentest".to_string()]);
         assert!(policy
             .validate_tool_call("db-pentest", None, &serde_json::json!({}))
-            .is_err());
+            .is_ok());
     }
 
     #[test]
@@ -1379,11 +1378,12 @@ mod tests {
     }
 
     #[test]
-    fn test_coding_agent_denies_proxy() {
-        let policy = McpProfilePolicy::coding_agent();
+    fn test_coding_agent_allows_operator_selected_proxy_when_profile_risk_allows() {
+        let policy =
+            McpProfilePolicy::coding_agent().with_allowed_tool_ids(vec!["proxy".to_string()]);
         assert!(policy
             .validate_tool_call("proxy", None, &serde_json::json!({}))
-            .is_err());
+            .is_ok());
     }
 
     #[test]
@@ -1498,9 +1498,11 @@ mod tests {
 
         let cases: &[(&str, OperationRisk)] = &[
             ("recon", OperationRisk::SafeActive),
+            ("scan", OperationRisk::SafeActive),
             ("scan-ports", OperationRisk::SafeActive),
             ("fuzz", OperationRisk::Intrusive),
             ("waf-detect", OperationRisk::SafeActive),
+            ("load", OperationRisk::LoadTest),
             ("load-test", OperationRisk::LoadTest),
             ("stress-test", OperationRisk::StressTest),
             ("packet", OperationRisk::RawPacket),

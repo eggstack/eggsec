@@ -55,11 +55,15 @@ fn force_running(app: &mut crate::App) {
     set_state(app, AppState::Running);
 }
 
-/// Tabs that can never be running, because they own no task lifecycle: they
-/// report `AppState::Idle` unconditionally and have no `set_state` hook. There
-/// is no "mid-run" state to protect, so they are excluded.
+/// Tabs that can participate in the generic task lifecycle and expose an
+/// input-focus indicator. Dashboard/History/Settings have no task lifecycle;
+/// Intercept has its own flow-list/detail/action-bar controls and deliberately
+/// reports no text input, so its running navigation is tested separately.
 fn can_run(tab: &Tab) -> bool {
-    !matches!(*tab, Tab::Dashboard | Tab::History | Tab::Settings)
+    !matches!(
+        *tab,
+        Tab::Dashboard | Tab::History | Tab::Settings | Tab::Intercept
+    )
 }
 
 #[test]

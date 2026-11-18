@@ -553,7 +553,10 @@ impl RemoteListener {
                     timeout,
                     env,
                 } => {
-                    tracing::info!(command = ?command, "Executing remote command");
+                    tracing::info!(
+                        argument_count = command.len().saturating_sub(1),
+                        "Executing remote command"
+                    );
                     match CommandExecutor::execute(command, timeout, env).await {
                         Ok((output, duration_ms)) => {
                             let response = ResponseMessage::success(id, output, duration_ms);

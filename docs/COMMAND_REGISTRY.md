@@ -114,6 +114,11 @@ The full server-lifecycle group (`serve`, `mcp-serve`, `agent`, `grpc`,
 the CLI operator uses these to launch the daemon, not to interactively invoke
 them in the helper sense.
 
+Both `mcp-serve` and `codegg-mcp` default to loopback. Non-loopback HTTP binds
+require both `--allow-public-bind` and a non-empty `--api-key`; public exposure
+can permit remote task submission and session access. Stdio mode remains
+unaffected and does not require an API key.
+
 Two ID details that agents routinely get wrong:
 
 - The Clap subcommand is `remote`, but its registry `command_id()` is
