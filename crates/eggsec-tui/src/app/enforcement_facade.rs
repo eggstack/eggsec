@@ -165,8 +165,9 @@ impl EnforcementFacade {
         }
     }
 
-    /// Central policy evaluation + dispatch. Uses the `ApprovedOperation` token
-    /// to structurally gate `spawn_task()`. Handles `EnforcementError` variants
+    /// Central policy evaluation + dispatch. Passes the mandatory
+    /// `ApprovedOperation` token to `spawn_task()`, which verifies request
+    /// binding before runtime submission. Handles `EnforcementError` variants
     /// for confirmation/denial flows.
     ///
     /// If a cached `ApprovedOperation` from the pre-dispatch gate exists (set in
@@ -175,8 +176,8 @@ impl EnforcementFacade {
     /// surface/profile, and manual-override state. A stale token is discarded
     /// and the request is freshly evaluated for the correct descriptor, so it
     /// never produces a second approval for the wrong descriptor nor a late
-    /// engine binding failure the frontend could have caught earlier.
-    /// Engine-side `validate_request_binding` remains the final gate.
+    /// binding failure the TUI could have caught earlier. The engine-owned
+    /// `validate_run_request_binding` runs in `spawn_task()` before submission.
     // `EnforcementError` embeds a full `PolicyDecision` and is deliberately
     // kept unboxed (see `eggsec_policy::decision::EnforcementError`), so the
     // large `Err` payload is inherent to the API rather than a defect here.

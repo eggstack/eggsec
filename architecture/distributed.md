@@ -313,12 +313,12 @@ Wraps a `StreamWrapper` with newline-delimited JSON framing:
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `ALLOWED_COMMANDS` | `["eggsec"]` | Only `eggsec` executable permitted |
+| Command filtering | None | Program and argument tokens are operator-selected; no source-coded allow/deny table |
 | `MAX_OUTPUT_SIZE` | 10 MB (10,485,760) | Max command output size |
 | `MAX_ARGS` | 50 | Max command arguments |
 | `MAX_ARG_LENGTH` | 1000 | Max characters per argument |
 | `MAX_TASKS_PER_REQUEST` | 5 | Max tasks per `request_tasks` call (`worker.rs:22`) |
-| `FORBIDDEN_PATTERNS` | 13 patterns | `../`, `..\`, `/etc/`, `/root/`, `/proc/`, `/sys/`, `~/.ssh/`, `~/.aws/`, `.pem`, `.key`, `--config`, `--config-file`, `--credentials` |
+| `MAX_COMMAND_TIMEOUT_SECS` | 300 seconds | Default and maximum command runtime (`command.rs`) |
 
 ### Infrastructure Constants (`remote.rs:17-19`, `eggsec-core/src/constants.rs:27-28`)
 
@@ -453,19 +453,23 @@ When a worker registers, the coordinator filters its claimed capabilities agains
 2. **IP allowlist** (optional): `RemoteListener::with_allowlist()` restricts connections to specific IPs/CIDRs.
 3. **Rate limiting**: 60 connections/minute per IP prevents rapid brute-force attempts.
 4. **Connection limits**: Max 100 concurrent connections prevents resource exhaustion.
-5. **Command executor sandboxing** (`command.rs:129-249`): Only `eggsec` binary allowed; forbidden path patterns; max 50 args, 1000 chars each; 10MB output limit; no custom environment variables.
+5. **Command execution trust boundary** (`command.rs`): no executable or argument-pattern filter; a PSK-authenticated peer can run arbitrary programs as the listener OS account. Argument count/length, environment, timeout, and output bounds limit resource use but do not sandbox commands. Use TLS and a dedicated host reachable only by trusted operators.
 6. **Enforcement context**: When `tool-api` is enabled, workers wrap task processing in an `EnforcementContext` approving against the `SecurityAgent` surface, which validates scope and policy for every dispatched task (`worker.rs:671-677`).
 
-### Command Executor Security (`command.rs:129-249`)
+### Command Executor Bounds and Trust Boundary (`command.rs`)
 
 | Check | Value |
 |-------|-------|
-| Allowed executables | `["eggsec"]` only |
-| Max arguments | 50 |
-| Max argument length | 1000 chars |
+| Allowed executables | Operator-selected; no source-coded executable allowlist |
+| Arguments | Up to 50 arguments plus program; each token at most 1000 bytes |
+| Timeout | Defaults to 300 seconds; explicit values clamped to 1–300 seconds |
 | Max output size | 10 MB |
-| Custom environment | Rejected (security: prevents PATH/LD_PRELOAD injection) |
-| Forbidden patterns | 13 patterns including `../`, `/etc/`, `~/.ssh/`, `.pem`, `.key`, `--config`, `--credentials` |
+| Custom environment | Rejected |
+| Forbidden argument patterns | None; path-like and option-like tokens pass unchanged |
+
+A peer holding the valid PSK is trusted to execute arbitrary programs as the
+listener account. TLS protects the channel; neither TLS nor PSK authentication
+turns this executor into a sandbox.
 
 ## Public API
 

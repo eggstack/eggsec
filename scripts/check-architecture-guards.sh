@@ -4364,6 +4364,77 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 151. Manual TUI submission keeps the approval token mandatory and bound.
+echo ""
+echo "--- Check 151: TUI submission binds requests to mandatory approvals ---"
+SECTION_FAIL=0
+TASK_RUNTIME="crates/eggsec-tui/src/app/task_runtime.rs"
+DISPATCH_MOD="crates/eggsec/src/dispatch/mod.rs"
+CANONICAL_EXECUTION="crates/eggsec/src/dispatch/canonical_execution.rs"
+if rg -q '_approved|Option<ApprovedOperation>' "$TASK_RUNTIME" 2>/dev/null; then
+  echo "FAIL: TUI spawn_task has a discarded or optional ApprovedOperation."
+  rg -n '_approved|Option<ApprovedOperation>' "$TASK_RUNTIME" 2>/dev/null || true
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub\(crate\) fn spawn_task' "$TASK_RUNTIME" 2>/dev/null \
+  || ! rg -q 'approved: ApprovedOperation' "$TASK_RUNTIME" 2>/dev/null \
+  || ! rg -q 'validate_run_request_binding\(&approved, &request' "$TASK_RUNTIME" 2>/dev/null; then
+  echo "FAIL: spawn_task must require an approval and validate the request before submission."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -q 'pub\(crate\) async fn dispatch_inner' "$DISPATCH_MOD" 2>/dev/null; then
+  echo "FAIL: dispatch_inner must remain crate-visible only."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+if ! rg -U -q '#\[doc\(hidden\)\][[:space:]]*pub async fn execute_canonical' "$CANONICAL_EXECUTION" 2>/dev/null; then
+  echo "FAIL: execute_canonical must remain doc-hidden while public for its compatibility test."
+  SECTION_FAIL=$((SECTION_FAIL + 1))
+fi
+EXEC_CANONICAL_CALLERS=$(rg -l 'execute_canonical[[:space:]]*\(' crates --glob='*.rs' 2>/dev/null || true)
+for file in $EXEC_CANONICAL_CALLERS; do
+  case "$file" in
+    crates/eggsec/src/dispatch/mod.rs|crates/eggsec/src/dispatch/canonical_execution.rs|crates/eggsec-tui/src/app/task_dispatcher.rs|crates/eggsec/tests/*)
+      ;;
+    *)
+      echo "FAIL: direct execute_canonical caller is outside TUI/tests: $file"
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+      ;;
+  esac
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: TUI task submissions are approval-bound; unchecked entry points are restricted."
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# 152. The TUI never writes secrets or other values to the process environment.
+echo ""
+echo "--- Check 152: TUI production code does not write process environment ---"
+SECTION_FAIL=0
+TUI_ENV_WRITES=$(rg -l 'std::env::set_var[[:space:]]*\(' crates/eggsec-tui/src --glob='*.rs' 2>/dev/null || true)
+for file in $TUI_ENV_WRITES; do
+  TEST_MODULE_LINE=$(rg -n '#\[cfg\(test\)]|^mod tests' "$file" 2>/dev/null | head -1 | cut -d: -f1)
+  if [[ -z "$TEST_MODULE_LINE" ]]; then
+    echo "FAIL: $file writes to the environment and has no test module boundary."
+    rg -n 'std::env::set_var[[:space:]]*\(' "$file" 2>/dev/null || true
+    SECTION_FAIL=$((SECTION_FAIL + 1))
+    continue
+  fi
+  while IFS= read -r hit; do
+    line=$(echo "$hit" | cut -d: -f1)
+    if [[ "$line" -lt "$TEST_MODULE_LINE" ]]; then
+      echo "$file:$hit"
+      echo "FAIL: production TUI code must not call std::env::set_var."
+      SECTION_FAIL=$((SECTION_FAIL + 1))
+    fi
+  done < <(rg -n 'std::env::set_var[[:space:]]*\(' "$file" 2>/dev/null || true)
+done
+if [[ $SECTION_FAIL -eq 0 ]]; then
+  echo "PASS: no production TUI process-environment writes."
+else
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=== Summary ==="
 if [[ $FAIL -gt 0 ]]; then

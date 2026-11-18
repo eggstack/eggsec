@@ -132,35 +132,17 @@ pub fn resolve_tool_registration(tool_id: &str) -> Option<ToolRegistration> {
 /// still required before any tool listed here can execute.
 ///
 /// - `"ops-agent"`: profile-expanded — every `mcp_metadata_exposable` tool
-/// - `"coding-agent"`: hardcoded narrow allowlist (scan-ports, fingerprint,
-///   scan-endpoints, endpoints, waf-detect, search)
+/// - `"coding-agent"`: every `mcp_metadata_exposable` tool; the operator
+///   selection is applied by the running server
 /// - any other: empty
 ///
 /// See `docs/TOOL_REGISTRATION.md` for the full exposure model.
 pub fn mcp_tool_registrations(profile: &str) -> Vec<ToolRegistration> {
-    let all = all_tool_registrations();
     match profile {
-        "ops-agent" => all
+        "ops-agent" | "coding-agent" => all_tool_registrations()
             .into_iter()
             .filter(|r| r.mcp_metadata_exposable)
             .collect(),
-        "coding-agent" => {
-            let coding_agent_ids = [
-                "scan",
-                "scan-ports",
-                "fingerprint",
-                "scan-endpoints",
-                "endpoints",
-                "waf-detect",
-                "search",
-            ];
-            all.into_iter()
-                .filter(|r| {
-                    coding_agent_ids.contains(&r.tool_id)
-                        || coding_agent_ids.contains(&r.operation_id)
-                })
-                .collect()
-        }
         _ => Vec::new(),
     }
 }
@@ -280,22 +262,17 @@ mod tests {
     }
 
     #[test]
-    fn mcp_coding_agent_returns_coding_tools() {
+    fn mcp_coding_agent_registrations_are_metadata_exposable() {
         let regs = mcp_tool_registrations("coding-agent");
-        let ids: Vec<&str> = regs.iter().map(|r| r.tool_id).collect();
-        assert!(
-            regs.len() >= 4,
-            "coding-agent should have at least 4 tools, got {}",
-            regs.len()
+        let ops = mcp_tool_registrations("ops-agent");
+        assert!(!regs.is_empty());
+        assert_eq!(
+            regs.iter().map(|r| r.tool_id).collect::<Vec<_>>(),
+            ops.iter().map(|r| r.tool_id).collect::<Vec<_>>()
         );
-        for &expected in &["scan-ports", "fingerprint", "waf-detect", "search"] {
-            assert!(
-                ids.contains(&expected),
-                "coding-agent should include '{}', got: {:?}",
-                expected,
-                ids
-            );
-        }
+        assert!(regs
+            .iter()
+            .all(|registration| registration.mcp_metadata_exposable));
     }
 
     #[test]

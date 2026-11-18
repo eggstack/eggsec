@@ -218,54 +218,48 @@ Chained security assessment pipelines:
 
 ## MCP Profiles
 
-Eggsec's MCP server has two profiles that control available tools and safety policies.
+Both MCP profiles require at least one explicit operator-selected tool via repeated
+`--allow-tool TOOL_ID` flags. The live set intersects those IDs with the active
+compiled registry, MCP exposure metadata, and profile controls; there is no
+source-coded fixed tool-ID allowlist. Selection is not authorization: networked
+operations still require the strict operator-loaded `LoadedScope` and
+`EnforcementContext` approval before dispatch.
 
 ### Ops-Agent Profile
 
-Full security testing toolkit for AI agents. All tools are available.
-
-| Capability | Available | Notes |
-|------------|-----------|-------|
-| Recon | Yes | All 23 recon modules |
-| Port scanning | Yes | |
-| Fingerprinting | Yes | |
-| Fuzzing (all types) | Yes | 40 payload types |
-| WAF detection/bypass | Yes | |
-| WAF stress testing | Yes | |
-| Load testing | Yes | |
-| Stress testing | Yes | SYN/UDP/ICMP floods |
-| Pipeline scanning | Yes | All profiles |
-| Session management | Yes | |
-| Plan generation | Yes | |
-
-### Coding-Agent Profile
-
-Bounded security validation tools for coding assistants. Restricted toolset with enforced safety.
-
-| Capability | Available | Notes |
-|------------|-----------|-------|
-| Target validation | Yes | Verify target is local/scope-allowed |
-| Re-check findings | Yes | Verify if a finding is fixed/still present |
-| Port scanning | Limited | Localhost/private IPs only |
-| Fingerprinting | Limited | Localhost/private IPs only |
-| Fuzzing (safe types) | Limited | xss, sqli, traversal only |
-| WAF detection | Limited | Localhost/private IPs only |
-| Load testing | No | Denied by policy |
-| Stress testing | No | Denied by policy |
-| Broad recon | No | Denied by policy |
-| External network | No | Denied by policy (unless scoped) |
-
-### Coding-Agent Safety Defaults
+The broader profile for tools the operator explicitly selects. It allows stress
+and packet features, sessions, and planning subject to the configured policy,
+loaded scope, and resource caps. The `/plan` endpoint uses only the selected
+tool registry view.
 
 | Setting | Value |
 |---------|-------|
-| Target policy | `ScopeOrLocalDevOnly` |
-| Max concurrency | 5 |
-| Max timeout | 60,000 ms |
-| Max batch size | 10 |
-| External network | Blocked |
-| Stress testing | Blocked |
-| Broad recon | Blocked |
+| Selected tools | Required; compiled/MCP-exposable tools only |
+| Target policy | `AnyWithScopeEngine`; operator-loaded strict scope |
+| Max concurrency / timeout / batch | 50 / 600,000 ms / 100 |
+| Stress testing / packet features | Available when selected and authorized |
+| Sessions / `/plan` | Enabled |
+
+### Coding-Agent Profile
+
+The resource-bounded profile for coding assistants. The operator still chooses
+the tool IDs; the server applies profile risk, argument, and resource limits,
+then strict scope authorization. There is no localhost/private-host restriction
+that overrides an explicit loaded scope.
+
+| Setting | Value |
+|---------|-------|
+| Selected tools | Required; compiled/MCP-exposable tools only |
+| Target policy | `AnyWithScopeEngine`; operator-loaded strict scope |
+| Max concurrency / timeout / batch | 5 / 60,000 ms / 10 |
+| Stress/load testing and raw packets | Denied by profile |
+| Exploit-adjacent and remote execution | Denied by profile |
+| Denied argument keys | `stealth`, `proxy_rotation`, `spoof_source`, `raw_packet` |
+| Sessions / `/plan` | Disabled |
+
+Operators can expose tools such as `db-pentest` or `proxy` when they are
+compiled and MCP-exposable; the active profile and strict capability/scope policy
+still govern calls.
 
 ---
 
@@ -337,8 +331,8 @@ Bounded security validation tools for coding assistants. Restricted toolset with
 |---------|-------------|
 | `eggsec serve --port` | REST API server |
 | `eggsec grpc-serve --port` | gRPC API server |
-| `eggsec mcp-serve --port` | MCP server for AI agents |
-| `eggsec codegg-mcp` | MCP server for coding agents (stdio, coding-agent profile) |
+| `eggsec mcp-serve --port --allow-tool <TOOL_ID>` | MCP server for AI agents; repeat `--allow-tool` for each selected tool |
+| `eggsec codegg-mcp --allow-tool <TOOL_ID>` | MCP server for coding agents (stdio, coding-agent profile); repeat `--allow-tool` for each selected tool |
 
 ### NSE Scripting
 

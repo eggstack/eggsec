@@ -89,12 +89,17 @@ async fn process_batch(
 
 struct AppState {
     mcp_server: Arc<McpServer>,
+    visible_registry: ToolRegistry,
     planner: ChainPlanner,
     openapi_generator: OpenApiGenerator,
+    plan_endpoint_enabled: bool,
 }
 
 async fn handle_openapi_json(State(state): State<Arc<AppState>>) -> axum::Json<serde_json::Value> {
-    let spec = state.openapi_generator.generate(&state.mcp_server.registry);
+    let mut spec = state.openapi_generator.generate(&state.visible_registry);
+    if !state.plan_endpoint_enabled {
+        spec.paths.remove("/plan");
+    }
     axum::Json(
         serde_json::from_str(&spec.to_json())
             .inspect_err(|e| {
@@ -105,7 +110,10 @@ async fn handle_openapi_json(State(state): State<Arc<AppState>>) -> axum::Json<s
 }
 
 async fn handle_openapi_yaml(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let spec = state.openapi_generator.generate(&state.mcp_server.registry);
+    let mut spec = state.openapi_generator.generate(&state.visible_registry);
+    if !state.plan_endpoint_enabled {
+        spec.paths.remove("/plan");
+    }
     ([("Content-Type", "application/x-yaml")], spec.to_yaml())
 }
 
@@ -133,31 +141,127 @@ pub async fn create_mcp_router(
     profile: McpProfile,
     enforcement: crate::config::EnforcementContext,
 ) -> Router {
+    create_mcp_router_with_allowed_tools(registry, api_key, profile, enforcement, Vec::new()).await
+}
+
+pub async fn create_mcp_router_with_allowed_tools(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    profile: McpProfile,
+    enforcement: crate::config::EnforcementContext,
+    allowed_tool_ids: Vec<String>,
+) -> Router {
     // Use the production constructor that directly accepts EnforcementContext (no build-then-patch).
-    let server = Arc::new(McpServer::with_enforcement(
-        registry.clone(),
-        api_key,
-        profile,
-        enforcement,
-    ));
-    let planner = ChainPlanner::new(registry.clone());
+    let server = Arc::new(
+        McpServer::with_enforcement(registry.clone(), api_key, profile, enforcement)
+            .with_allowed_tool_ids(allowed_tool_ids),
+    );
+    let visible_ids: Vec<String> = server
+        .visible_tools()
+        .into_iter()
+        .map(|tool| tool.id)
+        .collect();
+    let visible_registry = registry.filtered_by_ids(&visible_ids);
+    let planner = ChainPlanner::new(visible_registry.clone());
     let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
+    let plan_endpoint_enabled = server.plan_endpoint_enabled();
 
     let app_state = Arc::new(AppState {
         mcp_server: server,
+        visible_registry,
         planner,
         openapi_generator,
+        plan_endpoint_enabled,
     });
 
-    Router::new()
+    let mut router = Router::new()
         .route("/mcp", post(handle_mcp))
         .route("/json-rpc", post(handle_mcp))
         .route("/mcp/stream/{request_id}", get(handle_sse_stream))
         .route("/health", get(handle_health))
         .route("/openapi.json", get(handle_openapi_json))
-        .route("/openapi.yaml", get(handle_openapi_yaml))
-        .route("/plan", post(handle_create_plan))
-        .with_state(app_state)
+        .route("/openapi.yaml", get(handle_openapi_yaml));
+    if plan_endpoint_enabled {
+        router = router.route("/plan", post(handle_create_plan));
+    }
+    router.with_state(app_state)
+}
+
+#[cfg(test)]
+mod router_visibility_tests {
+    use super::*;
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use tower::ServiceExt;
+
+    fn strict_enforcement() -> crate::config::EnforcementContext {
+        crate::config::EnforcementContext::mcp_strict(
+            crate::config::ExecutionPolicy::default(),
+            crate::config::LoadedScope::default_empty(),
+        )
+    }
+
+    #[tokio::test]
+    async fn discovery_and_plan_routes_follow_operator_selection_and_profile() {
+        let registry = crate::tool::create_default_registry();
+        let selected = vec!["recon".to_string()];
+        let router = create_mcp_router_with_allowed_tools(
+            registry,
+            None,
+            McpProfile::CodingAgent,
+            strict_enforcement(),
+            selected,
+        )
+        .await;
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get("/openapi.json")
+                    .body(Body::empty())
+                    .expect("request should be valid"),
+            )
+            .await
+            .expect("router should respond");
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1_048_576)
+            .await
+            .expect("OpenAPI response body should be readable");
+        let spec: serde_json::Value =
+            serde_json::from_slice(&body).expect("OpenAPI response should be JSON");
+        let paths = spec["paths"]
+            .as_object()
+            .expect("paths should be an object");
+        assert!(paths.contains_key("/mcp/recon"));
+        assert!(!paths.contains_key("/mcp/scan-ports"));
+        assert!(!paths.contains_key("/plan"));
+
+        let response = router
+            .oneshot(
+                Request::post("/plan")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({"goal": "recon", "target": "https://example.com"})
+                            .to_string(),
+                    ))
+                    .expect("request should be valid"),
+            )
+            .await
+            .expect("router should respond");
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn operator_selected_registry_view_is_independent_and_exact() {
+        let registry = crate::tool::create_default_registry();
+        let selected = vec!["recon".to_string()];
+        let view = registry.filtered_by_ids(&selected);
+        let ids: Vec<String> = view.list().into_iter().map(|tool| tool.id).collect();
+        assert_eq!(ids, selected);
+        assert!(registry.list().len() > ids.len());
+    }
 }
 
 async fn handle_health() -> axum::Json<serde_json::Value> {
@@ -333,14 +437,22 @@ pub async fn run_stdio(
     profile: McpProfile,
     enforcement: crate::config::EnforcementContext,
 ) {
+    run_stdio_with_allowed_tools(registry, api_key, profile, enforcement, Vec::new()).await;
+}
+
+pub async fn run_stdio_with_allowed_tools(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    profile: McpProfile,
+    enforcement: crate::config::EnforcementContext,
+    allowed_tool_ids: Vec<String>,
+) {
     use tokio::io::{AsyncBufReadExt, BufReader, BufWriter};
 
-    let server = Arc::new(McpServer::with_enforcement(
-        registry,
-        api_key,
-        profile,
-        enforcement,
-    ));
+    let server = Arc::new(
+        McpServer::with_enforcement(registry, api_key, profile, enforcement)
+            .with_allowed_tool_ids(allowed_tool_ids),
+    );
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();

@@ -34,7 +34,7 @@ services:
       - EGGSEC_CONFIG=/home/eggsec/.config/eggsec/eggsec.toml
       - RUST_BACKTRACE=1
       - EGGSEC_RATE_LIMIT=50
-      - REDIS_URL=redis://:eggsec123@redis:6379
+      - "REDIS_URL=redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379"
     
     healthcheck:
       test: ["CMD", "eggsec", "--version"]
@@ -60,7 +60,7 @@ services:
     container_name: dvwa-target
     hostname: dvwa.target.local
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     environment:
       - PHP_UPLOAD_LIMIT=10485760
       - PHP_MAX_EXECUTION_TIME=300
@@ -84,7 +84,7 @@ services:
     container_name: juice-shop-target
     hostname: juice-shop.target.local
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=secseed
     healthcheck:
@@ -107,11 +107,13 @@ services:
     container_name: eggsec-elastic
     environment:
       - discovery.type=single-node
+      # Lab-only: security remains disabled for existing smoke-test behavior;
+      # this service's host port is loopback-bound below.
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "ELASTIC_PASSWORD=eggsec123"
+      - "ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?set ELASTIC_PASSWORD}"
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - elastic-data:/usr/share/elasticsearch/data
     healthcheck:
@@ -134,7 +136,7 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -157,7 +159,7 @@ services:
     container_name: webhook-receiver
     hostname: webhook.target.local
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     environment:
       - HTTP_PORT=8080
     healthcheck:
@@ -179,11 +181,11 @@ services:
     container_name: tor-proxy
     hostname: tor-proxy.target.local
     ports:
-      - "9050:9050"
-      - "9051:9051"
+      - "127.0.0.1:9050:9050"
+      - "127.0.0.1:9051:9051"
     environment:
       - TOR_CONTROL_PORT=9051
-      - TOR_PASSWORD=eggsec123
+      - "TOR_PASSWORD=${TOR_PASSWORD:?set TOR_PASSWORD}"
     healthcheck:
       test: ["CMD", "torify", "curl", "-f", "http://localhost:9050"]
       interval: 30s
@@ -203,13 +205,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: eggsec-redis
-    command: redis-server --requirepass eggsec123
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?set REDIS_PASSWORD}"
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "eggsec123", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -227,15 +231,15 @@ services:
     container_name: metasploitable-target
     hostname: metasploitable.target.local
     ports:
-      - "2222:22"
-      - "3001:3000"
-      - "3306:3306"
-      - "5432:5432"
-      - "5900:5900"
-      - "6667:6667"
-      - "8009:8009"
-      - "8180:8180"
-      - "10000:10000"
+      - "127.0.0.1:2222:22"
+      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:3306:3306"
+      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5900:5900"
+      - "127.0.0.1:6667:6667"
+      - "127.0.0.1:8009:8009"
+      - "127.0.0.1:8180:8180"
+      - "127.0.0.1:10000:10000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 10s
@@ -262,10 +266,10 @@ services:
     hostname: postgres-lab.local
     environment:
       POSTGRES_USER: lab
-      POSTGRES_PASSWORD: labpass
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
       POSTGRES_DB: labdb
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lab -d labdb || exit 1"]
       interval: 5s
@@ -282,14 +286,14 @@ services:
     container_name: db-pentest-mysql-lab
     hostname: mysql-lab.local
     environment:
-      MYSQL_ROOT_PASSWORD: labpass
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}"
       MYSQL_DATABASE: labdb
       MYSQL_USER: lab
-      MYSQL_PASSWORD: labpass
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?set MYSQL_PASSWORD}"
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "lab", "-plabpass"]
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysqladmin ping -h 127.0.0.1 -u lab"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -305,11 +309,11 @@ services:
     hostname: mssql-lab.local
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "LabPassw0rd!Strong"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD}"
     ports:
-      - "1434:1433"
+      - "127.0.0.1:1434:1433"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LabPassw0rd!Strong' -Q 'SELECT 1' || exit 1"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30

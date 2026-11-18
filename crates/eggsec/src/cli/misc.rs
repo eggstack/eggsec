@@ -6,6 +6,8 @@ Start remote listener for distributed commands
 Listens for remote commands from coordinated scanner nodes.
 For authorized distributed scanning infrastructure only.
 Requires explicit scope and authorization before execution.
+A peer with the valid PSK can run arbitrary programs as the listener's OS user;
+this channel is not a command sandbox. Use TLS and a dedicated trusted host.
 
 Examples:
   eggsec remote start --port 7890 --auth <psk>
@@ -19,7 +21,8 @@ Execute commands on remote systems
 
 Sends commands to a remote listener for execution.
 For authorized distributed scanning infrastructure only.
-Requires explicit scope and authorization before execution.
+The selected remote host runs arbitrary programs and arguments as its listener
+OS user; use only trusted peers with TLS and an explicitly authorized scope.
 
 Examples:
   eggsec exec --target 192.168.1.100:7890 --auth <psk> -- ls -la
@@ -322,14 +325,29 @@ pub struct McpServeArgs {
     pub bind: String,
     #[arg(long, help = "API key for authentication")]
     pub api_key: Option<String>,
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Allow binding to a non-loopback address (requires --api-key)"
+    )]
+    pub allow_public_bind: bool,
     #[arg(long, help = "Enable stdio mode for AI assistant integration")]
     pub stdio: bool,
     #[arg(
         long,
         default_value = "ops-agent",
+        value_parser = ["ops-agent", "coding-agent"],
         help = "MCP profile (ops-agent or coding-agent)"
     )]
     pub profile: String,
+    #[arg(
+        long = "allow-tool",
+        value_name = "TOOL_ID",
+        action = clap::ArgAction::Append,
+        required = true,
+        help = "MCP tool ID to expose (repeat for each operator-approved tool)"
+    )]
+    pub allow_tools: Vec<String>,
 }
 
 #[derive(clap::Args)]
@@ -342,6 +360,12 @@ pub struct CodeggMcpArgs {
     pub api_key: Option<String>,
     #[arg(
         long,
+        default_value_t = false,
+        help = "Allow binding to a non-loopback address (requires --api-key)"
+    )]
+    pub allow_public_bind: bool,
+    #[arg(
+        long,
         default_value_t = true,
         help = "Enable stdio mode (default for codegg-mcp)"
     )]
@@ -349,9 +373,18 @@ pub struct CodeggMcpArgs {
     #[arg(
         long,
         default_value = "coding-agent",
+        value_parser = ["ops-agent", "coding-agent"],
         help = "MCP profile (coding-agent recommended for codegg-mcp)"
     )]
     pub profile: String,
+    #[arg(
+        long = "allow-tool",
+        value_name = "TOOL_ID",
+        action = clap::ArgAction::Append,
+        required = true,
+        help = "MCP tool ID to expose (repeat for each operator-approved tool)"
+    )]
+    pub allow_tools: Vec<String>,
 }
 
 #[derive(clap::Args)]

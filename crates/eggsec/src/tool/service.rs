@@ -384,8 +384,9 @@ mod tests {
     #[test]
     fn static_catalog_resolves_aliases_like_engine() {
         let catalog = StaticOperationCatalog;
-        // `scan` is a canonical alias for `scan-ports` (Phase C compat).
-        assert!(catalog.matches_tool_id("scan", "scan-ports"));
+        // Runtime MCP/CLI `scan` is the pipeline operation; the port scanner
+        // has its own registered runtime ID (`scan-ports`).
+        assert!(catalog.matches_tool_id("scan", "pipeline"));
         assert!(catalog.metadata_for_id("scan-ports").is_some());
         assert!(!catalog.all_metadata().is_empty());
     }

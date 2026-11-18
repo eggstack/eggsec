@@ -20,7 +20,10 @@ pub use policy::{
     classify_tool_risk, McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector,
 };
 pub use profile::McpProfile;
-pub use routes::{create_mcp_router, run_stdio};
+pub use routes::{
+    create_mcp_router, create_mcp_router_with_allowed_tools, run_stdio,
+    run_stdio_with_allowed_tools,
+};
 pub use streaming::StreamEvent;
 pub use types::{
     CapabilitySummary, McpError, McpNotification, McpRequest, McpResource, McpResponse, McpRoot,
@@ -29,15 +32,60 @@ pub use types::{
 
 #[cfg(test)]
 mod tests {
-    use crate::tool::protocol::mcp::{McpRequest, McpResponse};
+    use crate::tool::protocol::mcp::McpRequest;
     use crate::tool::{
         create_default_registry, protocol::mcp::McpServer, ChainPlanner, OpenApiGenerator,
         PlanRequest,
     };
 
+    struct ContextAwareLoadTestTool;
+
+    #[async_trait::async_trait]
+    impl crate::tool::traits::SecurityTool for ContextAwareLoadTestTool {
+        fn id(&self) -> &'static str {
+            "load"
+        }
+
+        fn name(&self) -> &'static str {
+            "Context-aware test load tool"
+        }
+
+        fn category(&self) -> crate::tool::ToolCategory {
+            crate::tool::ToolCategory::LoadTest
+        }
+
+        fn description(&self) -> &'static str {
+            "Test double that requires the approved scope context."
+        }
+
+        async fn execute(
+            &self,
+            _request: crate::tool::ToolRequest,
+        ) -> crate::tool::ToolResult<crate::tool::ToolResponse> {
+            Err(crate::error::EggsecError::Validation(
+                "scope context was not supplied".to_string(),
+            ))
+        }
+
+        async fn execute_with_context(
+            &self,
+            request: crate::tool::ToolRequest,
+            context: &crate::tool::ToolExecutionContext,
+        ) -> crate::tool::ToolResult<crate::tool::ToolResponse> {
+            Ok(crate::tool::ToolResponse::success(
+                request.id,
+                self.id(),
+                serde_json::json!({
+                    "scope_rule_count": context.scope.allowed_targets.len()
+                }),
+            ))
+        }
+    }
+
     fn create_test_server() -> McpServer {
         let registry = create_default_registry();
-        McpServer::new(registry, Some("test-api-key".to_string()))
+        let selected = registry.list().into_iter().map(|tool| tool.id).collect();
+        McpServer::new(registry, Some("test-api-key".to_string())).with_allowed_tool_ids(selected)
     }
 
     #[tokio::test]
@@ -59,6 +107,140 @@ mod tests {
         let result = response.result.unwrap();
         assert!(result.get("serverInfo").is_some());
         assert!(result.get("capabilities").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_operator_selected_tool_set_is_fail_closed_at_discovery_and_call_time() {
+        let registry = create_default_registry();
+        let empty_server = McpServer::new(registry.clone(), Some("test-api-key".to_string()));
+        let list_request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({"api_key": "test-api-key"})),
+        };
+        let empty_response = empty_server.handle_request(list_request.clone()).await;
+        let empty_result = empty_response.result.unwrap();
+        assert_eq!(empty_result["count"], 0);
+
+        let selected_server = McpServer::new(registry, Some("test-api-key".to_string()))
+            .with_allowed_tool_ids(vec!["scan-ports".to_string()]);
+        let selected_response = selected_server.handle_request(list_request.clone()).await;
+        let selected_result = selected_response.result.unwrap();
+        let names: Vec<&str> = selected_result["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect();
+        assert!(names.contains(&"scan-ports"));
+        assert!(!names.contains(&"fingerprint"));
+
+        let alias_server =
+            McpServer::new(create_default_registry(), Some("test-api-key".to_string()))
+                .with_allowed_tool_ids(vec!["scan".to_string(), "load".to_string()]);
+        let alias_response = alias_server.handle_request(list_request).await;
+        let alias_result = alias_response.result.expect("alias listing should succeed");
+        let alias_names: Vec<&str> = alias_result["tools"]
+            .as_array()
+            .expect("tools should be an array")
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect();
+        assert_eq!(alias_names.len(), 2);
+        assert!(alias_names.contains(&"scan"));
+        assert!(alias_names.contains(&"load"));
+        assert!(!alias_names.contains(&"eggsec_preflight"));
+
+        let preflight_call = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(3)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "eggsec_preflight"
+            })),
+        };
+        let rejected_preflight = alias_server.handle_request(preflight_call).await;
+        let preflight_error = rejected_preflight
+            .error
+            .expect("unregistered synthetic MCP tools must be rejected");
+        assert!(preflight_error
+            .message
+            .contains("Unknown tool or capability"));
+
+        let unselected_call = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(2)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "fingerprint",
+                "arguments": {"target": "https://example.com"}
+            })),
+        };
+        let denied = selected_server.handle_request(unselected_call).await;
+        assert_eq!(denied.error.unwrap().code, -32020);
+    }
+
+    #[tokio::test]
+    async fn scope_sensitive_load_dispatch_receives_approved_scope_snapshot() {
+        use crate::config::{
+            Capability, EnforcementContext, ExecutionPolicy, LoadedScope, Scope, ScopeRule,
+            ScopeSource,
+        };
+        use crate::tool::protocol::mcp::McpProfile;
+        use crate::tool::ToolRegistry;
+
+        let registry = ToolRegistry::new();
+        registry
+            .register(ContextAwareLoadTestTool)
+            .expect("test tool should register");
+
+        let mut scope = Scope::default();
+        scope
+            .allowed_targets
+            .push(ScopeRule::new("127.0.0.1".to_string()));
+        let loaded_scope = LoadedScope::explicit(scope, ScopeSource::ConfigFile, None);
+
+        let mut execution_policy = ExecutionPolicy::default();
+        execution_policy.allow_load_testing = true;
+        execution_policy
+            .allowed_capabilities
+            .push(Capability::LoadTest);
+        let enforcement = EnforcementContext::mcp_strict(execution_policy, loaded_scope);
+        let server = McpServer::with_enforcement(
+            registry,
+            Some("test-api-key".to_string()),
+            McpProfile::OpsAgent,
+            enforcement,
+        )
+        .with_allowed_tool_ids(vec!["load".to_string()]);
+
+        let response = server
+            .handle_request(McpRequest {
+                jsonrpc: "2.0".to_string(),
+                id: Some(serde_json::json!(1)),
+                method: "tools/call".to_string(),
+                params: Some(serde_json::json!({
+                    "api_key": "test-api-key",
+                    "name": "load",
+                    "arguments": {"target": "http://127.0.0.1"}
+                })),
+            })
+            .await;
+
+        assert!(
+            response.error.is_none(),
+            "MCP call should execute: {:?}",
+            response.error
+        );
+        let result = response.result.expect("successful MCP result");
+        assert_eq!(result["isError"], false);
+        let text = result["content"][0]["text"]
+            .as_str()
+            .expect("tool response text");
+        assert!(text.contains("\"scope_rule_count\": 1"), "{text}");
     }
 
     #[tokio::test]
@@ -471,6 +653,14 @@ mod tests {
     // Phase 12: Coding-agent profile tests
 
     fn create_coding_agent_server() -> McpServer {
+        let selected = crate::tool::registration::mcp_tool_registrations("coding-agent")
+            .into_iter()
+            .map(|registration| registration.tool_id.to_string())
+            .collect();
+        create_coding_agent_server_with_selection(selected)
+    }
+
+    fn create_coding_agent_server_with_selection(selected: Vec<String>) -> McpServer {
         let registry = create_default_registry();
         let enforcement = crate::config::EnforcementContext::mcp_strict(
             crate::config::ExecutionPolicy::default(),
@@ -482,6 +672,54 @@ mod tests {
             super::profile::McpProfile::CodingAgent,
             enforcement,
         )
+        .with_allowed_tool_ids(selected)
+    }
+
+    #[tokio::test]
+    async fn coding_agent_resources_reflect_operator_selection_and_loaded_scope() {
+        async fn read_resource(server: &McpServer, uri: &str) -> serde_json::Value {
+            let request = McpRequest {
+                jsonrpc: "2.0".to_string(),
+                id: Some(serde_json::json!(1)),
+                method: "resources/read".to_string(),
+                params: Some(serde_json::json!({"api_key": "test-api-key", "uri": uri})),
+            };
+            let response = server.handle_request(request).await;
+            assert!(response.error.is_none(), "resource read should succeed");
+            let result = response.result.expect("resource result should be present");
+            let text = result["contents"][0]["text"]
+                .as_str()
+                .expect("resource text should be a string");
+            serde_json::from_str(text).expect("resource text should contain JSON")
+        }
+
+        let server = create_coding_agent_server_with_selection(vec!["recon".to_string()]);
+        let manifest = read_resource(&server, "eggsec://coding-agent/manifest").await;
+        assert_eq!(
+            manifest["tool_selection"]["tool_ids"],
+            serde_json::json!(["recon"])
+        );
+        assert_eq!(manifest["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(manifest["tools"][0]["tool_id"], "recon");
+
+        let safety = read_resource(&server, "eggsec://coding-agent/safety-policy").await;
+        assert_eq!(safety["target_authority"]["requires_explicit_scope"], true);
+        assert_eq!(
+            safety["tool_selection"]["tool_ids"],
+            serde_json::json!(["recon"])
+        );
+        assert!(safety.get("default_allowlist").is_none());
+
+        let workflow = read_resource(&server, "eggsec://coding-agent/workflow").await;
+        assert_eq!(workflow["allowed_tools"], serde_json::json!(["recon"]));
+        assert_eq!(
+            workflow["steps"][1]["tool_options"],
+            serde_json::json!(["recon"])
+        );
+
+        let contracts = read_resource(&server, "eggsec://coding-agent/tool-contracts").await;
+        assert_eq!(contracts["contracts"].as_array().unwrap().len(), 1);
+        assert_eq!(contracts["contracts"][0]["tool_id"], "recon");
     }
 
     #[tokio::test]
@@ -500,30 +738,18 @@ mod tests {
         let tools = result.get("tools").unwrap().as_array().unwrap();
         let count = result.get("count").unwrap().as_u64().unwrap();
 
-        // Coding-agent only allows: scan, scan-ports, fingerprint, endpoints, waf-detect, search
-        assert!(
-            (1..=6).contains(&count),
-            "coding-agent should have 1-6 tools, got {}",
-            count
-        );
+        assert!(count > 0, "operator-selected MCP tools should be listed");
         let names: Vec<&str> = tools
             .iter()
             .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
             .collect();
+        let metadata_ids: Vec<String> =
+            crate::tool::registration::mcp_tool_registrations("coding-agent")
+                .into_iter()
+                .map(|registration| registration.tool_id.to_string())
+                .collect();
         for name in &names {
-            assert!(
-                [
-                    "scan",
-                    "scan-ports",
-                    "fingerprint",
-                    "endpoints",
-                    "waf-detect",
-                    "search"
-                ]
-                .contains(name),
-                "coding-agent should not expose tool: {}",
-                name
-            );
+            assert!(metadata_ids.iter().any(|id| id.as_str() == *name));
         }
     }
 
@@ -544,11 +770,11 @@ mod tests {
 
         // Should not have stress or load testing categories
         assert!(
-            !categories.contains_key("stresstesting"),
+            !categories.contains_key("stress"),
             "coding-agent should not expose stress testing"
         );
         assert!(
-            !categories.contains_key("loadtesting"),
+            !categories.contains_key("loadtest"),
             "coding-agent should not expose load testing"
         );
     }
@@ -582,7 +808,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "scan",
+                "name": "scan-ports",
                 "arguments": {"target": "http://localhost:8080", "stealth": true}
             })),
         };
@@ -602,7 +828,7 @@ mod tests {
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
                 "api_key": "test-api-key",
-                "name": "scan",
+                "name": "scan-ports",
                 "arguments": {"target": "http://localhost:8080", "concurrency": 100}
             })),
         };
@@ -630,7 +856,7 @@ mod tests {
         let response = server.handle_request(request).await;
         assert!(response.error.is_some());
         let error = response.error.unwrap();
-        assert_eq!(error.code, -32024); // TargetDenied error code
+        assert_eq!(error.code, -32025); // Strict enforcement / LoadedScope denial
     }
 
     #[tokio::test]
@@ -655,7 +881,7 @@ mod tests {
         let safety = result.get("safety").unwrap();
         assert_eq!(safety.get("max_concurrency").unwrap(), 5);
         assert_eq!(safety.get("max_timeout_ms").unwrap(), 60000);
-        assert_eq!(safety.get("default_external_network").unwrap(), false);
+        assert_eq!(safety.get("default_external_network").unwrap(), true);
         assert_eq!(safety.get("stress_testing_available").unwrap(), false);
     }
 
@@ -848,7 +1074,8 @@ mod tests {
                 ExecutionPolicy::default(),
                 LoadedScope::default_empty(),
             ),
-        );
+        )
+        .with_allowed_tool_ids(vec!["recon".to_string()]);
 
         let request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -902,7 +1129,8 @@ mod tests {
             Some("test-api-key".to_string()),
             McpProfile::OpsAgent,
             EnforcementContext::mcp_strict(policy, loaded),
-        );
+        )
+        .with_allowed_tool_ids(vec!["recon".to_string()]);
 
         let request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -936,8 +1164,8 @@ mod tests {
         let args = serde_json::json!({"target": "https://example.com"});
         let desc = operation_descriptor_for_mcp_call(&policy, "scan", None, &args).unwrap();
 
-        // Metadata lookup resolves "scan" alias to canonical "scan-ports"
-        assert_eq!(desc.operation, "scan-ports");
+        // Metadata lookup resolves the runtime "scan" alias to the pipeline operation.
+        assert_eq!(desc.operation, "pipeline");
         assert!(desc.target.is_some());
         assert!(desc.requires_explicit_scope); // Ops and Coding both set true
                                                // required_capabilities populated by the helper (exact contents depend on registry mapping; non-emptiness for scan is typical)

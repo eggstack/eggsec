@@ -1,6 +1,6 @@
 # Dependency Advisory Exceptions
 
-Reviewed: 2026-09-13 (Phase F supply-chain hardening)
+Reviewed: 2026-11-17 (Milestone 006 supply-chain and output hygiene)
 
 This document tracks active advisory exceptions that cannot yet be resolved
 by simple dependency upgrades.
@@ -49,6 +49,20 @@ Every retained advisory ignore must include:
 
 ## Active Exceptions
 
+### Reported open Dependabot alert mapping (snapshot 2026-11-17)
+
+The available milestone baseline reports seven open alerts. They are mapped here by advisory ID (the baseline did not include Dependabot's numeric alert URLs); each ID below matches an existing `deny.toml` exception. Owners and review-by dates are the current exception records.
+
+| Alert (dependency; severity) | `deny.toml` exception ID | Owner | Review-by |
+|------------------------------|--------------------------|-------|-----------|
+| `lopdf` stack overflow; high | RUSTSEC-2026-0187 | eggsec (output) | 2027-02-15 |
+| `rustls-webpki` CRL panic; high | RUSTSEC-2026-0104 | eggsec-db-lab | 2027-02-15 |
+| `rustls` session-secret Debug exposure; medium | RUSTSEC-2026-0346 | eggsec (db-pentest) | 2027-02-15 |
+| `rustls-webpki` wildcard name-constraint bypass; low | RUSTSEC-2026-0099 | eggsec-db-lab | 2027-02-15 |
+| `rustls-webpki` URI name-constraint bypass; low | RUSTSEC-2026-0098 | eggsec-db-lab | 2027-02-15 |
+| `rustls` unauthenticated ServerHello key-share downgrade; low | RUSTSEC-2026-0349 | eggsec (db-pentest) | 2027-02-15 |
+| `rustls-webpki` distrusted emSign intermediates; low | RUSTSEC-2026-0382 | eggsec-db-lab | 2027-02-15 |
+
 ### RUSTSEC-2025-0057 — fxhash unmaintained
 
 | Field | Value |
@@ -61,7 +75,7 @@ Every retained advisory ignore must include:
 | Compensating control | None needed; no known security impact |
 | Owner | eggsec (recon) / standalone eggstack/eggsec-nse runtime |
 | Created | 2025-07-01 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | scraper v0.22+ must drop fxhash dependency; no alternative available |
 
 ### RUSTSEC-2024-0384 — instant unmaintained
@@ -76,7 +90,7 @@ Every retained advisory ignore must include:
 | Compensating control | None needed; no known security impact |
 | Owner | eggsec-cli / eggsec-tui |
 | Created | 2024-06-01 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | notify v8+ or upstream must drop instant; no alternative available |
 
 ### RUSTSEC-2025-0119 — number_prefix unmaintained — **RESOLVED 2026-10-06**
@@ -122,7 +136,7 @@ Every retained advisory ignore must include:
 | Compensating control | Lab-only connections to operator-authorized MSSQL targets; scope enforcement unchanged |
 | Owner | eggsec-db-lab |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | tiberius 0.12.3 is latest and still depends on rustls-pemfile; requires tiberius upstream to migrate to `rustls-pki-types::pem` |
 
 ### RUSTSEC-2026-0192 — ttf-parser unmaintained
@@ -137,7 +151,7 @@ Every retained advisory ignore must include:
 | Compensating control | Generation-only usage; no untrusted font input reaches ttf-parser |
 | Owner | eggsec (output) |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | printpdf must migrate ttf-parser -> skrifa, or Eggsec must take the printpdf 0.7 -> 0.12 breaking major bump (see lopdf entry) |
 
 ### RUSTSEC-2026-0187 — lopdf stack overflow (nested PDF objects)
@@ -152,7 +166,7 @@ Every retained advisory ignore must include:
 | Compensating control | Generation-only usage; no `load*` calls in `crates/eggsec/src/output/pdf.rs` (verified: only `PdfDocument::new`, `add_builtin_font`, `use_text`) |
 | Owner | eggsec (output) |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | Fixed in lopdf >= 0.42.0, which requires printpdf 0.7 -> >= 0.8 (breaking major bump, current latest 0.12.8). Tracked for a dedicated printpdf upgrade pass; Dependabot will surface printpdf updates |
 
 ### RUSTSEC-2023-0071 — rsa Marvin timing sidechannel
@@ -167,7 +181,7 @@ Every retained advisory ignore must include:
 | Compensating control | Scope-enforced, operator-directed lab connections only; no long-lived RSA-decryption oracle exposed to untrusted networks |
 | Owner | eggsec-db-lab |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | No fixed upgrade available per advisory (upstream migrating to constant-time implementation); requires sqlx-mysql/rsa upstream fix |
 
 ### RUSTSEC-2026-0104 / RUSTSEC-2026-0099 / RUSTSEC-2026-0098 — rustls-webpki 0.101.7
@@ -182,7 +196,7 @@ Every retained advisory ignore must include:
 | Compensating control | Scope-enforced lab connections; TLS verification left enabled (no `danger_accept_invalid_certs` bypass in this path) |
 | Owner | eggsec-db-lab |
 | Created | 2026-09-13 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | **Corrected 2026-10-06.** The previous note — "tiberius 0.12.3 is latest; requires tiberius upstream to upgrade its rustls stack" — is no longer accurate: upstream has since released **tiberius 0.13.0**, which does move to `tokio-rustls` 0.26 / rustls 0.23 / rustls-webpki 0.103. It was trialled and **reverted**: 0.13.0 depends on `tokio-rustls ^0.26.4` with default features, which enables rustls' `aws-lc-rs` crypto provider, and `[bans] deny = ["aws-lc-rs"]` forbids it under the repo's ring-only TLS policy. Feature unification would apply that provider to the whole build, not just MSSQL. So this is now blocked by **policy**, not by upstream. Clearing it requires either tiberius exposing a ring-only path or a maintainer decision to relax the ring-only rule |
 
 ### RUSTSEC-2026-0543 — chrono unmaintained
@@ -197,14 +211,20 @@ Every retained advisory ignore must include:
 | Compensating control | No technical mitigation is claimed; this is a temporary maintenance-status exception pending migration |
 | Owner | eggsec (workspace time/date API) |
 | Created | 2026-11-17 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | All `chrono` versions are affected, with no safe version-only upgrade. Replacing `chrono` and `chrono-tz` with `jiff`/`time` plus timezone support requires a coordinated workspace API migration. |
+
+## Full-feature decision: retain `db-pentest`
+
+`db-pentest` remains in both `eggsec/full` and the `eggsec-cli/full` aggregate. This preserves the existing database assessment surface in the curated full build; removing it would be a behavior change and is outside this milestone's approval. No feature definition was changed.
+
+The separate `db-pentest-mssql-tiberius` marker is not enabled by `full`: resolving `cargo tree --locked -p eggsec-cli --features full -i tiberius` finds no `tiberius`, and the same full graph contains no `rustls` 0.21.12. The all-features dependency-policy gate still evaluates that optional marker and retains its documented exceptions. Thus the active MSSQL/Tiberius exception records remain necessary for explicit opt-in builds, but should not be described as a TLS stack shipped by the Docker `full` build.
 
 ## License exception
 
 | Crate | License | Scope | Owner | Review-by | Rationale |
 |-------|---------|-------|-------|-----------|-----------|
-| `auto_generate_cdp` 0.4.6 | GPL-3.0-or-later (from LICENSE.txt; no Cargo license field) | Build-time only, `headless-browser` feature via `headless_chrome` codegen | eggsec (browser) | 2026-12-12 | Runs at build time to generate Chrome DevTools Protocol bindings; not linked into shipped binaries. Lab-only DOM XSS/SPA crawling feature. Blocker: headless_chrome upstream must replace or relicense the codegen tool. |
+| `auto_generate_cdp` 0.4.6 | GPL-3.0-or-later (from LICENSE.txt; no Cargo license field) | Build-time only, `headless-browser` feature via `headless_chrome` codegen | eggsec (browser) | 2027-02-15 | Runs at build time to generate Chrome DevTools Protocol bindings; not linked into shipped binaries. Lab-only DOM XSS/SPA crawling feature. Blocker: headless_chrome upstream must replace or relicense the codegen tool. |
 | `borrow-or-share` 0.2.4 | MIT-0 | Allowed globally | — | — | MIT No Attribution is OSI-approved permissive, equivalent in spirit to the already-allowed `0BSD`. Added to the global allow list, not an exception. |
 
 ## Yanked crate notice (warning, not exception)
@@ -229,7 +249,7 @@ path.
 | Exploitability | Low in lab-only, operator-authorized MSSQL TLS |
 | Owner | eggsec (db-pentest) |
 | Created | 2026-11-09 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | Same as RUSTSEC-2026-0104: tiberius 0.13 + rustls 0.23 pulls aws-lc-rs via default tokio-rustls features; ring-only TLS policy forbids |
 
 ### RUSTSEC-2026-0385 — ctutils via ed25519-dalek 3
@@ -242,7 +262,7 @@ path.
 | Exploitability | Low — verify-only path, no secret material generation under attacker timing control |
 | Owner | eggsec (scanner) |
 | Created | 2026-11-09 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | Await upstream ctutils/curve25519 constant-time fix |
 
 ### RUSTSEC-2026-0459 — libsqlite3-sys bundled SQLite (daemon)
@@ -255,7 +275,7 @@ path.
 | Exploitability | Low — local crafted DB/WAL pair; operator-local daemon database |
 | Owner | eggsec-daemon |
 | Created | 2026-11-09 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | `rusqlite` 0.41 + `libsqlite3-sys` 0.39 needs coordinated sqlx/daemon linking review |
 
 ### RUSTSEC-2024-0449 — unsafe-libyaml via serde_yaml_neo
@@ -268,7 +288,7 @@ path.
 | Exploitability | Low — unmaintained, not a direct RCE in Eggsec usage |
 | Owner | eggsec / eggsec-web-proxy |
 | Created | 2026-11-09 |
-| Review-by | 2026-12-12 |
+| Review-by | 2027-02-15 |
 | Blocker | serde_yaml ecosystem migration; no drop-in maintained replacement audited yet |
 
 ## Resolved in Corrective Closure Pass (2026-08-11)
@@ -322,13 +342,14 @@ ignores above):
 - RUSTSEC-2025-0020 / RUSTSEC-2026-0177 (pyo3) — upgraded to 0.29.2
 - RUSTSEC-2026-0194 / RUSTSEC-2026-0195 (quick-xml) — upgraded to 0.41.0
 - RUSTSEC-2026-0192 (anyhow) — upgraded in lockfile (note: distinct from the ttf-parser RUSTSEC-2026-0192 collision in the old Phase E notes; the anyhow advisory ID was mis-recorded there and is not re-used)
+- RUSTSEC-2026-0560 through RUSTSEC-2026-0565 (lettre SMTP vulnerabilities) — upgraded `lettre` 0.11.23 → 0.11.24 during Milestone 006; `make check-deps` passes after the update. These advisories are resolved by the compatible upstream release, not retained as exceptions.
 
 The stale `.cargo/audit.toml` ignore IDs for these already-fixed advisories
 were removed with the file in Phase F and are not restored.
 
 ## Review Schedule
 
-All exceptions must be reviewed by 2026-12-12. Exceptions that are still
+All exceptions must be reviewed by 2027-02-15. Exceptions that are still
 active at review time must be re-evaluated for:
 
 1. Whether the upstream has released a fix

@@ -35,24 +35,27 @@ Raw `ToolDispatcher::dispatch()` (`tool/dispatcher.rs:228`) is `pub(crate)` and 
 
 | Protocol | Listing Source | Filtering at Listing | Exposure Check at Execute |
 |----------|---------------|----------------------|---------------------------|
-| MCP (OpsAgent) | `registry.list()` | `McpProfilePolicy.filter_tools()` (`policy.rs:159`) → `mcp_tool_registrations("ops-agent")` (filter on `mcp_metadata_exposable`) | `EnforcementContext::evaluate()` + `ApprovedOperation` token |
-| MCP (CodingAgent) | `registry.list()` | `McpProfilePolicy.filter_tools()` (`policy.rs:159`) → `mcp_tool_registrations("coding-agent")` (hardcoded narrow allowlist) | Same as OpsAgent |
+| MCP (OpsAgent) | `registry.list()` | Operator `--allow-tool` IDs ∩ `McpProfilePolicy.filter_tools()` ∩ `mcp_tool_registrations("ops-agent")` (`mcp_metadata_exposable`) | Strict `EnforcementContext` from `LoadedScope` + approved operation |
+| MCP (CodingAgent) | `registry.list()` | Operator `--allow-tool` IDs ∩ profile safety filters ∩ `mcp_tool_registrations("coding-agent")` (`mcp_metadata_exposable`) | Same strict loaded-scope approval path |
 | MCP (conservative default) | `mcp_tool_registrations_default_visible()` | Filter on `mcp_default_visible` (passive/safe-active, no feature gate) | Same as OpsAgent |
 | REST | `registry.list()` | None at listing (full registration available; routing checks `rest_exposable`) | `rest_exposable` checked at execute via `EnforcementContext::evaluate()` |
 | gRPC | `registry.list()` | None at listing (full registration available; routing checks `grpc_exposable`) | `grpc_exposable` checked at execute via `EnforcementContext::evaluate()` |
 | Agent | `create_default_registry()` → `agent_tool_registrations()` | None at listing | `agent_exposable` checked at dispatch via `EnforcedDispatcher::dispatch_checked()` |
 
-MCP listing **does** apply `ToolRegistration` filtering on top of `McpProfilePolicy`:
-- OpsAgent uses `mcp_tool_registrations("ops-agent")` which returns all
-  tools with `mcp_metadata_exposable = true`. This is the
-  **profile-expanded** listing, not the conservative default.
-- CodingAgent uses a hardcoded narrow allowlist (scan-ports, fingerprint,
-  scan-endpoints, endpoints, waf-detect, search).
-- REST and gRPC expose `rest_exposable` / `grpc_exposable` checks at
-  execute time (via `EnforcementContext::evaluate()`), not at listing.
+MCP server startup requires at least one repeated `--allow-tool TOOL_ID`
+selection. Both profiles intersect that exact operator-selected set with the
+compiled runtime registry, profile visibility rules, and the metadata-exposable
+registration ceiling. Constructors without a selection expose no executable
+tools. The same selected/exposable checks run again at call time; listing alone
+is never authorization.
 
-These are **listing-level** filters. Runtime authorization remains
-`EnforcementContext::evaluate()` → `ApprovedOperation` → `EnforcedDispatcher::dispatch_checked()`.
+OpsAgent can expose any metadata-exposable tool the operator selects (including
+higher-risk operations); CodingAgent keeps its separate profile risk, target, and
+argument limits. Every dispatched call still requires strict
+`EnforcementContext::evaluate()` using operator-loaded `LoadedScope` provenance,
+then an approved operation token and `EnforcedDispatcher::dispatch_checked()`.
+REST and gRPC continue to check `rest_exposable` / `grpc_exposable` at execute
+time rather than at listing.
 
 ## 5. Feature-Gated Tools
 
@@ -75,18 +78,18 @@ The project uses **Model A** (profile-expanded metadata-exposable listing):
 
 | Listing | Source | Visibility | Mechanism |
 |---------|--------|------------|-----------|
-| OpsAgent MCP listing | `mcp_tool_registrations("ops-agent")` | **Profile-expanded** — every `mcp_metadata_exposable` tool | `ToolSelector::All` (`policy.rs:100`) + `mcp_tool_registrations("ops-agent")` (filter on `mcp_metadata_exposable`) |
-| CodingAgent MCP listing | `mcp_tool_registrations("coding-agent")` | Hardcoded narrow allowlist | `ToolSelector::Exact(vec![...])` (`policy.rs:124`) + hardcoded allowlist filter |
+| OpsAgent MCP listing | `mcp_tool_registrations("ops-agent")` | Operator-selected subset of every `mcp_metadata_exposable` tool | `ToolSelector::Exact(operator IDs)` + registration filter |
+| CodingAgent MCP listing | `mcp_tool_registrations("coding-agent")` | Operator-selected subset, subject to profile risk and argument limits | `ToolSelector::Exact(operator IDs)` + registration filter |
 | Conservative default | `mcp_tool_registrations_default_visible()` | Conservative subset (passive/safe-active, no feature gate) | Filter on `mcp_default_visible` |
 | `db-pentest` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:505`), requires `db-pentest-mcp` feature |
 | `mobile-static` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:568`), not in default registry |
 | `mobile-dynamic` domain | Domain registration | Opt-in | `mcp_exposed_by_default: false` (`domain/mod.rs:631`), not in default registry |
 
-**Important**: OpsAgent is **not** the conservative default listing. It is an
-expanded operator profile that lists every `mcp_metadata_exposable` tool,
-including high-risk operations that are not `mcp_default_visible`. Strict
-runtime policy (`EnforcementContext::evaluate()` + `ApprovedOperation`) is
-still required to dispatch any listed tool.
+**Important**: OpsAgent is **not** the conservative default listing. It may
+expose any `mcp_metadata_exposable` operation that the operator explicitly
+selects, including higher-risk operations not marked `mcp_default_visible`. The
+selection is an exposure ceiling, not authorization: strict loaded-scope
+`EnforcementContext` approval is still required for every dispatch.
 
 The `mcp_tool_registrations_default_visible()` function returns the
 conservative subset for callers that want only default-visible tools.
@@ -102,8 +105,8 @@ conservative subset for callers that want only default-visible tools.
 
 | Surface | Filters through `ToolRegistration` | Filter mechanism |
 |---------|-----------------------------------|------------------|
-| MCP (OpsAgent) | Yes | `mcp_tool_registrations("ops-agent")` → `mcp_metadata_exposable` |
-| MCP (CodingAgent) | Yes | `mcp_tool_registrations("coding-agent")` → hardcoded allowlist |
+| MCP (OpsAgent) | Yes | Operator-selected IDs intersect `mcp_tool_registrations("ops-agent")` → `mcp_metadata_exposable` |
+| MCP (CodingAgent) | Yes | Operator-selected IDs intersect metadata exposure and profile safety filters |
 | MCP (default-visible) | Yes | `mcp_tool_registrations_default_visible()` → `mcp_default_visible` |
 | REST | Indirect | `rest_exposable` checked at execute time only |
 | gRPC | Indirect | `grpc_exposable` checked at execute time only |
@@ -161,5 +164,5 @@ Shortened durable-fact comments in protocol surfaces that duplicated metadata no
 
 - **metadata-exposable** — `mcp_metadata_exposable: true` flag set from `OperationMetadata.mcp_exposable`. Means the operation *may* be MCP-registered when the required feature is compiled, scoped, and policy-authorized.
 - **default-visible** — `mcp_default_visible: true` flag. Conservative subset visible to `mcp_tool_registrations_default_visible()`.
-- **profile-expanded** — Profile-specific listing (`ops-agent`, `coding-agent`) that goes beyond the conservative default. OpsAgent is profile-expanded.
+- **operator-selected** — Exact tool IDs supplied through repeated `--allow-tool` flags; empty selection exposes no executable tools.
 - **runtime-approved** — Has passed `EnforcementContext::evaluate()` and produced an `ApprovedOperation` token. Only at this point can `EnforcedDispatcher::dispatch_checked()` be invoked.

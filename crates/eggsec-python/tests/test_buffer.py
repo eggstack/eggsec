@@ -57,6 +57,37 @@ class TestBinaryBuffer:
         mv = memoryview(buf)
         assert len(mv) == 13
         assert bytes(mv) == b"protocol test"
+        assert mv.readonly is True
+        assert mv.itemsize == 1
+        assert mv.format == "b"
+        assert mv.ndim == 1
+        assert mv.shape == (13,)
+        assert mv.strides == (1,)
+        assert mv.suboffsets == ()
+
+    def test_buffer_exposes_owner_reference(self):
+        from eggsec._core import BinaryBuffer
+
+        buf = BinaryBuffer(b"owned buffer")
+        mv = memoryview(buf)
+
+        assert mv.obj is buf
+
+    def test_buffer_survives_exporter_drop(self):
+        import gc
+
+        from eggsec._core import BinaryBuffer
+
+        payload = b"buffer remains alive"
+
+        def make_view():
+            buf = BinaryBuffer(payload)
+            return memoryview(buf)
+
+        mv = make_view()
+        gc.collect()
+
+        assert bytes(mv) == payload
 
     def test_len(self):
         from eggsec._core import BinaryBuffer
@@ -291,6 +322,40 @@ class TestArtifactBuffer:
         art = MilestoneArtifact.with_content("id5", "b.bin", "application/octet-stream", data, "h")
         mv = memoryview(art)
         assert bytes(mv) == data
+        assert mv.readonly is True
+        assert mv.itemsize == 1
+        assert mv.format == "b"
+        assert mv.ndim == 1
+        assert mv.shape == (len(data),)
+        assert mv.strides == (1,)
+        assert mv.suboffsets == ()
+
+    def test_artifact_buffer_exposes_owner_reference(self):
+        from eggsec._core import MilestoneArtifact
+
+        data = b"artifact owner"
+        art = MilestoneArtifact.with_content("id-owner", "owner.bin", "application/octet-stream", data, "h")
+        mv = memoryview(art)
+
+        assert mv.obj is art
+
+    def test_artifact_buffer_survives_exporter_drop(self):
+        import gc
+
+        from eggsec._core import MilestoneArtifact
+
+        data = b"artifact remains alive"
+
+        def make_view():
+            art = MilestoneArtifact.with_content(
+                "id-drop", "drop.bin", "application/octet-stream", data, "h"
+            )
+            return memoryview(art)
+
+        mv = make_view()
+        gc.collect()
+
+        assert bytes(mv) == data
 
     def test_no_content(self):
         from eggsec._core import MilestoneArtifact
@@ -300,6 +365,8 @@ class TestArtifactBuffer:
         assert art.to_bytes() is None
         assert art.hex() is None
         assert art.memoryview() is None
+        with pytest.raises(BufferError, match="Artifact has no embedded content"):
+            memoryview(art)
 
 
 class TestFindingSetIteration:

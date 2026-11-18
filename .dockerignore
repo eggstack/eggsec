@@ -1,0 +1,9 @@
+# Keep local Compose credentials and repository history out of Docker build contexts.
+.env
+.env.*
+**/.env
+**/.env.*
+.git
+**/.git
+target
+**/target

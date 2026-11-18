@@ -722,6 +722,52 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "rest-api")]
+    #[test]
+    fn mcp_commands_require_repeatable_operator_tool_selection() {
+        let parsed = Cli::try_parse_from([
+            "eggsec",
+            "mcp-serve",
+            "--allow-public-bind",
+            "--allow-tool",
+            "scan-ports",
+            "--allow-tool",
+            "fingerprint",
+        ])
+        .expect("mcp-serve must accept repeated --allow-tool selections");
+        let Some(Commands::McpServe(args)) = parsed.command else {
+            panic!("expected mcp-serve command");
+        };
+        assert!(args.allow_public_bind);
+        assert_eq!(
+            args.allow_tools,
+            vec!["scan-ports".to_string(), "fingerprint".to_string()]
+        );
+
+        let parsed = Cli::try_parse_from([
+            "eggsec",
+            "codegg-mcp",
+            "--allow-public-bind",
+            "--allow-tool",
+            "scan-ports",
+        ])
+        .expect("codegg-mcp must accept --allow-tool");
+        let Some(Commands::CodeggMcp(args)) = parsed.command else {
+            panic!("expected codegg-mcp command");
+        };
+        assert!(args.allow_public_bind);
+        assert_eq!(args.allow_tools, vec!["scan-ports".to_string()]);
+    }
+
+    #[cfg(feature = "rest-api")]
+    #[test]
+    fn mcp_commands_require_an_explicit_tool_selection() {
+        let err = Cli::try_parse_from(["eggsec", "mcp-serve"])
+            .err()
+            .expect("mcp-serve without --allow-tool must fail to parse");
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
     /// Global `--yes`/`-y` must reach every subcommand, including the ones
     /// that previously declared a dead local `--yes` (auth-test, stress,
     /// remote, exec) whose help text promised "Skip confirmation prompt".
@@ -773,12 +819,6 @@ mod tests {
             assert_eq!(conn.port, 6543, "subcommand {sub}");
             assert_eq!(conn.database, "eggsec_test", "subcommand {sub}");
             assert_eq!(conn.username, "scanner", "subcommand {sub}");
-
-            let config = conn.resolve();
-            assert_eq!(config.host, "db.internal", "subcommand {sub}");
-            assert_eq!(config.port, 6543, "subcommand {sub}");
-            assert_eq!(config.database, "eggsec_test", "subcommand {sub}");
-            assert_eq!(config.username, "scanner", "subcommand {sub}");
         }
     }
 
@@ -802,7 +842,7 @@ mod tests {
         let unique = format!("{var}_{}", std::process::id());
         a.conn.password_env = unique.clone();
         std::env::set_var(&unique, "hunter2");
-        let config = a.conn.resolve();
+        let config = a.conn.resolve().expect("password environment variable set");
         std::env::remove_var(&unique);
 
         assert_eq!(config.password.expose_secret(), "hunter2");

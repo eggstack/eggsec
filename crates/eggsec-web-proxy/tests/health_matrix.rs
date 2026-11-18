@@ -9,10 +9,9 @@
 //! and body-cap semantics over raw Eggress streams would recreate a general
 //! HTTP client to remove a dependency line.
 //!
-//! Lab TLS note: health probes use explicit-insecure TLS
-//! (`danger_accept_invalid_certs(true)`, unchanged from baseline), so a
-//! self-signed local HTTPS target is expected to validate as healthy. TLS
-//! verification is not silently enabled or disabled by this phase.
+//! TLS note: health probes use normal certificate verification. The
+//! self-signed local HTTPS fixture must fail, while successful 2xx responses
+//! through a proxy remain healthy.
 
 use eggsec_web_proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
 use std::sync::{
@@ -74,7 +73,7 @@ async fn spawn_https_target(status: u16) -> String {
     use std::sync::Arc as StdArc;
     use tokio_rustls::TlsAcceptor;
 
-    // Self-signed cert for localhost (lab-only; health client is insecure).
+    // Self-signed cert for localhost; the health client must reject it by default.
     let mut params =
         rcgen::CertificateParams::new(vec!["localhost".to_string(), "127.0.0.1".to_string()])
             .unwrap();
@@ -254,6 +253,14 @@ async fn spawn_socks5_proxy(require_auth: bool, user: &str, pass: &str) -> std::
 }
 
 async fn spawn_http_proxy(require_auth: bool, expected_auth: &str) -> std::net::SocketAddr {
+    spawn_http_proxy_with_connects(require_auth, expected_auth, None).await
+}
+
+async fn spawn_http_proxy_with_connects(
+    require_auth: bool,
+    expected_auth: &str,
+    accepted_connects: Option<Arc<AtomicUsize>>,
+) -> std::net::SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let exp = expected_auth.to_string();
@@ -263,6 +270,7 @@ async fn spawn_http_proxy(require_auth: bool, expected_auth: &str) -> std::net::
                 return;
             };
             let exp = exp.clone();
+            let accepted_connects = accepted_connects.clone();
             tokio::spawn(async move {
                 let mut buf = Vec::new();
                 let mut tmp = [0u8; 4096];
@@ -284,6 +292,15 @@ async fn spawn_http_proxy(require_auth: bool, expected_auth: &str) -> std::net::
                         .write_all(b"HTTP/1.1 407 Proxy Auth Required\r\n\r\n")
                         .await;
                     return;
+                }
+                if req
+                    .lines()
+                    .next()
+                    .is_some_and(|line| line.starts_with("CONNECT "))
+                {
+                    if let Some(accepted_connects) = &accepted_connects {
+                        accepted_connects.fetch_add(1, Ordering::SeqCst);
+                    }
                 }
                 let target = req
                     .lines()
@@ -367,26 +384,47 @@ async fn socks5_http_non2xx_is_unhealthy() {
 }
 
 #[tokio::test]
-async fn http_connect_https_200_is_healthy() {
+async fn http_connect_rejects_self_signed_target_certificate() {
     let target = spawn_https_target(200).await;
-    let proxy = spawn_http_proxy(false, "").await;
+    let accepted_connects = Arc::new(AtomicUsize::new(0));
+    let proxy = spawn_http_proxy_with_connects(false, "", Some(accepted_connects.clone())).await;
     let entry = ProxyEntry::new(ProxyType::Http, proxy.ip().to_string(), proxy.port());
     let checker = HealthChecker::new(health_config(target, 8000)).unwrap();
     let result = checker.check(&entry).await;
-    assert!(result.is_healthy, "err: {:?}", result.error);
+    assert!(!result.is_healthy, "untrusted certificate reported healthy");
+    assert_eq!(accepted_connects.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
-async fn http_connect_auth_https_200_is_healthy() {
+async fn http_connect_auth_succeeds_before_self_signed_target_is_rejected() {
     use base64::{engine::general_purpose, Engine as _};
     let creds = general_purpose::STANDARD.encode("ku:kp-secret-2");
     let target = spawn_https_target(200).await;
-    let proxy = spawn_http_proxy(true, &format!("Proxy-Authorization: Basic {}", creds)).await;
+    let accepted_connects = Arc::new(AtomicUsize::new(0));
+    let proxy = spawn_http_proxy_with_connects(
+        true,
+        &format!("Proxy-Authorization: Basic {}", creds),
+        Some(accepted_connects.clone()),
+    )
+    .await;
     let entry = ProxyEntry::new(ProxyType::Http, proxy.ip().to_string(), proxy.port())
         .with_auth("ku".to_string(), "kp-secret-2".to_string());
     let checker = HealthChecker::new(health_config(target, 8000)).unwrap();
     let result = checker.check(&entry).await;
-    assert!(result.is_healthy, "err: {:?}", result.error);
+    assert!(!result.is_healthy, "untrusted certificate reported healthy");
+    assert_eq!(accepted_connects.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn http_proxy_407_is_unhealthy() {
+    // A proxy requiring credentials answers 407 before contacting the target.
+    // Health remains a 2xx application-response signal, not reachability alone.
+    let proxy = spawn_http_proxy(true, "Proxy-Authorization: Basic dXNlcjpwYXNz").await;
+    let entry = ProxyEntry::new(ProxyType::Http, proxy.ip().to_string(), proxy.port());
+    let checker =
+        HealthChecker::new(health_config("http://127.0.0.1:9/health".to_string(), 5000)).unwrap();
+    let result = checker.check(&entry).await;
+    assert!(!result.is_healthy);
 }
 
 #[tokio::test]
@@ -401,17 +439,18 @@ async fn tunnel_success_with_app_failure_is_unhealthy() {
 }
 
 #[tokio::test]
-async fn https_self_signed_validates_via_lab_insecure_mode() {
-    // Baseline behavior preserved: health probes use explicit-insecure TLS,
-    // so a self-signed local HTTPS target validates as healthy. TLS
-    // verification semantics are unchanged (neither enabled nor disabled)
-    // by this phase; the mode stays explicit lab-only.
+async fn https_self_signed_target_fails_certificate_verification() {
+    // A forged/untrusted target certificate must not produce a healthy result.
     let target = spawn_https_target(200).await;
     let proxy = spawn_socks5_proxy(false, "", "").await;
     let entry = ProxyEntry::new(ProxyType::Socks5, proxy.ip().to_string(), proxy.port());
     let checker = HealthChecker::new(health_config(target, 8000)).unwrap();
     let result = checker.check(&entry).await;
-    assert!(result.is_healthy, "err: {:?}", result.error);
+    assert!(!result.is_healthy, "untrusted certificate reported healthy");
+    assert!(
+        result.error.is_some(),
+        "certificate failure should be reported"
+    );
 }
 
 #[tokio::test]
@@ -508,11 +547,13 @@ async fn https_uses_plaintext_connect_like_production() {
     // the minimal harness fake does not implement; production proxies
     // support both.)
     let target = spawn_https_target(200).await;
-    let proxy = spawn_http_proxy(false, "").await;
+    let accepted_connects = Arc::new(AtomicUsize::new(0));
+    let proxy = spawn_http_proxy_with_connects(false, "", Some(accepted_connects.clone())).await;
     let entry = ProxyEntry::new(ProxyType::Https, proxy.ip().to_string(), proxy.port());
     let checker = HealthChecker::new(health_config(target, 8000)).unwrap();
     let result = checker.check(&entry).await;
-    assert!(result.is_healthy, "err: {:?}", result.error);
+    assert!(!result.is_healthy, "untrusted certificate reported healthy");
+    assert_eq!(accepted_connects.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

@@ -174,6 +174,22 @@ Rules are sorted by priority (descending) on insertion (`rules.rs:237`). `evalua
 - `is_complete()` checks end-of-stream frames per method type (unary always true, server-streaming requires server end, client-streaming requires client end, bidi requires both).
 - `create_frame()` validates flow control before sending, returns `FlowControlError::WindowExceeded` if exceeded.
 
+### Upstream proxy health checks
+
+`HealthChecker` sends the configured HTTP(S) `test_url` through the selected
+proxy using Reqwest, with normal TLS certificate verification. Health means the
+application response is `2xx`; tunnel success alone is insufficient, and a
+`407 Proxy Authentication Required` is unhealthy (the current boolean outcome
+does not distinguish authentication-required from other failures). Untrusted
+or self-signed target certificates fail unless trusted by the normal platform
+trust configuration. SOCKS4 health checks fail closed because Reqwest has no
+faithful SOCKS4 mapping.
+
+`ProxyType::Https` remains mapped to an `http://` proxy and plaintext CONNECT,
+matching current production dialing. Whether the enum was intended to mean TLS
+to the proxy is unresolved naming debt and is deferred; health hardening does
+not change that behavior.
+
 ## Security Model
 
 - **In-memory only**: Certificate cache (`cert.rs:15`), proxy pool stats (`pool.rs:52-56`), session data — no persistent state across restarts.

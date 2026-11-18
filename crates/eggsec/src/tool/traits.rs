@@ -177,7 +177,7 @@ impl ToolExecutionContext {
 ///     fn description(&self) -> &'static str { "A sample tool" }
 ///
 ///     async fn execute(&self, request: ToolRequest) -> ToolResult<ToolResponse> {
-///         Ok(ToolResponse::success(request.request_id, self.id(), serde_json::json!({})))
+///         Ok(ToolResponse::success(request.id, self.id(), serde_json::json!({})))
 ///     }
 /// }
 /// ```

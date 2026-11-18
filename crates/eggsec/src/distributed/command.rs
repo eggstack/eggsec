@@ -5,7 +5,6 @@ use std::time::Instant;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 
-const ALLOWED_COMMANDS: &[&str] = &["eggsec"];
 const MAX_OUTPUT_SIZE: usize = 10 * 1024 * 1024; // 10MB
 const MAX_ARGS: usize = 50;
 const MAX_ARG_LENGTH: usize = 1000;
@@ -14,22 +13,6 @@ const MAX_ARG_LENGTH: usize = 1000;
 /// (`timeout: None` on the wire) gets this default instead of an unbounded
 /// child, and an explicit value is clamped into `1..=MAX_COMMAND_TIMEOUT_SECS`.
 const MAX_COMMAND_TIMEOUT_SECS: u64 = 300;
-
-const FORBIDDEN_PATTERNS: &[&str] = &[
-    "../",
-    "..\\",
-    "/etc/",
-    "/root/",
-    "/proc/",
-    "/sys/",
-    "~/.ssh/",
-    "~/.aws/",
-    ".pem",
-    ".key",
-    "--config",
-    "--config-file",
-    "--credentials",
-];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -148,27 +131,14 @@ impl CommandExecutor {
         }
 
         let program = &command[0];
-
-        // Security: Only allow specific executables
-        if !ALLOWED_COMMANDS.iter().any(|&cmd| cmd == program) {
-            return Err(format!(
-                "Command '{}' not allowed. Only {} commands are permitted.",
-                program,
-                ALLOWED_COMMANDS.join(", ")
-            ));
+        if program.trim().is_empty() {
+            return Err("No command provided".to_string());
         }
 
-        // Validate arguments
-        for arg in &command[1..] {
+        // Bound token sizes without filtering operator-selected programs or args.
+        for arg in &command {
             if arg.len() > MAX_ARG_LENGTH {
                 return Err(format!("Argument too long (max {} chars)", MAX_ARG_LENGTH));
-            }
-
-            let arg_lower = arg.to_lowercase();
-            for pattern in FORBIDDEN_PATTERNS {
-                if arg_lower.contains(&pattern.to_lowercase()) {
-                    return Err(format!("Argument contains forbidden pattern: {}", pattern));
-                }
             }
         }
 
@@ -354,6 +324,35 @@ mod tests {
         let psk1 = generate_psk();
         let psk2 = generate_psk();
         assert_ne!(psk1, psk2);
+    }
+
+    #[test]
+    fn command_resource_bounds_do_not_filter_operator_selected_programs_and_arguments() {
+        let commands = [
+            vec!["ls", "-la"],
+            vec!["cat", "/etc/hosts"],
+            vec!["eggsec", "--config", "../operator-config.toml"],
+        ];
+        for tokens in commands {
+            let command = tokens.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert!(!command.is_empty());
+            assert!(command.len() <= MAX_ARGS + 1);
+            assert!(command.iter().all(|arg| arg.len() <= MAX_ARG_LENGTH));
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn executor_runs_arbitrary_program_and_path_like_arguments() {
+        let command = vec![
+            "/bin/echo".to_string(),
+            "../home/operator/.ssh/id_rsa".to_string(),
+            "--config".to_string(),
+        ];
+        let (output, _) = CommandExecutor::execute(command, Some(5), None)
+            .await
+            .expect("an operator-selected executable and arguments should run");
+        assert_eq!(output.trim(), "../home/operator/.ssh/id_rsa --config");
     }
 
     #[test]

@@ -1,9 +1,9 @@
 //! Task dispatch module — frontend-neutral worker execution.
 //!
-//! This module owns the canonical dispatch logic for all assessment tasks.
-//! Frontend crates (TUI, CLI, agent) call [`dispatch_task()`] with a
-//! [`eggsec_runtime::request::RunRequest`] and receive typed [`TaskResult`]
-//! values through channels.
+//! This module owns the canonical dispatch logic for assessment tasks.
+//! Frontend crates call the approved execution boundary for strict surfaces;
+//! unchecked canonical execution is a manual-surface primitive, not general
+//! API. [`dispatch_task()`] remains a legacy manual compatibility wrapper.
 //!
 //! # Architecture
 //!
@@ -15,6 +15,7 @@
 //! eggsec engine functions (scanner, loadtest, fuzzer, etc.)
 //! ```
 
+pub mod binding;
 pub mod canonical_execution;
 pub mod executor;
 pub mod executors;
@@ -126,10 +127,9 @@ fn load_test_parameters(p: &eggsec_runtime::request::LoadTestParams) -> (u64, us
 /// `ManualPermissive` context supports operator-directed overrides). Strict
 /// surfaces (REST/MCP/agent/gRPC) must never call it directly — route through
 /// `EnforcementContext::evaluate()` and `EnforcedDispatcher::dispatch_checked()`.
-/// Kept `pub` because `dispatch_task()` (manual-surface compatibility entry
-/// point) delegates to it.
-#[doc(hidden)]
-pub async fn dispatch_inner(
+/// Kept crate-visible because `dispatch_task()` (manual-surface compatibility
+/// entry point) delegates to it.
+pub(crate) async fn dispatch_inner(
     request: RunRequest,
     progress_tx: mpsc::Sender<(u64, u64)>,
 ) -> anyhow::Result<TaskResult> {

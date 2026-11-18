@@ -32,20 +32,20 @@ Always compiled. Dependencies: `eggsec-core`, `eggsec-report-model`, `serde`, `s
 | `ai_schema.rs` | 237 | 9 | `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` — typed AI consumption output |
 | `audit_summary.rs` | 82 | 2 | `AuditSummary` — aggregated enforcement decision counts from JSON audit events |
 | `baseline.rs` | 192 | 10 | `BaselineComparison` — finding-level new/resolved/unchanged classification by `id` matching |
-| `convert.rs` | 346 | 4 | Conversion functions `load_scan_report`, `convert_to_*` over model DTOs; re-exports `ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData` from `eggsec-report-model` (canonical owner) |
+| `convert.rs` | 371 | 6 | Conversion functions `load_scan_report`, `convert_to_*` over model DTOs; re-exports `ScanReportData`, `FindingData`, `PortData`, `ServiceData`, `WirelessNetworkReportData` from `eggsec-report-model` (canonical owner) |
 | `csv.rs` | 163 | 0 | `CsvExporter` — finding/port/endpoint CSV export; streaming async variant |
 | `dedup.rs` | 163 | 6 | `DedupEngine`, `DedupStrategy` (Strict/Fuzzy/Disabled) |
 | `diff.rs` | 25 | 1 | Re-exports `DiffSummary` from `eggsec-report-model` (canonical owner) — numeric diff envelope for `RunManifest` |
 | `envelope.rs` | 228 | 11 | Compatibility facade: re-exports `ReportEnvelope`, `FindingRecord`, `EvidenceItem`, `EvidenceManifest`, `EvidenceKind` (20 variants), `BaselineSummary`, `RedactionState`, `RedactionPolicy` from `eggsec-report-model` (canonical owner, 555 lines) + `From<&AgentFinding>` conversion (stays: couples contract to output-side type) |
-| `escape.rs` | 81 | 4 | `escape_html()`, `escape_csv()` (NFKC + formula injection protection), `escape_xml()` |
-| `html.rs` | 325 | 0 | `HtmlReport` — styled HTML with dark/light themes, Chart.js doughnut |
+| `escape.rs` | 81 | 7 | `escape_html()`, `escape_csv()` (NFKC + formula injection protection), `escape_xml()` |
+| `html.rs` | 396 | 2 | `HtmlReport` — dark/light HTML with an optional inline Chart.js v4.5.1 doughnut; self-contained reports work offline |
 | `junit.rs` | 407 | 2 | `JUnitBuilder`, `JUnitReport` — JUnit XML via `quick_xml::Writer` (write-only, XXE-safe) |
 | `markdown.rs` | 234 | 1 | `MarkdownReport` — markdown-formatted report generation |
 | `policy_summary.rs` | 36 | 2 | Re-exports `PolicySummary` from `eggsec-report-model` (canonical owner) — policy decision metadata for report envelopes |
 | `sarif.rs` | 276 | 1 | `SarifBuilder`, `SarifReport` — SARIF 2.1.0 JSON via `serde_json` (no XML parsing, XXE-safe) |
 | `trend.rs` | 539 | 15 | `TrendAnalyzer`, `ResultComparator`, `TrendAnalysis`, `TrendDirection`, `ComparisonResult`, `ScanResult` |
 
-**Test-bearing files**: 14 of 17 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, junit, markdown, policy_summary, sarif, trend).
+**Test-bearing files**: 15 of 17 (agent, ai_schema, audit_summary, baseline, convert, dedup, diff, envelope, escape, html, junit, markdown, policy_summary, sarif, trend).
 
 ### `crates/eggsec/src/output/` (7 files, engine crate)
 
@@ -63,7 +63,7 @@ Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionB
 
 **Test-bearing files**: 5 of 7 (attack_graph, lab_report, pdf, report_summary, run_manifest).
 
-**Combined test-bearing files**: 22 of 27 total source files (14 output crate + 5 engine output + 3 findings).
+**Combined test-bearing files**: 23 of 27 total source files (15 output crate + 5 engine output + 3 findings).
 
 ## Architecture
 
@@ -73,7 +73,7 @@ Depend on engine-internal types (`PipelineReport`, `PolicyDecision`, `ExecutionB
 |--------|------------|----------------|--------|-----------------|
 | JSON | `serde_json` | `convert_to_json()` (`convert.rs:179`) | Pretty-printed JSON string | `ScanReportData` → JSON |
 | CSV | `CsvExporter` | `export_findings()` (`csv.rs:25`) | String | Streaming async variant; NFKC-normalized escaping |
-| HTML | `HtmlReport` | `generate()` (`html.rs:44`) | HTML string | Dark/light themes; Chart.js doughnut; `escape_html()` on all user content |
+| HTML | `HtmlReport` | `generate()` (`html.rs:47`) | HTML string | Dark/light themes; optional inline Chart.js v4.5.1; self-contained/offline; `escape_html()` on all user content |
 | Markdown | `MarkdownReport` | `generate()` (`markdown.rs:81`) | `Result<String>` | Pipe-character escaping in wireless tables via closure |
 | SARIF | `SarifBuilder` | `build()` → `to_json()` (`sarif.rs:214`) | SARIF 2.1.0 JSON | `serde_json` (no XML); invocations with timestamps |
 | JUnit | `JUnitBuilder` | `build()` → `to_xml()` (`junit.rs:185`) | JUnit XML | `quick_xml::Writer` write-only (XXE-safe) |
@@ -244,18 +244,19 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 | `ai_schema.rs` | 9 | Empty/critical/high/mixed findings, risk score cap, serialization roundtrip |
 | `audit_summary.rs` | 2 | Empty summary, multi-event aggregation |
 | `baseline.rs` | 10 | No changes, new, resolved, mixed, empty both sides, count helpers |
-| `convert.rs` | 4 | Mixed-case severity parsing for JUnit/SARIF, summary counts |
+| `convert.rs` | 6 | Mixed-case severity parsing for JUnit/SARIF, summary counts, offline HTML/escaping regressions |
 | `dedup.rs` | 6 | FromStr parsing, default strategy, disabled/strict/fuzzy dedup, empty input |
 | `diff.rs` | 1 | Struct construction |
 | `envelope.rs` | 11 | EvidenceItem/FindingRecord/EvidenceManifest creation, redaction, serialization roundtrip, refresh manifest |
-| `escape.rs` | 4 | Fullwidth bypass detection, tab/CR quoting |
+| `escape.rs` | 7 | CSV formula-injection, fullwidth bypass detection, tab/CR quoting |
+| `html.rs` | 2 | No remote script, summary-only rendering without Chart.js, chart-library guard |
 | `junit.rs` | 2 | Builder construction, XML output validation |
 | `markdown.rs` | 1 | Markdown report generation |
 | `policy_summary.rs` | 2 | Default values, serialization |
 | `sarif.rs` | 1 | Builder construction, version/schema validation |
 | `trend.rs` | 15 | Comparator added/removed/no-change/same-title-different-category, risk trend, analyzer single/worsening/improving, average time, category counts, most common, default |
 
-**Total output crate tests**: 70 (schedule/session removed with their 8 tests; cron tests live in `eggsec-agent::cron`).
+**Total output crate tests**: 77 (schedule/session removed with their 8 tests; cron tests live in `eggsec-agent::cron`).
 
 ### Test Counts by File (engine output + findings)
 
@@ -272,7 +273,7 @@ Method `risk_score()` returns weighted sum capped at 100.0.
 
 **Total engine output + findings tests**: 46.
 
-**Grand total**: 116 tests across output and findings modules (70 output crate + 46 engine output + findings).
+**Grand total**: 123 tests across output and findings modules (77 output crate + 46 engine output + findings).
 
 ## Invariants & Gotchas
 

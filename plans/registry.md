@@ -40,6 +40,7 @@ Flat-era files (2026-07 – 2026-09) are grandfathered at the `plans/` top level
 | performance-resource-efficiency | closed | `plans/performance-resource-efficiency-roadmap-2026-09-21.md` | Phase F + closure-polish corrective pass |
 | daemon-protocol-agent | closed | (single-plan workstream) `plans/ws6-daemon-schema-parity.md` | Executed |
 | nse-runtime-extraction | active | `plans/subsystems/nse-runtime-extraction-roadmap.md` | Milestones 001-006 closed; M007A and M007B closed (M007B via a corrective pass whose plan premise the audit falsified); M007C **blocked** (public-API gate found a 74-function major break; 0.2.1 not published); M007C-R **closed** (`eggsec-nse 0.3.0` published from candidate `16cb38e`); M007C-S **closed** (advisory `GHSA-w2g3-v83j-frp2` published, `0.1.0` yanked, `0.2.0` yank deferred to M007D); **M007D is the current handoff**; M007E dependency-gated; automated NSE remains quarantined until 007E |
+| security-assurance-hardening | **conditionally closed** | `plans/subsystems/security-assurance-hardening-roadmap.md` | M1–M5 are closed with per-milestone records; M6 is conditionally closed pending Docker image build/runtime and Compose set/unset evidence (§10 of its closure). M4's soft ordering after M1 is satisfied. |
 
 ## Grandfathered file index
 
@@ -167,6 +168,23 @@ compiled with its full original test suite passing (payload corpus 233, secret d
 - `plans/implementation/security-knowledge-corpus/004-payload-corpus-extraction.md` — **closed 2026-10-05**; closure `plans/closure/security-knowledge-corpus/004-closure.md`. 34 pure-data modules (7,084 lines) into `crates/eggsec-payloads`, **233 tests green**; zero diffs in `eggsec-python`/`eggsec-tui`. **Amended 2026-10-06:** the milestone's premise that the remaining 6 were "live-probe" generators was false — their `get_payloads()` functions are pure data. Those 6 payload sets moved too, so the crate owns **all 40** variants and no longer panics; the cross-variant caches moved into the corpus with them. Guard 150, the corpus crate's own all-40 test, and `crates/eggsec/tests/fuzzer_payload_corpus_seam.rs` assert it.
 - `plans/implementation/security-knowledge-corpus/003-secret-detection-extraction.md` — **closed 2026-10-05**; closure `plans/closure/security-knowledge-corpus/003-closure.md`. `recon/secrets.rs` moved into `crates/eggsec-secrets` with a **one-line** body diff (the `Severity` import); 11 tests green, `eggsec-core` the only workspace edge, and **zero** consumer diffs — so `eggsec-python`'s exhaustive 30-arm `SecretType` match compiles untouched. Check 149 pins the owner, the facade, and freezes the AWS-scoped entropy gate at `3.5`.
 - `plans/implementation/security-knowledge-corpus/005-publication-qualification.md` — **closed 2026-10-05 (deferral)**; closure `plans/closure/security-knowledge-corpus/005-closure.md`, decision in `plans/adrs/ADR-0006-knowledge-corpus-publication.md` (accepted). Publication **deferred**: corpora still evolving (14 commits since 2026-06-01, `+550 payloads`), release qualification proven expensive (NSE M007C, 74-function break), `eggsec-core` would need publishing on a shared version line, **no external consumer identified**, and `eggsec-payloads` would ship a `get_payloads` that panics for 6 of 40 variants. Reopening requires all four ADR conditions. No code changed.
+
+### security-assurance-hardening (implemented 2026-11-17; M6 conditional)
+
+Governed by `plans/subsystems/security-assurance-hardening-roadmap.md`. The six
+plans were authored from a read-only audit of baseline `77188755`; the changes
+are now implemented and recorded in the linked closure records. The M4 audit
+claim about credential disclosure was corrected: disabled certificate
+verification affects the health probe's *target* fetch, not the proxy hop, so
+the demonstrated defect was health-signal integrity rather than credential
+disclosure.
+
+- `plans/implementation/security-assurance-hardening/001-enforcement-gate-integrity.md` — **closed**; closure `plans/closure/security-assurance-hardening/001-status.md`. The TUI requires and binds `ApprovedOperation` before runtime submission; strict authorization semantics remain unchanged. Guard 151 ran in `make check` and was demonstrated to reject a temporary optional/discarded-approval mutation; the source was restored.
+- `plans/implementation/security-assurance-hardening/002-python-buffer-protocol-lifetime.md` — **closed**; closure `plans/closure/security-assurance-hardening/002-status.md`. Both buffer exporters transfer owner references; `make check-python` passed.
+- `plans/implementation/security-assurance-hardening/003-mcp-surface-admission-control.md` — **closed**; closure `plans/closure/security-assurance-hardening/003-status.md`. MCP requires explicit operator selection of active, MCP-exposable tool IDs; strict `LoadedScope`/approved execution remains enforced.
+- `plans/implementation/security-assurance-hardening/004-secret-and-credential-egress.md` — **closed**; closure `plans/closure/security-assurance-hardening/004-status.md`. The TUI no longer writes passwords into the process environment, proxy health verifies the target, and human-operated remote execution remains broad without a source-coded command allowlist/denylist; the PSK peer trust grant and resource bounds are documented. M4's low-severity `ProxyType::Https` mapping question remains out of scope.
+- `plans/implementation/security-assurance-hardening/005-daemon-http-adapter-safety.md` — **closed**; closure `plans/closure/security-assurance-hardening/005-status.md`. The HTTP adapter remains dormant and unwired pending a future ADR.
+- `plans/implementation/security-assurance-hardening/006-supply-chain-and-output-hygiene.md` — **conditionally closed**; closure `plans/closure/security-assurance-hardening/006-status.md`. Static changes and dependency checks passed; Docker image build/runtime and Compose set/unset tests remain unavailable in this environment.
 
 ### nse-runtime-extraction
 

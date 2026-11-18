@@ -17,7 +17,7 @@ async fn handle_storage_query(_args: crate::cli::storage::StorageQueryArgs) -> R
         use crate::storage::init_storage;
         use sqlx::Row;
 
-        let db = init_storage(&_args.conn.resolve()).await?;
+        let db = init_storage(&_args.conn.resolve()?).await?;
 
         if let Some(ref sql) = _args.sql {
             let rows = sqlx::query(sql)
@@ -76,7 +76,7 @@ async fn handle_storage_export(_args: crate::cli::storage::StorageExportArgs) ->
     {
         use crate::storage::init_storage;
 
-        let db = init_storage(&_args.conn.resolve()).await?;
+        let db = init_storage(&_args.conn.resolve()?).await?;
 
         let output_path = _args.output.as_deref().unwrap_or("storage_export.json");
 
@@ -125,7 +125,7 @@ async fn handle_storage_stats(_args: crate::cli::storage::StorageStatsArgs) -> R
     {
         use crate::storage::init_storage;
 
-        let db = init_storage(&_args.conn.resolve()).await?;
+        let db = init_storage(&_args.conn.resolve()?).await?;
 
         if let Some(ref scan_id) = _args.scan_id {
             match db.get_scan(scan_id).await? {
@@ -185,7 +185,7 @@ async fn handle_storage_init(_args: crate::cli::storage::StorageInitArgs) -> Res
     {
         use crate::storage::init_storage;
 
-        let db = init_storage(&_args.conn.resolve()).await?;
+        let db = init_storage(&_args.conn.resolve()?).await?;
 
         if _args.force {
             println!("Dropping existing tables...");
