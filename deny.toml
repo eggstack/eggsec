@@ -40,6 +40,14 @@ ignore = [
     { id = "RUSTSEC-2026-0385", reason = "ctutils non-constant-time Choice masks via curve25519-dalek 5 -> ed25519-dalek 3 (template signature verify). Verification-only, no local secret generation on attacker-controlled timing paths. Await ctutils/curve25519 fix. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys bundled SQLite <3.54 via rusqlite 0.32 (daemon session store). Local crafted WAL/page-size attack; daemon DB is operator-local. rusqlite 0.41/libsqlite3-sys 0.39 blocked by sqlx linking policy until coordinated upgrade. See docs/DEPENDENCY_EXCEPTIONS.md." },
     { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml unmaintained via serde_yaml_neo (web-proxy/engine YAML). Operator-supplied config only; no untrusted YAML ingestion. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    # --- GUI shell advisory exceptions (desktop-gui-frontend milestone 015) ---
+    { id = "RUSTSEC-2024-0429", reason = "glib 0.18.5 unsound; transitive via gtk 0.18->tauri 2.11.6 shell closure (eggsec-gui, Linux only). Upgrade to glib>=0.20.0 is unreachable: no published muda/tao/wry version uses gtk-rs 0.20+, and tauri 2.12.5 still requires gtk ^0.18. Blocked by upstream, not by repo policy. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error 1.0.4 unmaintained; transitive via gtk3-macros 0.18.2 and glib-macros 0.18.5 (gtk-rs 0.18 stack in the eggsec-gui shell closure). 1.0.4 is the latest published version; the gtk-rs 0.20+ macro crates do not depend on it, so this clears with RUSTSEC-2024-0429. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident 0.9.0 unmaintained; transitive via urlpattern 0.3.0->tauri-utils 2.9.3 (eggsec-gui shell closure). urlpattern 0.6.0 drops the unic-* set, but tauri-utils 2.10.x requires urlpattern ^0.6 and declares MSRV 1.90, above the workspace 1.89 floor. Blocked by the MSRV floor, not by upstream. See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0075", reason = "unic-char-range 0.9.0 unmaintained; same urlpattern 0.3.0->tauri-utils 2.9.3 path as RUSTSEC-2025-0100. Clears with urlpattern 0.6.0, which requires tauri-utils 2.10.x (MSRV 1.90, above the workspace 1.89 floor). See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0080", reason = "unic-common 0.9.0 unmaintained; same urlpattern 0.3.0->tauri-utils 2.9.3 path as RUSTSEC-2025-0100. Clears with urlpattern 0.6.0, which requires tauri-utils 2.10.x (MSRV 1.90, above the workspace 1.89 floor). See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0081", reason = "unic-char-property 0.9.0 unmaintained; same urlpattern 0.3.0->tauri-utils 2.9.3 path as RUSTSEC-2025-0100. Clears with urlpattern 0.6.0, which requires tauri-utils 2.10.x (MSRV 1.90, above the workspace 1.89 floor). See docs/DEPENDENCY_EXCEPTIONS.md." },
+    { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version 0.9.0 unmaintained; same urlpattern 0.3.0->tauri-utils 2.9.3 path as RUSTSEC-2025-0100. Clears with urlpattern 0.6.0, which requires tauri-utils 2.10.x (MSRV 1.90, above the workspace 1.89 floor). See docs/DEPENDENCY_EXCEPTIONS.md." },
 ]
 
 [licenses]
@@ -59,7 +67,6 @@ allow = [
     "BSL-1.0",
     "0BSD",
     "CDLA-Permissive-2.0",
-    "bzip2-1.0.6",
 ]
 confidence-threshold = 0.8
 # Per-crate license exceptions (Phase F). Prefer allow-list additions for

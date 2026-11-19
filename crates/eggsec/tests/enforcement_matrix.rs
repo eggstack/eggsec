@@ -3,7 +3,7 @@
 //! Protects the dual-mode enforcement contract across all execution surfaces.
 //! Catches two categories of regression:
 //!
-//! 1. Manual CLI/TUI becoming too strict to be useful.
+//! 1. Manual CLI/TUI/GUI becoming too strict to be useful.
 //! 2. Agent/MCP/REST/CI becoming too permissive or honoring manual discretion.
 //!
 //! This file is the canonical cross-surface guardrail.
@@ -131,10 +131,12 @@ const ALL_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::CliManualStrict,
     ExecutionSurface::TuiManual,
     ExecutionSurface::TuiManualStrict,
+    ExecutionSurface::DesktopGuiManual,
     ExecutionSurface::McpServer,
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 /// Automated (strict) surfaces.
@@ -143,11 +145,15 @@ const AUTOMATED_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
-/// Surfaces that honor manual overrides (only CliManual and TuiManual).
-const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] =
-    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
+/// Surfaces that honor manual overrides (the permissive manual surfaces).
+const OVERRIDE_HONORING_SURFACES: &[ExecutionSurface] = &[
+    ExecutionSurface::CliManual,
+    ExecutionSurface::TuiManual,
+    ExecutionSurface::DesktopGuiManual,
+];
 
 /// Surfaces that do NOT honor manual overrides.
 const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
@@ -157,11 +163,15 @@ const NON_OVERRIDE_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 /// Manual permissive surfaces.
-const PERMISSIVE_SURFACES: &[ExecutionSurface] =
-    &[ExecutionSurface::CliManual, ExecutionSurface::TuiManual];
+const PERMISSIVE_SURFACES: &[ExecutionSurface] = &[
+    ExecutionSurface::CliManual,
+    ExecutionSurface::TuiManual,
+    ExecutionSurface::DesktopGuiManual,
+];
 
 /// Strict/guarded surfaces (not permissive).
 const STRICT_SURFACES: &[ExecutionSurface] = &[
@@ -171,6 +181,7 @@ const STRICT_SURFACES: &[ExecutionSurface] = &[
     ExecutionSurface::SecurityAgent,
     ExecutionSurface::Ci,
     ExecutionSurface::RestApi,
+    ExecutionSurface::GrpcApi,
 ];
 
 // ===========================================================================
@@ -178,15 +189,15 @@ const STRICT_SURFACES: &[ExecutionSurface] = &[
 // ===========================================================================
 
 #[test]
-fn cli_manual_and_tui_manual_map_to_manual_permissive() {
-    assert_eq!(
-        ExecutionSurface::CliManual.profile(),
-        ExecutionProfile::ManualPermissive
-    );
-    assert_eq!(
-        ExecutionSurface::TuiManual.profile(),
-        ExecutionProfile::ManualPermissive
-    );
+fn permissive_manual_surfaces_map_to_manual_permissive() {
+    for surface in OVERRIDE_HONORING_SURFACES {
+        assert_eq!(
+            surface.profile(),
+            ExecutionProfile::ManualPermissive,
+            "{}: a permissive manual surface must map to ManualPermissive",
+            surface
+        );
+    }
 }
 
 #[test]
@@ -231,12 +242,17 @@ fn rest_maps_to_strict_profile() {
 }
 
 #[test]
-fn only_cli_tui_manual_honor_manual_overrides() {
+fn grpc_maps_to_strict_profile() {
+    assert_eq!(
+        ExecutionSurface::GrpcApi.profile(),
+        ExecutionProfile::McpStrict
+    );
+}
+
+#[test]
+fn only_permissive_manual_surfaces_honor_manual_overrides() {
     for surface in ALL_SURFACES {
-        let expected = matches!(
-            surface,
-            ExecutionSurface::CliManual | ExecutionSurface::TuiManual
-        );
+        let expected = OVERRIDE_HONORING_SURFACES.contains(surface);
         assert_eq!(
             surface.honors_manual_override(),
             expected,
@@ -3535,14 +3551,82 @@ fn strict_surface_still_denies_out_of_scope_target_on_relaxed_operation() {
 /// The counterpart to the relaxation above: `packet` and `wireless` are also
 /// target-less, but they sniff, so requiring a loaded scope is the only lever an
 /// operator has over them and it stays.
+///
+/// The two halves refuse in different places, and both refusals matter. `packet`
+/// addresses a remote host, so a target-less run is refused when the descriptor
+/// is built. The interface-bound operations bind to a *local* interface or
+/// identifier, so they accept a target-less run — and they keep the
+/// explicit-scope requirement on the descriptor, which is where the enforcement
+/// kernel reads it.
 #[test]
 fn strict_surface_still_requires_scope_for_interface_bound_operations() {
-    for op in ["packet", "wireless", "wireless-deauth"] {
+    // The remote-target half refuses a target-less run outright.
+    let packet = metadata_for_tool_id("packet").expect("packet should have metadata");
+    assert!(
+        packet.try_descriptor_for_target(None).is_err(),
+        "packet should still refuse a target-less run"
+    );
+
+    for op in ["packet-capture", "wireless", "wireless-deauth"] {
         let metadata =
             metadata_for_tool_id(op).unwrap_or_else(|| panic!("{op} should have metadata"));
         assert!(
-            metadata.try_descriptor_for_target(None).is_err(),
-            "{op} should still refuse a target-less run"
+            metadata.target_policy.is_interface_bound(),
+            "{op} must be interface-bound"
+        );
+
+        // A target-less run is accepted, but only with the scope requirement
+        // still attached.
+        let no_target = metadata
+            .try_descriptor_for_target(None)
+            .unwrap_or_else(|e| panic!("{op} should accept a target-less run, got {e}"));
+        assert!(
+            no_target.requires_explicit_scope,
+            "{op} lost its scope requirement"
+        );
+        assert!(no_target.target.is_none(), "{op} invented a target");
+
+        // And the lever stays: once a local identifier is supplied, a strict
+        // automated surface refuses the operation without an explicit scope
+        // manifest — on the scope dimension, not on the risk. The risk tiers
+        // are granted so the scope dimension is the one the decision turns on.
+        let local = metadata
+            .try_descriptor_for_target(Some("wlan0"))
+            .unwrap_or_else(|e| panic!("{op} should accept a local identifier, got {e}"));
+        assert_eq!(
+            local.target.as_deref(),
+            Some("wlan0"),
+            "{op} dropped the local identifier"
+        );
+
+        let caps: Vec<Capability> = metadata.required_capabilities.to_vec();
+        let policy = ExecutionPolicy {
+            allowed_capabilities: caps,
+            allow_raw_packets: true,
+            allow_intrusive_fuzzing: true,
+            allow_load_testing: true,
+            allow_stress_testing: true,
+            allow_credential_testing: true,
+            ..Default::default()
+        };
+        let enabled: Vec<String> = metadata
+            .required_features
+            .iter()
+            .map(|f| f.to_string())
+            .collect();
+
+        // No scope manifest loaded at all.
+        let mut ctx = ctx_for_surface(ExecutionSurface::RestApi, policy, LoadedScope::default());
+        ctx.enabled_features = eggsec::config::EnabledFeatures::from_names(enabled);
+        let outcome = ctx.evaluate(&local);
+        assert!(
+            !outcome.is_allowed(),
+            "{op} was allowed on a strict surface with no loaded scope"
+        );
+        let classes = &outcome.decision().denial_classes;
+        assert!(
+            classes.contains(&DenialClass::ScopeMissing),
+            "{op} was denied for the wrong reason: {classes:?}"
         );
     }
 }

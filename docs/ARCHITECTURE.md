@@ -44,7 +44,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 
 ## 2. Workspace Crate Ownership
 
-23 workspace crates (`eggsec-nse` is external and not a member).
+25 workspace crates (`eggsec-nse` is external and not a member).
 
 | Crate | Role | Policy Decisions | Execution | Frontend | Dependency-Light | Notes |
 |-------|------|:---:|:---:|:---:|:---:|-------|
@@ -56,6 +56,7 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec` | Composition root | **Yes** | All domains | No | No | Central policy, orchestration, all security modules. |
 | `eggsec-cli` | Binary entrypoint | No | No | **Yes** | Yes | Thin wrapper: depends on `eggsec` + `eggsec-tui`. |
 | `eggsec-tui` | TUI frontend | No | No | **Yes** | No | 33 tabs, enforcement toggle, packaged themes. |
+| `eggsec-gui` | Desktop GUI frontend | No | No | **Yes** | No | Tauri v2 desktop shell. **Daemon-only**: depends on `eggsec-frontend-client`, `eggsec-runtime`, `eggsec-daemon-protocol`, `eggsec-ui-model` and `eggsec-output` — never the engine, the daemon crate, the CLI or the TUI. No outbound HTTP; buildless frontend with zero npm dependencies. |
 | `eggsec-nse` (external) | NSE compatibility runtime | No | Domain execution | No | Yes | [Standalone repository](https://github.com/eggstack/eggsec-nse), consumed by Eggsec as the versioned `eggsec-nse 0.2.0` crates.io release behind the optional engine `nse` feature. |
 | `eggsec-db-lab` | DB pentest domain | No | Domain execution | No | Yes | Postgres/MySQL/MSSQL/MongoDB/Redis checks. |
 | `eggsec-web-proxy` | Web proxy domain | No | Domain execution | No | Yes | MITM intercept, TLS, protocol handlers. |
@@ -69,11 +70,23 @@ The **command registry** (`commands/registry.rs`) provides static, inspectable m
 | `eggsec-daemon-protocol` | Daemon IPC types | No | No | No | Yes | Wire DTOs for the daemon protocol. |
 | `eggsec-policy` | Deterministic authorization semantics | **Yes** | No | No | Yes | Data + pure algorithms only: no Tokio, no network, no filesystem. Engine bridges DNS, features, and transport. |
 | `eggsec-ui-model` | Frontend view DTOs | No | No | No | Yes | View model types for TUI/daemon event rendering. |
+| `eggsec-frontend-client` | Frontend runtime client | No | No | No | Yes | Frontend-neutral runtime-client contract (`RuntimeClient` trait + embedded/daemon implementations). No frontend framework, no engine dependency. |
 | `eggsec-transport` | Scope-aware outbound HTTP contract | No | No | No | Yes | Neutral DTOs, mandatory `NetworkAuthority`, recording fake. No concrete clients. |
 | `eggsec-transport-eggfetch` | `HttpTransport` over `eggfetch-core` | No | No | No | Yes | Approved-IP pinning, manual authorized redirects. No production consumers yet. |
 | `eggsec-python` | Python bindings | No | No | No | Yes | PyO3/maturin. Depends on `eggsec` + `eggsec-core`. Engine/AsyncEngine entry points, scope enforcement, OperationRegistry, EnforcementContext, event protocol, callbacks/sinks, domain registry, 1.0 readiness. |
 
-**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-agent`, `eggsec-policy`) have no engine/runtime dependencies (`eggsec-report-model` depends only on `eggsec-core`; `eggsec-output` renders over the model, never the reverse). The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends. The workspace root is a virtual manifest — install with `cargo install --path crates/eggsec-cli`.
+**Dependency direction**: Leaf crates (`eggsec-core`, `eggsec-report-model`, `eggsec-output`, `eggsec-agent`, `eggsec-policy`) have no engine/runtime dependencies (`eggsec-report-model` depends only on `eggsec-core`; `eggsec-output` renders over the model, never the reverse). The main `eggsec` crate is the composition root. `eggsec-cli` and `eggsec-tui` are the only frontends that link the engine. The workspace root is a virtual manifest — install with `cargo install --path crates/eggsec-cli`.
+
+`eggsec-frontend-client` is the frontend-neutral runtime-client contract (`RuntimeClient` trait plus the embedded and daemon implementations). It depends on `eggsec-runtime` + `eggsec-daemon-protocol` and on **no frontend framework** (no `ratatui`/`crossterm`) and **not on the engine** — so a new frontend can reuse the runtime contract without inheriting the terminal UI or the composition root.
+
+`eggsec-gui` is the desktop GUI: a Tauri v2 shell that is a **frontend without an engine edge**. It depends on `eggsec-frontend-client` + `eggsec-runtime` + `eggsec-daemon-protocol` + `eggsec-ui-model` + `eggsec-output` and on no other crate — it may not name `eggsec`, `eggsec-daemon`, `eggsec-cli` or `eggsec-tui`, and it performs no outbound HTTP: every engine request travels over the daemon's Unix socket. That is what keeps the desktop GUI from becoming a second composition root, and it is enforced by the architecture guards (Checks 155–158). See `architecture/desktop_gui.md`.
+
+Two of those five edges are worth naming explicitly, because both are the reason the GUI can show a report and stop a daemon without gaining an engine edge:
+
+- **`eggsec-output` is a leaf data crate** — `eggsec-core` + `eggsec-report-model` only, no engine, no runtime, no framework. The GUI renders the same report artifacts the CLI renders through the same functions, so the export path adds no new dependency direction: the renderers sit below the engine, and the GUI reaches them directly.
+- **`libc` is unix-only** (`crates/eggsec-gui/Cargo.toml`). Tokio's `signal` module receives signals but cannot send them, so the SIGTERM the GUI delivers to a daemon it started is made through the `libc::kill` syscall directly. The GUI's other new edges are the Tokio `process` and `signal` features.
+
+The GUI still links **no engine crate, no daemon crate, no CLI crate and no TUI crate** after milestone 006 added full operation coverage, report export and the opt-in daemon spawn-and-supervise lifecycle. The spawn route is opt-in precisely because it is the one place the GUI would otherwise have owned a process: it starts a binary the operator names, over the daemon's Unix socket, and it links the daemon's *protocol* — never the daemon's *code*.
 
 The knowledge-corpus leaves (`eggsec-service-db`, `eggsec-secrets`, `eggsec-payloads`, `eggsec-udp-scan`) are near-empty-dependency data crates reached only through engine `pub use` facades. The seam is one-directional: **the corpus owns data, the engine owns I/O** — the live probers stay engine-side even though their `get_payloads()` are pure data. See `architecture/knowledge_corpus.md`.
 
@@ -83,7 +96,7 @@ The knowledge-corpus leaves (`eggsec-service-db`, `eggsec-secrets`, `eggsec-payl
 
 | Type | Canonical Location | Purpose |
 |------|--------------------|---------|
-| `ExecutionSurface` | `eggsec-policy/src/policy.rs` | Caller origin identity. 9 variants: `CliManual`, `TuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
+| `ExecutionSurface` | `eggsec-policy/src/policy.rs` | Caller origin identity. 10 variants: `CliManual`, `TuiManual`, `DesktopGuiManual`, `CliManualStrict`, `TuiManualStrict`, `McpServer`, `SecurityAgent`, `Ci`, `RestApi`, `GrpcApi`. |
 | `ExecutionProfile` | `eggsec-policy/src/policy.rs` | Trust boundary. 5 variants: `ManualPermissive`, `ManualGuarded`, `CiStrict`, `McpStrict`, `AgentStrict`. |
 | `OperationRisk` | `eggsec-policy/src/policy.rs` | Risk tier ordering. 15 variants from `Passive` to `AgentAutonomous`. |
 | `OperationMode` | `eggsec-policy/src/policy.rs` | Semantic mode: `StandardAssessment`, `DefenseLab`, `HazardousLab`. |
@@ -118,6 +131,7 @@ The knowledge-corpus leaves (`eggsec-service-db`, `eggsec-secrets`, `eggsec-payl
 |-----------------|-----------------|:---:|:---:|
 | `CliManual` | `ManualPermissive` | Yes | No |
 | `TuiManual` | `ManualPermissive` | Yes | No |
+| `DesktopGuiManual` | `ManualPermissive` | Yes | No |
 | `CliManualStrict` | `ManualGuarded` | No | No |
 | `TuiManualStrict` | `ManualGuarded` | No | No |
 | `McpServer` | `McpStrict` | No | Yes |
@@ -314,7 +328,7 @@ DaemonClient → Runtime::submit(RunRequest)
 **Invariant**: All daemon-dispatched operations must pass through `approve_run_request_bundle()` before execution. The `ApprovedRunRequest` bundle couples the approval token with the specific request, preventing token reuse.
 **Close-session behavior**: Closing a session persists a final snapshot (with `closed=true` and cancelled tasks) but does **not** delete the session. History is preserved and accessible via `daemon history` / `daemon show`.
 
-**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind `full-executor`) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks.
+**Real executor**: `EggsecRuntimeExecutor` (feature-gated behind the daemon's `service` profile, whose deprecated `full-executor` alias selects the same profile) implements `RuntimeTaskExecutor` by receiving `RuntimeExecutionContext` from the runtime, resolving scope, obtaining an `ApprovedRunRequest` bundle, then dispatching. The daemon depends on `eggsec` only when this feature is enabled. Without it, `NoopExecutorStub` rejects all tasks and the daemon publishes an **empty** task-kind list — the published list is derived from the executor's declared support, so a rejecting executor cannot advertise a capability it cannot execute.
 
 ## 5. Side-Effecting Execution Path Inventory
 
@@ -371,6 +385,7 @@ operation.
 | MCP | `tool/protocol/mcp/handlers/server.rs` | McpStrict | No |
 | Agent | `agent/mod.rs` (via `agent::services::AgentExecutionService`) | AgentStrict | No |
 | TUI | `eggsec-tui/src/app/` | ManualPermissive/Guarded | Yes |
+| Desktop GUI | Engine runtime bridge (`eggsec-frontend-client` → `runtime_bridge`) | ManualPermissive | Yes |
 | CI | `commands/handlers/ci.rs` | CiStrict | No — no dispatch path at all |
 
 Strict surfaces reach `ToolDispatcher` only through `EnforcedDispatcher`.

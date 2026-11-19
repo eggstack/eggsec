@@ -317,11 +317,9 @@ async fn submit_task_and_observe_result_envelope() {
     let mut outcome = None;
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
-            if let Some(event) = rx.recv().await {
-                if let RuntimeEvent::TaskCompleted { outcome: o, .. } = event {
-                    outcome = Some(o);
-                    break;
-                }
+            if let Some(RuntimeEvent::TaskCompleted { outcome: o, .. }) = rx.recv().await {
+                outcome = Some(o);
+                break;
             }
         }
     })
@@ -372,11 +370,9 @@ async fn cancel_task_produces_cancelled_event() {
     let mut cancelled = false;
     tokio::time::timeout(Duration::from_secs(1), async {
         loop {
-            if let Some(event) = rx.recv().await {
-                if let RuntimeEvent::TaskCancelled { .. } = event {
-                    cancelled = true;
-                    break;
-                }
+            if let Some(RuntimeEvent::TaskCancelled { .. }) = rx.recv().await {
+                cancelled = true;
+                break;
             }
         }
     })
@@ -431,11 +427,9 @@ async fn failed_task_reports_error() {
     let mut error_message = None;
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
-            if let Some(event) = rx.recv().await {
-                if let RuntimeEvent::TaskFailed { error, .. } = event {
-                    error_message = Some(error.message);
-                    break;
-                }
+            if let Some(RuntimeEvent::TaskFailed { error, .. }) = rx.recv().await {
+                error_message = Some(error.message);
+                break;
             }
         }
     })
@@ -723,12 +717,17 @@ async fn capabilities_reflect_current_build() {
     // Cancellation supported
     assert!(caps.supports_cancellation);
 
-    // Default (daemon_conservative) includes safe task kinds
+    // The default is the canonical set: every capability name the task-kind
+    // set defines, `resume` included.
     assert!(!caps.task_kinds.is_empty());
 
-    // Full lab has all 29 task kinds
-    let full = eggsec_runtime::RuntimeCapabilities::full_lab();
-    assert_eq!(full.task_kinds.len(), 29);
+    // The canonical list has one entry per task kind.
+    let canonical = eggsec_runtime::RuntimeCapabilities::canonical();
+    assert_eq!(
+        canonical.task_kinds.len(),
+        eggsec_runtime::request::TaskKind::all_variants().len()
+    );
+    assert!(canonical.task_kinds.iter().any(|c| c.name == "resume"));
 }
 
 #[tokio::test]

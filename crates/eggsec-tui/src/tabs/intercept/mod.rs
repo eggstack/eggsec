@@ -50,6 +50,12 @@ macro_rules! inner {
 /// the real pane height on every render.
 const DEFAULT_FLOW_VIEWPORT: usize = 20;
 
+/// Smallest interval a recorded session may claim.
+///
+/// The wall clock cannot resolve a session shorter than one tick, so a
+/// session that ran must never record a zero-length interval.
+const MIN_SESSION_INTERVAL_MS: i64 = 1;
+
 pub struct InterceptTab {
     pub flows: Vec<ProxyFlow>,
     pub selected_flow: Option<usize>,
@@ -115,6 +121,13 @@ pub struct InterceptTab {
     /// The flow pane is laid out by `render_flow_list`, so this is the only way
     /// the key handlers can learn the real viewport height they must scroll by.
     flow_viewport_height: Cell<usize>,
+    /// Monotonic reading taken when the current session started.
+    ///
+    /// The wall clock ticks far coarser than the lifetime of a short
+    /// session, so the session's start and end stamps can land on the same
+    /// tick and render as the same RFC 3339 string. This reading keeps the
+    /// interval the wall clock loses.
+    session_started_at: Option<std::time::Instant>,
 }
 
 impl InterceptTab {
@@ -169,6 +182,7 @@ impl InterceptTab {
             selected_grpc_session: 0,
             stream_mux_scroll: 0,
             flow_viewport_height: Cell::new(DEFAULT_FLOW_VIEWPORT),
+            session_started_at: None,
         }
     }
 
@@ -665,13 +679,55 @@ impl InterceptTab {
         self.selected_flow = None;
         self.table_state.select(None);
         self.session = Some(InterceptSession::new(&self.listen_addr, self.dry_run));
+        self.session_started_at = Some(std::time::Instant::now());
     }
 
     pub fn stop_session(&mut self) {
+        let elapsed = self
+            .session_started_at
+            .take()
+            .map(|started| started.elapsed());
         if let Some(ref mut session) = self.session {
             session.finalize();
+            // `finalize` stamps the end from the wall clock, whose
+            // resolution is coarser than a short session's lifetime: the
+            // end stamp can land on the same tick as the start stamp and
+            // render as the same RFC 3339 string, and a session that ran
+            // would report that it started and ended at the same instant.
+            // Keep the recorded end strictly after the recorded start.
+            Self::ensure_end_after_start(session, elapsed);
         }
         self.state = AppState::Idle;
+    }
+
+    /// Guarantee that a finalized session records an end stamp strictly
+    /// after its start stamp.
+    ///
+    /// `InterceptSession::new` pre-fills `ended_at` with the start stamp and
+    /// `InterceptSession::finalize` re-stamps it from the wall clock. That
+    /// clock ticks far coarser than the lifetime of a short session, so a
+    /// session that starts and stops inside one tick records the same instant
+    /// twice and reports a zero-length interval even though it ran. When the
+    /// wall clock cannot resolve the interval, fall back to the monotonic
+    /// measurement of how long the session actually ran.
+    fn ensure_end_after_start(
+        session: &mut InterceptSession,
+        elapsed: Option<std::time::Duration>,
+    ) {
+        let (Ok(start), Ok(end)) = (
+            chrono::DateTime::parse_from_rfc3339(&session.started_at),
+            chrono::DateTime::parse_from_rfc3339(&session.ended_at),
+        ) else {
+            return;
+        };
+        if end > start {
+            return;
+        }
+        let measured = elapsed
+            .and_then(|elapsed| chrono::Duration::from_std(elapsed).ok())
+            .unwrap_or_else(chrono::Duration::zero);
+        let interval = measured.max(chrono::Duration::milliseconds(MIN_SESSION_INTERVAL_MS));
+        session.ended_at = (start + interval).to_rfc3339();
     }
 
     fn selected_flow_data(&self) -> Option<&ProxyFlow> {
@@ -799,6 +855,14 @@ impl Default for InterceptTab {
 }
 
 impl TabState for InterceptTab {
+    /// Test-only hook: drive the tab into a lifecycle state without a full
+    /// dispatch, so the mid-run navigation guard can assert the "navigation
+    /// must not move focus while a task runs" invariant for this tab too.
+    #[cfg(test)]
+    fn set_state(&mut self, state: AppState) {
+        self.state = state;
+    }
+
     fn state(&self) -> AppState {
         self.state.clone()
     }
@@ -838,6 +902,7 @@ impl TabState for InterceptTab {
         self.selected_http2_session = 0;
         self.selected_grpc_session = 0;
         self.stream_mux_scroll = 0;
+        self.session_started_at = None;
         self.close_edit_modal();
     }
 
@@ -1074,6 +1139,16 @@ impl TabInput for InterceptTab {
             return;
         }
         match c {
+            // The flow list is this tab's focused control, so the app is in
+            // insert mode while it is focused and `j`/`k` arrive here as
+            // characters instead of as global navigation keys. Keep the
+            // list drivable in both modes.
+            'j' if self.focus_area == InterceptFocusArea::FlowList && !self.is_running() => {
+                self.handle_down()
+            }
+            'k' if self.focus_area == InterceptFocusArea::FlowList && !self.is_running() => {
+                self.handle_up()
+            }
             'r' if self.detail_pane == DetailPane::Rules => self.toggle_rule_view(),
             'p' if !self.is_running() => self.toggle_performance_mode(),
             '/' if !self.is_running() => {
@@ -1221,8 +1296,37 @@ impl TabInput for InterceptTab {
         }
     }
 
+    /// Focus the flow list, the control this tab opens on.
+    ///
+    /// This tab owns no input group: its flow list is the selector the
+    /// operator drives first, and its selected row is what the focus ring
+    /// marks. Without this hook the tab entry left *nothing* focused, so
+    /// the app stayed in Normal mode and every keystroke was eaten by a
+    /// global shortcut (`r` reset the tab, `p` jumped tabs, digits jumped
+    /// tabs) instead of reaching the tab.
+    fn ensure_input_focus(&mut self) {
+        if self.filter_active || self.is_edit_modal_open() {
+            // A text surface is open and owns the focus.
+            return;
+        }
+        if self.focus_area != InterceptFocusArea::FlowList {
+            self.focus_area = InterceptFocusArea::FlowList;
+        }
+    }
+
+    /// Report the focused control.
+    ///
+    /// The flow list is a focusable control on this tab — the selected row
+    /// is the focus ring — so it must report as focused: it is what tab entry
+    /// focuses, and reporting `false` told the app the tab had no live
+    /// control, which left the tab in Normal mode where its own bindings
+    /// (`r` rules, `p` perf, `/` filter) and the edit modal's text entry
+    /// were unreachable. The filter prompt and the edit modal are text
+    /// fields on top of the flow list and own the focus while they are open.
     fn is_input_focused(&self) -> bool {
-        false
+        self.focus_area == InterceptFocusArea::FlowList
+            || self.filter_active
+            || self.is_edit_modal_open()
     }
 
     fn is_at_left_edge(&self) -> bool {

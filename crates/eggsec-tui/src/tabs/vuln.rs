@@ -474,12 +474,12 @@ impl TabRender for VulnTab {
 }
 
 impl TabInput for VulnTab {
-    fn ensure_input_focus(&mut self) {
-        if self.focus_area == VulnFocusArea::Inputs {
-            crate::tabs::core::ensure_group_field_focused(&mut self.core.inputs);
-        }
-    }
-
+    // `ensure_input_focus` comes from `tab_input_custom!` below. It was also
+    // written out by hand here, which is a duplicate definition (E0201) and
+    // stopped the `vuln-management` feature from compiling at all. The two
+    // were identical: `core::ensure_first_field_focused(&mut core)` is
+    // `core::ensure_group_field_focused(&mut core.inputs)`, and `TabCore`
+    // owns exactly one input group.
     tab_input_custom!(
         VulnTab,
         core: core,

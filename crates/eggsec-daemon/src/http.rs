@@ -623,7 +623,7 @@ pub async fn run_http_server(
         .route("/sessions/{session_id}/cancel-active", post(cancel_active))
         .route("/sessions/{session_id}/events", get(subscribe_events))
         .route(
-            "/sessions/{session_id}/policy/approve",
+            "/sessions/{session_id}/tasks/{task_id}/policy/approve",
             post(approve_policy),
         )
         .route("/sessions/{session_id}", delete(close_session))
@@ -731,7 +731,7 @@ mod tests {
                 .route("/sessions/{session_id}/cancel-active", post(cancel_active))
                 .route("/sessions/{session_id}/events", get(subscribe_events))
                 .route(
-                    "/sessions/{session_id}/policy/approve",
+                    "/sessions/{session_id}/tasks/{task_id}/policy/approve",
                     post(approve_policy),
                 )
                 .route("/sessions/{session_id}", delete(close_session))

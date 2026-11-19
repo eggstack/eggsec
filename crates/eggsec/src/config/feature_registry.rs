@@ -472,6 +472,17 @@ feature_registry! {
 // - `output-mode`: heavy or special-purpose output/plugin modes.
 // - `implicit-base`: transitively enabled via `full` members (no direct entry).
 // - `process-host`: process-host/CLI concerns, not engine lab contents.
+//
+// **Scope of this list.** `FULL_EXCLUDED_WITH_REASON` is the exclusion list
+// of the `full` aggregate **only** — it is not a global policy about which
+// features may be combined. A second aggregate, the daemon's `service`
+// profile, exists with its own contract and its own exclusion list:
+// [`crate::config::daemon_profile::DAEMON_SERVICE_EXCLUDED`], governed by
+// [`crate::config::daemon_profile::DAEMON_SERVICE_PROFILE`] and the
+// absolute-no subset
+// [`crate::config::daemon_profile::DAEMON_SERVICE_FORBIDDEN`]. The registry
+// above remains the single source of truth for *which features exist*; each
+// aggregate owns only its own membership and its own reasons.
 
 /// Exact direct membership of the `full` aggregate.
 ///

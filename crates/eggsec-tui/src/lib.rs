@@ -1,7 +1,6 @@
 mod app;
 mod components;
 mod help;
-pub mod runtime_client;
 pub mod search;
 mod session;
 pub mod state;

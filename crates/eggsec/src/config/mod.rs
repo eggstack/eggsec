@@ -34,6 +34,7 @@
 
 mod api;
 mod budget;
+pub mod daemon_profile;
 mod discovery;
 mod feature_registry;
 mod http;
@@ -61,6 +62,10 @@ pub use feature_registry::{
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
 pub use budget::{BudgetError, ExecutionBudget};
+pub use daemon_profile::{
+    profile_violations, required_profile_features, ProfileViolation, DAEMON_SERVICE_EXCLUDED,
+    DAEMON_SERVICE_FORBIDDEN, DAEMON_SERVICE_PROFILE,
+};
 pub use discovery::DiscoveredTargetStatus;
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope, load_scope_with_source};

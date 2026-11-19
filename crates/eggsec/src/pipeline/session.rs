@@ -53,6 +53,29 @@ pub async fn load(path: &str) -> Result<PipelineSession> {
     Ok(session)
 }
 
+/// Read the target of a saved checkpoint, synchronously.
+///
+/// A resume request carries no target of its own: the checkpoint is the
+/// authority for what is being resumed, and the enforcement layer needs that
+/// target so the resumed run is scope-checked like any other.
+///
+/// This is the synchronous counterpart to [`load`], for the enforcement path:
+/// the authorisation chain is synchronous, and a checkpoint is a small local
+/// JSON file. A checkpoint that cannot be read, or that carries no target, is
+/// a hard failure — the caller must never fall back to a target-less resume.
+pub fn read_target(path: &str) -> Result<String> {
+    let json = std::fs::read_to_string(path)?;
+    let session: PipelineSession = serde_json::from_str(&json)?;
+    let target = session.target.trim().to_string();
+    if target.is_empty() {
+        return Err(crate::error::EggsecError::InvalidTarget(
+            "the checkpoint carries no target; a resume cannot be authorised without one"
+                .to_string(),
+        ));
+    }
+    Ok(target)
+}
+
 /// Directory that holds discoverable scan checkpoints.
 ///
 /// Deliberately distinct from the TUI's own `sessions/` directory, which stores

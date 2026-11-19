@@ -44,6 +44,14 @@ pub enum RuntimeError {
     #[error("scope unavailable: {0}")]
     ScopeUnavailable(String),
 
+    /// No policy decision is pending for the task.
+    ///
+    /// This covers every way an answer can find nothing to answer: the task
+    /// never asked, the decision was already answered, the holder was
+    /// cancelled, or the surface never held a decision at all.
+    #[error("no pending policy decision for task {0}")]
+    NoPendingApproval(String),
+
     #[error("cancelled")]
     Cancelled,
 }

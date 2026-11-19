@@ -303,7 +303,7 @@ fn pipeline_multiplexer_resolves_before_boundary() {
 // ── 7. packet family ──
 
 #[test]
-fn packet_family_shares_operation_with_explicit_wire_kinds() {
+fn packet_family_splits_capture_and_keeps_explicit_wire_kinds() {
     let cap = TaskKind::PacketCapture(PacketCaptureParams::default());
     let trace = TaskKind::PacketTraceroute(PacketTracerouteParams {
         target: "127.0.0.1".into(),
@@ -314,11 +314,24 @@ fn packet_family_shares_operation_with_explicit_wire_kinds() {
         protocol: "tcp".into(),
         ..Default::default()
     });
-    for kind in [&cap, &trace, &send] {
+    // The capture half owns its own operation: it binds to a **local
+    // interface**, while `packet` also serves `traceroute` and `packet-send`,
+    // which address a remote host and must keep requiring one. The wire kinds
+    // still name their operation explicitly — they do not fall through string
+    // aliases.
+    assert_eq!(cap.operation_id(), "packet-capture");
+    assert_eq!(
+        CanonicalOperationRequest::from_task_kind(&cap).operation_id(),
+        "packet-capture"
+    );
+    for kind in [&trace, &send] {
         assert_eq!(kind.operation_id(), "packet");
         let canonical = CanonicalOperationRequest::from_task_kind(kind);
         assert_eq!(canonical.operation_id(), "packet");
-        assert_eq!(executor_route_for(canonical.operation_id()), "network");
+    }
+    // Both halves of the family reach the same executor route.
+    for op in ["packet-capture", "packet"] {
+        assert_eq!(executor_route_for(op), "network");
     }
     // Interface-bound capture carries no target; traceroute/send do.
     assert_eq!(cap.canonical_target(), None);

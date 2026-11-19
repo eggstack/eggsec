@@ -28,164 +28,97 @@ pub struct RuntimeCapabilities {
     pub supports_multiple_active_tasks: bool,
 }
 
-/// Default capabilities are conservative (daemon safe subset).
-/// Use `full_lab()` for all task kinds.
+/// The default capability set is the **canonical** one: every capability name
+/// the task-kind set defines, derived rather than transcribed.
+///
+/// The capability set is an *advertisement and admission* concern, not an
+/// authorisation one. Whether a given operation may run is decided by the
+/// enforcement layer from the operation's risk, the operator's execution
+/// policy, the loaded scope, and the enabled features. Publishing a hazard
+/// family here therefore does not permit it — it only stops the runtime from
+/// refusing the submission as an unknown kind.
 impl Default for RuntimeCapabilities {
     fn default() -> Self {
-        Self::daemon_conservative()
+        Self::canonical()
     }
 }
 
 impl RuntimeCapabilities {
-    /// Create conservative capabilities suitable for the daemon.
+    /// The canonical capability list, derived from the task-kind set.
     ///
-    /// Includes only safe, non-hazardous task kinds. Excludes stress testing,
-    /// packet manipulation, wireless active attacks, database pentest, traffic
-    /// interception, and C2 simulation.
-    pub fn daemon_conservative() -> Self {
+    /// Every canonical capability name appears exactly once — `resume`
+    /// included — because the list is generated from
+    /// [`TaskKind::all_variants`] rather than transcribed. The published
+    /// descriptions come from the canonical description table, which is keyed
+    /// by capability name and covers exactly this name set.
+    pub fn canonical() -> Self {
+        let task_kinds = TaskKind::all_variants()
+            .iter()
+            .map(|kind| TaskCapability::new(kind.capability_name(), kind.capability_description()))
+            .collect();
+        Self::with_task_kinds(task_kinds)
+    }
+
+    /// A capability set carrying exactly the given task kinds.
+    ///
+    /// The transports and the session/task flags are the standard ones; only
+    /// the task-kind list varies. This is how a host makes its **published**
+    /// set and the runtime's **enforced** set the same object: the published
+    /// list is computed first, then handed to the runtime as its enforced
+    /// set.
+    pub fn with_task_kinds(task_kinds: Vec<TaskCapability>) -> Self {
         Self {
-            task_kinds: vec![
-                TaskCapability::new("port-scan", "Port scanning"),
-                TaskCapability::new("endpoint-scan", "Endpoint discovery"),
-                TaskCapability::new("fingerprint", "Service fingerprinting"),
-                TaskCapability::new("waf", "WAF detection"),
-                TaskCapability::new("pipeline", "Security assessment pipeline"),
-                TaskCapability::new("recon", "Reconnaissance"),
-                TaskCapability::new("load-test", "HTTP load testing"),
-                TaskCapability::new("fuzz", "Fuzzing"),
-                TaskCapability::new("waf-stress", "WAF stress testing"),
-                TaskCapability::new("nse", "NSE script execution"),
-                TaskCapability::new("hunt", "Vulnerability hunting"),
-                TaskCapability::new("browser", "Headless browser testing"),
-                TaskCapability::new("graphql", "GraphQL testing"),
-                TaskCapability::new("oauth", "OAuth testing"),
-                TaskCapability::new("auth-test", "Authentication testing"),
-                TaskCapability::new("compliance", "Compliance checking"),
-                TaskCapability::new("vuln", "Vulnerability scanning"),
-                TaskCapability::new("storage", "Storage operations"),
-                TaskCapability::new("integration", "External integrations"),
-                TaskCapability::new("workflow", "Workflow execution"),
-            ],
+            task_kinds,
             transports: vec!["in-process".into()],
             supports_cancellation: true,
             supports_multiple_sessions: true,
             supports_multiple_active_tasks: false,
         }
-    }
-
-    /// Create capabilities listing all task kinds including hazardous/lab families.
-    pub fn full_lab() -> Self {
-        Self {
-            task_kinds: vec![
-                TaskCapability::new("load-test", "HTTP load testing"),
-                TaskCapability::new("stress-test", "Network stress testing"),
-                TaskCapability::new("port-scan", "Port scanning"),
-                TaskCapability::new("endpoint-scan", "Endpoint discovery"),
-                TaskCapability::new("fingerprint", "Service fingerprinting"),
-                TaskCapability::new("fuzz", "Fuzzing"),
-                TaskCapability::new("waf", "WAF detection"),
-                TaskCapability::new("waf-stress", "WAF stress testing"),
-                TaskCapability::new("pipeline", "Security assessment pipeline"),
-                TaskCapability::new("recon", "Reconnaissance"),
-                TaskCapability::new("packet-capture", "Packet capture"),
-                TaskCapability::new("traceroute", "Packet traceroute"),
-                TaskCapability::new("packet-send", "Packet sending"),
-                TaskCapability::new("graphql", "GraphQL testing"),
-                TaskCapability::new("oauth", "OAuth testing"),
-                TaskCapability::new("auth-test", "Authentication testing"),
-                TaskCapability::new("nse", "NSE script execution"),
-                TaskCapability::new("hunt", "Vulnerability hunting"),
-                TaskCapability::new("browser", "Headless browser testing"),
-                TaskCapability::new("compliance", "Compliance checking"),
-                TaskCapability::new("storage", "Storage operations"),
-                TaskCapability::new("integration", "External integrations"),
-                TaskCapability::new("workflow", "Workflow execution"),
-                TaskCapability::new("vuln", "Vulnerability scanning"),
-                TaskCapability::new("wireless", "WiFi reconnaissance"),
-                TaskCapability::new("wireless-active", "WiFi active attacks"),
-                TaskCapability::new("db-pentest", "Database security testing"),
-                TaskCapability::new("intercept", "Traffic interception"),
-                TaskCapability::new("c2", "C2 simulation"),
-            ],
-            transports: vec!["in-process".into()],
-            supports_cancellation: true,
-            supports_multiple_sessions: true,
-            supports_multiple_active_tasks: false,
-        }
-    }
-
-    /// Deprecated: use `full_lab()` instead.
-    #[deprecated(note = "renamed to full_lab(); use full_lab() for all task kinds")]
-    pub fn full() -> Self {
-        Self::full_lab()
     }
 
     /// Create capabilities for a no-op executor (no task kinds).
     pub fn noop() -> Self {
-        Self {
-            task_kinds: vec![],
-            transports: vec!["in-process".into()],
-            supports_cancellation: true,
-            supports_multiple_sessions: true,
-            supports_multiple_active_tasks: false,
-        }
+        Self::with_task_kinds(Vec::new())
     }
 
     /// Check if a task kind is supported by these capabilities.
+    ///
+    /// The name lookup delegates to [`TaskKind::capability_name`], the single
+    /// canonical name table — there is no second copy to drift.
     pub fn supports_task_kind(&self, kind: &TaskKind) -> bool {
-        let name = task_kind_name(kind);
+        let name = kind.capability_name();
         self.task_kinds.iter().any(|c| c.name == name)
-    }
-}
-
-/// Map a `TaskKind` variant to its capability name string.
-fn task_kind_name(kind: &TaskKind) -> &'static str {
-    match kind {
-        TaskKind::LoadTest(_) => "load-test",
-        TaskKind::StressTest(_) => "stress-test",
-        TaskKind::PortScan(_) => "port-scan",
-        TaskKind::EndpointScan(_) => "endpoint-scan",
-        TaskKind::Fingerprint(_) => "fingerprint",
-        TaskKind::Fuzz(_) => "fuzz",
-        TaskKind::Waf(_) => "waf",
-        TaskKind::WafStress(_) => "waf-stress",
-        TaskKind::Pipeline(_) => "pipeline",
-        TaskKind::Resume(_) => "resume",
-        TaskKind::Recon(_) => "recon",
-        TaskKind::PacketCapture(_) => "packet-capture",
-        TaskKind::PacketTraceroute(_) => "traceroute",
-        TaskKind::PacketSend(_) => "packet-send",
-        TaskKind::GraphQl(_) => "graphql",
-        TaskKind::OAuth(_) => "oauth",
-        TaskKind::AuthTest(_) => "auth-test",
-        TaskKind::Nse(_) => "nse",
-        TaskKind::Hunt(_) => "hunt",
-        TaskKind::Browser(_) => "browser",
-        TaskKind::Compliance(_) => "compliance",
-        TaskKind::Storage(_) => "storage",
-        TaskKind::Integrations(_) => "integration",
-        TaskKind::Workflow(_) => "workflow",
-        TaskKind::Vuln(_) => "vuln",
-        TaskKind::Wireless(_) => "wireless",
-        TaskKind::WirelessActive(_) => "wireless-active",
-        TaskKind::DbPentest(_) => "db-pentest",
-        TaskKind::Intercept(_) => "intercept",
-        TaskKind::C2(_) => "c2",
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::*;
+    use crate::request::{CAPABILITY_DESCRIPTIONS, *};
+
+    fn canonical_names() -> Vec<String> {
+        RuntimeCapabilities::canonical()
+            .task_kinds
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    }
 
     #[test]
     fn capabilities_roundtrip() {
-        let caps = RuntimeCapabilities::daemon_conservative();
+        let caps = RuntimeCapabilities::canonical();
         let json = serde_json::to_string(&caps).unwrap();
         let deserialized: RuntimeCapabilities = serde_json::from_str(&json).unwrap();
         assert_eq!(caps.task_kinds.len(), deserialized.task_kinds.len());
         assert!(deserialized.supports_cancellation);
+    }
+
+    #[test]
+    fn default_capabilities_are_the_canonical_set() {
+        assert_eq!(
+            RuntimeCapabilities::default().task_kinds.len(),
+            RuntimeCapabilities::canonical().task_kinds.len()
+        );
     }
 
     #[test]
@@ -215,44 +148,53 @@ mod tests {
         assert!(caps.supports_multiple_sessions);
     }
 
+    /// The derived list must cover every canonical capability name. The
+    /// enumeration is generated from the canonical task-kind table, so this
+    /// holds by construction — the test is the machine-checked backstop for
+    /// the guard that pins the derivation.
     #[test]
-    fn daemon_conservative_includes_safe_kinds() {
-        let caps = RuntimeCapabilities::daemon_conservative();
-        let names: Vec<_> = caps.task_kinds.iter().map(|c| c.name.as_str()).collect();
-        for expected in &[
-            "port-scan",
-            "endpoint-scan",
-            "fingerprint",
-            "waf",
-            "pipeline",
-            "recon",
-            "load-test",
-            "fuzz",
-            "waf-stress",
-            "nse",
-            "hunt",
-            "browser",
-            "graphql",
-            "oauth",
-            "auth-test",
-            "compliance",
-            "vuln",
-            "storage",
-            "integration",
-            "workflow",
-        ] {
+    fn canonical_covers_every_task_kind() {
+        let caps = RuntimeCapabilities::canonical();
+        let variants = TaskKind::all_variants();
+        assert_eq!(
+            caps.task_kinds.len(),
+            variants.len(),
+            "the derived list must have one entry per task kind"
+        );
+        for kind in &variants {
             assert!(
-                names.contains(expected),
-                "Missing safe task kind: {expected}"
+                caps.supports_task_kind(kind),
+                "canonical list is missing {:?}",
+                kind.capability_name()
             );
         }
     }
 
     #[test]
-    fn daemon_conservative_excludes_hazardous_kinds() {
-        let caps = RuntimeCapabilities::daemon_conservative();
-        let names: Vec<_> = caps.task_kinds.iter().map(|c| c.name.as_str()).collect();
-        for excluded in &[
+    fn canonical_names_are_unique() {
+        let names = canonical_names();
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "duplicate capability names");
+    }
+
+    #[test]
+    fn canonical_includes_resume() {
+        let names = canonical_names();
+        assert!(
+            names.contains(&"resume".to_string()),
+            "resume must be advertised like every other canonical kind"
+        );
+    }
+
+    /// The hazard families are *offered*, not *permitted*: publishing them
+    /// stops the runtime refusing the submission as an unknown kind. The
+    /// operator's execution policy still decides whether they may run.
+    #[test]
+    fn canonical_includes_the_hazard_families() {
+        let names = canonical_names();
+        for expected in &[
             "stress-test",
             "packet-send",
             "wireless",
@@ -264,54 +206,65 @@ mod tests {
             "traceroute",
         ] {
             assert!(
-                !names.contains(excluded),
-                "Hazardous kind should not be in conservative: {excluded}"
+                names.contains(&expected.to_string()),
+                "hazard family should be advertised: {expected}"
+            );
+        }
+    }
+
+    /// The description table is data, not identity: it is keyed by capability
+    /// name and must cover exactly the derived name set — no more, no fewer.
+    #[test]
+    fn description_table_covers_exactly_the_canonical_names() {
+        let derived: Vec<String> = canonical_names();
+        let derived: Vec<&str> = derived.iter().map(|n| n.as_str()).collect();
+        let described: Vec<&str> = CAPABILITY_DESCRIPTIONS.iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            derived.len(),
+            described.len(),
+            "description table must cover exactly the derived name set"
+        );
+        for name in &derived {
+            assert!(
+                described.contains(name),
+                "description table is missing {name}"
+            );
+        }
+        for name in &described {
+            assert!(
+                derived.contains(name),
+                "description table has an extra name {name}"
             );
         }
     }
 
     #[test]
-    fn full_lab_has_all_task_kinds() {
-        let caps = RuntimeCapabilities::full_lab();
-        let names: Vec<_> = caps.task_kinds.iter().map(|c| c.name.as_str()).collect();
-        for expected in &[
-            "load-test",
-            "stress-test",
-            "port-scan",
-            "endpoint-scan",
-            "fingerprint",
-            "fuzz",
-            "waf",
-            "waf-stress",
-            "pipeline",
-            "recon",
-            "packet-capture",
-            "traceroute",
-            "packet-send",
-            "graphql",
-            "oauth",
-            "auth-test",
-            "nse",
-            "hunt",
-            "browser",
-            "compliance",
-            "storage",
-            "integration",
-            "workflow",
-            "vuln",
-            "wireless",
-            "wireless-active",
-            "db-pentest",
-            "intercept",
-            "c2",
-        ] {
-            assert!(names.contains(expected), "Missing task kind: {expected}");
+    fn every_canonical_entry_has_a_description() {
+        for capability in &RuntimeCapabilities::canonical().task_kinds {
+            assert!(
+                !capability.description.trim().is_empty(),
+                "capability {} has no description",
+                capability.name
+            );
+        }
+    }
+
+    /// The name lookup and the canonical name table must not diverge.
+    #[test]
+    fn supports_task_kind_agrees_with_capability_name() {
+        let caps = RuntimeCapabilities::canonical();
+        for kind in TaskKind::all_variants() {
+            let name = kind.capability_name();
+            assert!(
+                caps.task_kinds.iter().any(|c| c.name == name),
+                "{name} is not in the canonical list"
+            );
         }
     }
 
     #[test]
     fn supports_task_kind_positive() {
-        let caps = RuntimeCapabilities::daemon_conservative();
+        let caps = RuntimeCapabilities::canonical();
         assert!(caps.supports_task_kind(&TaskKind::PortScan(PortScanParams {
             target: "10.0.0.1".into(),
             ports: None,
@@ -326,11 +279,32 @@ mod tests {
         })));
     }
 
+    /// A runtime configured with a narrower set still refuses the kinds
+    /// outside it. The canonical list is the default, not the only option.
     #[test]
-    fn supports_task_kind_negative() {
-        let caps = RuntimeCapabilities::daemon_conservative();
+    fn a_narrow_set_rejects_the_kinds_outside_it() {
+        let narrow = RuntimeCapabilities {
+            task_kinds: vec![
+                TaskCapability::new("port-scan", "Port scanning"),
+                TaskCapability::new("load-test", "HTTP load testing"),
+            ],
+            transports: vec!["in-process".into()],
+            supports_cancellation: true,
+            supports_multiple_sessions: true,
+            supports_multiple_active_tasks: false,
+        };
         assert!(
-            !caps.supports_task_kind(&TaskKind::StressTest(StressTestParams {
+            narrow.supports_task_kind(&TaskKind::PortScan(PortScanParams {
+                target: "10.0.0.1".into(),
+                ports: None,
+                scan_type: None,
+                timeout_ms: None,
+                concurrency: None,
+                udp: None,
+            }))
+        );
+        assert!(
+            !narrow.supports_task_kind(&TaskKind::StressTest(StressTestParams {
                 target: "10.0.0.1".into(),
                 flood_type: "syn".into(),
                 duration_secs: None,
@@ -339,9 +313,25 @@ mod tests {
             }))
         );
         assert!(
-            !caps.supports_task_kind(&TaskKind::Wireless(WirelessParams {
+            !narrow.supports_task_kind(&TaskKind::Wireless(WirelessParams {
                 interface: None,
                 duration_secs: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn noop_capabilities_are_empty() {
+        let caps = RuntimeCapabilities::noop();
+        assert!(caps.task_kinds.is_empty());
+        assert!(
+            !caps.supports_task_kind(&TaskKind::PortScan(PortScanParams {
+                target: "10.0.0.1".into(),
+                ports: None,
+                scan_type: None,
+                timeout_ms: None,
+                concurrency: None,
+                udp: None,
             }))
         );
     }

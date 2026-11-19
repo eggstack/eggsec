@@ -39,8 +39,7 @@ pub struct WebSocketTestResult {
 }
 
 pub struct WebSocketFuzzer {
-    #[allow(dead_code)]
-    pub(crate) url: String,
+    url: String,
     subprotocols: Vec<String>,
 }
 
@@ -50,6 +49,16 @@ impl WebSocketFuzzer {
             url,
             subprotocols: vec![],
         }
+    }
+
+    /// The target URL this fuzzer was constructed with.
+    ///
+    /// Exposed as an accessor rather than a public field so the corpus crate
+    /// keeps control of the struct's shape while the engine's
+    /// `AdvancedFuzzer` implementation can still read the target it must
+    /// dial.
+    pub fn url(&self) -> &str {
+        &self.url
     }
 
     pub fn with_subprotocols(mut self, protocols: Vec<String>) -> Self {

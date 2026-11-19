@@ -546,7 +546,7 @@ fn packet_matrix() -> DomainPrerequisites {
             "feature-packet",
             "Feature packet-inspection",
             "not compiled; rebuild with --features packet-inspection",
-            "cargo check -p eggsec --features packet-inspection (needs libpcap-dev)",
+            "cargo check -p eggsec --features packet-inspection (pure-Rust pnet; no libpcap needed)",
         )
     };
     let priv_raw = privilege_prereq(
@@ -719,7 +719,7 @@ fn nse_matrix() -> DomainPrerequisites {
             "feature-nse",
             "Feature nse",
             "not compiled; rebuild with --features nse",
-            "cargo check -p eggsec --features nse (needs libssl-dev)",
+            "cargo check -p eggsec --features nse (needs a C toolchain: cc, perl, make; OpenSSL is vendored)",
         )
     };
     DomainPrerequisites {

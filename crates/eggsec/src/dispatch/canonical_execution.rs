@@ -302,7 +302,12 @@ impl CanonicalOperationRequest {
             Self::DbPentest(_) => "db-pentest",
             Self::Storage(_) => "storage",
             Self::StressTest(_) => "stress-test",
-            Self::PacketCapture(_) | Self::PacketTraceroute(_) | Self::PacketSend(_) => "packet",
+            // The capture half of the packet family owns its own operation:
+            // a capture binds to a **local interface**, while `packet` also
+            // serves `traceroute` and `packet-send`, which address a remote
+            // host and must keep requiring one.
+            Self::PacketCapture(_) => "packet-capture",
+            Self::PacketTraceroute(_) | Self::PacketSend(_) => "packet",
             Self::Nse(_) => "nse",
             // Resume runs the pipeline stage set from a saved checkpoint, so it
             // shares the `pipeline` operation identity rather than declaring a
@@ -316,7 +321,13 @@ impl CanonicalOperationRequest {
             Self::Integrations(_) => "integrations",
             Self::Workflow(_) => "workflow",
             Self::Vuln(_) => "vuln",
-            Self::Wireless(_) | Self::WirelessActive(_) => "wireless",
+            Self::Wireless(_) => "wireless",
+            // An active wireless request performs a deauth/disassoc, which is
+            // the `wireless-deauth` operation — risk `Intrusive`, capability
+            // `RawPacketProbe`, feature `wireless-advanced`. The CLI resolves
+            // its deauth command against the same operation, so the daemon and
+            // the CLI authorise the same work at the same risk level.
+            Self::WirelessActive(_) => "wireless-deauth",
             Self::Intercept(_) => "proxy-intercept",
             Self::C2(_) => "c2",
         }
@@ -334,19 +345,20 @@ impl CanonicalOperationRequest {
             Self::LoadTest(r) => Some(r.target.clone()),
             Self::Recon(r) => Some(r.target.clone()),
             Self::Pipeline(r) => Some(r.target.clone()),
-            // The resumed target lives in the checkpoint, not in the request, so
-            // this is target-less by construction: validation against
-            // `OperationMetadata` target policy then fails explicitly rather
-            // than resuming an unbound operation. Manual surfaces supply the
-            // target from the selected session in their descriptor path.
-            Self::Resume(_) => None,
+            // The resumed target lives in the checkpoint, not in the request.
+            // It is resolved from the checkpoint so the resumed run is bound
+            // to the same target the enforcement layer approved. A checkpoint
+            // that cannot be read yields `None`, which fails the descriptor
+            // build closed: a resume is never authorised against no target.
+            Self::Resume(p) => crate::pipeline::session::read_target(&p.session_path).ok(),
             Self::GraphQl(r) => Some(r.target.clone()),
             Self::OAuth(r) => Some(r.target.clone()),
             Self::AuthTest(r) => Some(r.target.clone()),
             Self::DbPentest(r) => Some(r.target.clone()),
             Self::Storage(_) => None,
             Self::StressTest(p) => Some(p.target.clone()),
-            Self::PacketCapture(_) => None,
+            // The local identifier (an interface name), not a remote host.
+            Self::PacketCapture(p) => p.interface.clone(),
             Self::PacketTraceroute(p) => Some(p.target.clone()),
             Self::PacketSend(p) => Some(p.target.clone()),
             Self::Nse(p) => Some(p.target.clone()),
@@ -356,8 +368,11 @@ impl CanonicalOperationRequest {
             Self::Integrations(_) => None,
             Self::Workflow(_) => None,
             Self::Vuln(p) => Some(p.target.clone()),
-            Self::Wireless(_) => None,
-            Self::WirelessActive(_) => None,
+            // The local identifier, not a remote host: an interface name for
+            // the passive scan, the BSSID (falling back to the interface)
+            // for the deauth.
+            Self::Wireless(p) => p.interface.clone(),
+            Self::WirelessActive(p) => p.target_bssid.clone().or_else(|| p.interface.clone()),
             Self::Intercept(p) => p.target.clone(),
             Self::C2(p) => p.target.clone(),
         }
@@ -593,10 +608,10 @@ pub fn executor_route_for(operation_id: &str) -> &'static str {
         "recon" | "pipeline" => "recon",
         "waf-detect" | "waf-bypass" | "waf-stress" => "waf",
         "fuzz" | "graphql" | "oauth" => "fuzz-api",
-        "load-test" | "stress-test" | "packet" | "auth-test" => "network",
+        "load-test" | "stress-test" | "packet" | "packet-capture" | "auth-test" => "network",
         "nse" => "nse",
         "hunt" | "browser" | "compliance" | "storage" | "integrations" | "workflow" | "vuln"
-        | "wireless" => "security",
+        | "wireless" | "wireless-deauth" => "security",
         "db-pentest" => "db-pentest",
         "proxy-intercept" => "intercept",
         "c2" => "c2",
@@ -2027,9 +2042,14 @@ mod tests {
         assert_eq!(pipe.operation_id(), "pipeline");
     }
 
+    /// The capture owns its own operation; `traceroute` and `packet-send`
+    /// keep sharing `packet`, which still requires a remote target.
     #[test]
     fn packet_family_shares_canonical_operation() {
-        let cap = CanonicalOperationRequest::PacketCapture(PacketCaptureParams::default());
+        let cap = CanonicalOperationRequest::PacketCapture(PacketCaptureParams {
+            interface: Some("eth0".into()),
+            ..Default::default()
+        });
         let trace = CanonicalOperationRequest::PacketTraceroute(PacketTracerouteParams {
             target: "10.0.0.1".into(),
             max_hops: None,
@@ -2039,11 +2059,14 @@ mod tests {
             protocol: "tcp".into(),
             ..Default::default()
         });
-        assert_eq!(cap.operation_id(), "packet");
+        assert_eq!(cap.operation_id(), "packet-capture");
         assert_eq!(trace.operation_id(), "packet");
         assert_eq!(send.operation_id(), "packet");
-        assert_eq!(cap.canonical_target(), None);
+        // The capture's target is its local identifier, not a remote host.
+        assert_eq!(cap.canonical_target(), Some("eth0".to_string()));
         assert_eq!(trace.canonical_target(), Some("10.0.0.1".to_string()));
+        assert_eq!(executor_route_for(cap.operation_id()), "network");
+        assert_eq!(executor_route_for(trace.operation_id()), "network");
     }
 
     #[test]

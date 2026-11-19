@@ -10,6 +10,10 @@
 #![cfg(feature = "cli")]
 
 use eggsec::config::all_operation_metadata;
+use eggsec::config::daemon_profile::{
+    profile_violations, required_profile_features, ProfileViolation, DAEMON_SERVICE_EXCLUDED,
+    DAEMON_SERVICE_FORBIDDEN, DAEMON_SERVICE_PROFILE,
+};
 use eggsec::config::{
     classify_feature, feature_state, is_feature_enabled_registry, is_known_feature_registry,
     FeatureState, ALL_FEATURES,
@@ -865,6 +869,7 @@ fn individual_sweep_covers_every_feature() {
         "eggsec-web-proxy --features web-proxy",
         "eggsec-mobile-lab --features mobile-dynamic",
         "eggsec-daemon --features http-api",
+        "eggsec-daemon --features service",
         "eggsec-daemon --features full-executor",
         "eggsec-cli --no-default-features",
         "eggsec-python --features full-no-system",
@@ -887,6 +892,360 @@ fn individual_sweep_covers_every_feature() {
             sweep.contains(gated),
             "sweep must handle prerequisite-gated feature '{}'",
             gated
+        );
+    }
+}
+
+// ─── Daemon service profile conformance (M008) ─────────────────────────────
+//
+// The daemon's `service` cargo feature is a *profile*: one explicit list of
+// engine features, owned by the engine (`eggsec::config::daemon_profile`) and
+// checked here against the manifest, the registry and the documentation. The
+// checks are static so they run under `make check` on every push — the
+// daemon's compiled feature set is verified separately, at runtime, in
+// `crates/eggsec-daemon/tests/feature_profile.rs`.
+
+/// The engine features the daemon's `service` cargo feature forwards.
+fn daemon_service_forwarded_features() -> Vec<String> {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-daemon/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+    let deps = features
+        .get("service")
+        .expect("crates/eggsec-daemon must declare a 'service' cargo feature");
+    extract_engine_features(deps)
+}
+
+/// Parse the first markdown table under `heading` and return its first column.
+///
+/// The daemon profile document is machine-parsed, so the format is fixed: a
+/// `## Heading`, then a table whose first column holds the feature or domain
+/// name in backticks.
+fn parse_first_table_column(doc: &str, heading: &str) -> Vec<String> {
+    let mut lines = doc.lines();
+    let mut in_section = false;
+    let mut column: Vec<String> = Vec::new();
+    let mut seen_table = false;
+
+    for line in lines.by_ref() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            if in_section {
+                break;
+            }
+            if trimmed == heading {
+                in_section = true;
+            }
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if trimmed.starts_with('|') {
+            let cells: Vec<&str> = trimmed.trim_matches('|').split('|').collect();
+            let first = cells.first().copied().unwrap_or("").trim();
+            if first.is_empty() {
+                continue;
+            }
+            // Skip the header row and the `---|---` separator row.
+            if first.starts_with('-') || first.starts_with("Feature") || first.starts_with("Domain")
+            {
+                seen_table = true;
+                continue;
+            }
+            column.push(first.trim_matches('`').trim().to_string());
+        } else if seen_table && !trimmed.is_empty() {
+            // The table ended; the first table under the heading is the one
+            // that was parsed above.
+            break;
+        }
+    }
+
+    column
+}
+
+/// The daemon's `service` feature must forward exactly the profile list.
+#[test]
+fn daemon_service_profile_matches_the_documented_list() {
+    let mut forwarded = daemon_service_forwarded_features();
+    forwarded.sort();
+
+    let mut expected: Vec<String> = DAEMON_SERVICE_PROFILE
+        .iter()
+        .map(|feature| (*feature).to_string())
+        .collect();
+    expected.sort();
+
+    assert_eq!(
+        forwarded, expected,
+        "the daemon's 'service' feature must forward exactly DAEMON_SERVICE_PROFILE"
+    );
+}
+
+/// Every engine feature the daemon forwards must exist in the registry.
+#[test]
+fn daemon_service_profile_features_are_all_known_engine_features() {
+    for feature in daemon_service_forwarded_features() {
+        assert!(
+            is_known_feature_registry(&feature),
+            "the daemon forwards unknown engine feature '{feature}'"
+        );
+    }
+}
+
+/// The daemon's profile must cover every feature the profile requires.
+#[test]
+fn daemon_service_profile_covers_every_required_feature() {
+    let forwarded = daemon_service_forwarded_features();
+    for feature in required_profile_features() {
+        assert!(
+            forwarded.iter().any(|forwarded| forwarded == feature),
+            "the daemon's 'service' feature omits required engine feature '{feature}'"
+        );
+    }
+}
+
+/// The daemon's profile must not enable a second serving surface or a
+/// process-host concern.
+///
+/// `cli` **is** present, and that is deliberate: `cli` gates the engine's
+/// `commands` / `dispatch` / `runtime_bridge` machinery, which is where
+/// `EggsecRuntimeExecutor` lives. It is a host gate, not a CLI serving
+/// surface — removing it would stop the daemon from hosting the executor it
+/// is built around.
+#[test]
+fn daemon_service_profile_does_not_enable_cli_shaped_serving_features() {
+    let forwarded = daemon_service_forwarded_features();
+    for forbidden in [
+        "rest-api",
+        "grpc-api",
+        "ws-api",
+        "config-watch",
+        "logging-subscriber",
+        "email-notifications",
+        "daemon-client",
+        "full",
+    ] {
+        assert!(
+            !forwarded.iter().any(|forwarded| forwarded == forbidden),
+            "the daemon's 'service' feature must not enable '{forbidden}'"
+        );
+    }
+}
+
+/// The daemon's profile must not enable the security-risk or test-only
+/// features.
+#[test]
+fn daemon_service_profile_does_not_enable_security_risk_or_test_features() {
+    let forwarded = daemon_service_forwarded_features();
+    for forbidden in ["insecure-tls", "test-helpers"] {
+        assert!(
+            !forwarded.iter().any(|forwarded| forwarded == forbidden),
+            "the daemon's 'service' feature must not enable '{forbidden}'"
+        );
+    }
+}
+
+/// The daemon's profile must not enable the MCP exposure markers.
+#[test]
+fn daemon_service_profile_does_not_enable_exposure_markers() {
+    let forwarded = daemon_service_forwarded_features();
+    for forbidden in ["db-pentest-mcp", "web-proxy-mcp", "c2-mcp"] {
+        assert!(
+            !forwarded.iter().any(|forwarded| forwarded == forbidden),
+            "the daemon's 'service' feature must not enable '{forbidden}'"
+        );
+    }
+}
+
+/// The daemon's profile must not enable the engine's aggregate.
+#[test]
+fn daemon_service_profile_does_not_enable_the_aggregate() {
+    let forwarded = daemon_service_forwarded_features();
+    assert!(
+        !forwarded.iter().any(|forwarded| forwarded == "full"),
+        "the daemon's 'service' feature must not enable the 'full' aggregate"
+    );
+}
+
+/// `full-executor` is a deprecated alias for `service`, not a second profile.
+#[test]
+fn daemon_full_executor_is_a_deprecated_alias_for_service() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-daemon/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+    let alias = features
+        .get("full-executor")
+        .expect("crates/eggsec-daemon must keep the 'full-executor' alias");
+    assert_eq!(
+        alias,
+        &vec!["service".to_string()],
+        "'full-executor' must remain a pure alias for 'service'"
+    );
+}
+
+/// The operator documentation's included-features table must equal the
+/// profile exactly — a row added to the doc without the cargo feature (or
+/// the other way round) fails here.
+#[test]
+fn daemon_profile_documentation_matches_the_manifest() {
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let doc_path = workspace_root.join("docs/DAEMON_FEATURE_PROFILE.md");
+    let doc = std::fs::read_to_string(&doc_path).unwrap_or_else(|e| {
+        panic!(
+            "docs/DAEMON_FEATURE_PROFILE.md must exist at {}: {e}",
+            doc_path.display()
+        )
+    });
+
+    let documented = parse_first_table_column(&doc, "## Included features");
+    let mut documented_sorted = documented.clone();
+    documented_sorted.sort();
+
+    let mut expected: Vec<String> = DAEMON_SERVICE_PROFILE
+        .iter()
+        .map(|feature| (*feature).to_string())
+        .collect();
+    expected.sort();
+
+    assert_eq!(
+        documented_sorted, expected,
+        "docs/DAEMON_FEATURE_PROFILE.md's included-features table must list exactly DAEMON_SERVICE_PROFILE"
+    );
+}
+
+/// Negative: a profile that enables a forbidden feature is rejected.
+#[test]
+fn daemon_profile_conformance_checker_rejects_a_forbidden_feature() {
+    let violations = profile_violations(&["rest-api"]);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.to_string().contains("rest-api")),
+        "expected a violation naming 'rest-api', got {violations:?}"
+    );
+}
+
+/// Negative: a profile that names an unknown feature is rejected.
+#[test]
+fn daemon_profile_conformance_checker_rejects_an_unknown_feature() {
+    let violations = profile_violations(&["not-a-real-feature"]);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| matches!(violation, ProfileViolation::UnknownFeature { .. })),
+        "expected an unknown-feature violation, got {violations:?}"
+    );
+}
+
+/// Negative: a profile that omits a required feature is rejected.
+#[test]
+fn daemon_profile_conformance_checker_rejects_a_missing_required_feature() {
+    let candidate: Vec<&str> = DAEMON_SERVICE_PROFILE
+        .iter()
+        .copied()
+        .filter(|feature| *feature != "nse")
+        .collect();
+    let violations = profile_violations(&candidate);
+    assert!(
+        violations.iter().any(|violation| matches!(
+            violation,
+            ProfileViolation::MissingRequiredFeature { feature } if *feature == "nse"
+        )),
+        "expected a missing-required-feature violation naming 'nse', got {violations:?}"
+    );
+}
+
+/// Negative: a profile that names the same feature twice is rejected.
+#[test]
+fn daemon_profile_conformance_checker_rejects_a_duplicate() {
+    let mut candidate: Vec<&str> = DAEMON_SERVICE_PROFILE.to_vec();
+    candidate.push("nse");
+    let violations = profile_violations(&candidate);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| matches!(violation, ProfileViolation::DuplicateFeature { .. })),
+        "expected a duplicate-feature violation, got {violations:?}"
+    );
+}
+
+/// Positive control: the documented profile passes the checker, so the
+/// negative tests above are not vacuous.
+#[test]
+fn daemon_profile_conformance_checker_accepts_the_documented_profile() {
+    assert_eq!(
+        profile_violations(DAEMON_SERVICE_PROFILE),
+        Vec::<ProfileViolation>::new()
+    );
+}
+
+/// The alias resolves to the same engine feature set as `service`.
+///
+/// The alias's literal is `["service"]`, so cargo enables exactly the same
+/// engine features under either name — the alias is a rename, not a second
+/// profile.
+#[test]
+fn the_full_executor_alias_builds_the_same_profile() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-daemon/Cargo.toml");
+    let features = parse_features_raw(&manifest_path);
+    assert_eq!(
+        features.get("full-executor"),
+        Some(&vec!["service".to_string()]),
+        "'full-executor' must resolve to exactly the 'service' feature"
+    );
+    let service = features
+        .get("service")
+        .expect("crates/eggsec-daemon must declare a 'service' cargo feature");
+    assert_eq!(
+        extract_engine_features(service),
+        daemon_service_forwarded_features(),
+        "'service' must forward the profile's engine features"
+    );
+}
+
+/// The daemon's default build still links no engine.
+#[test]
+fn the_default_daemon_build_still_links_no_engine() {
+    let manifest_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../eggsec-daemon/Cargo.toml");
+    let manifest_str = std::fs::read_to_string(&manifest_path).expect("failed to read Cargo.toml");
+    let manifest: toml::Value = manifest_str.parse().expect("failed to parse Cargo.toml");
+
+    let defaults = manifest
+        .get("features")
+        .and_then(|f| f.get("default"))
+        .and_then(|d| d.as_array())
+        .expect("the daemon manifest must declare [features] default");
+    assert!(
+        defaults.is_empty(),
+        "the daemon's default feature set must stay empty — the daemon links no engine by default"
+    );
+
+    let engine_dep = manifest
+        .get("dependencies")
+        .and_then(|d| d.get("eggsec"))
+        .expect("the daemon manifest must declare the engine dependency");
+    assert_eq!(
+        engine_dep.get("optional").and_then(|v| v.as_bool()),
+        Some(true),
+        "the engine dependency must stay optional so the default build links no engine"
+    );
+}
+
+/// The engine's `full` aggregate is unchanged.
+#[test]
+fn the_engine_full_aggregate_is_unchanged() {
+    assert_eq!(
+        eggsec::config::FULL_MEMBERS.len(),
+        28,
+        "the 'full' aggregate's membership must not change"
+    );
+    for (feature, reason) in eggsec::config::FULL_EXCLUDED_WITH_REASON {
+        assert!(
+            !reason.trim().is_empty(),
+            "the exclusion of '{feature}' must carry a reason"
         );
     }
 }

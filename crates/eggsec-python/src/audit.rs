@@ -585,6 +585,7 @@ fn parse_execution_surface(surface: &str) -> PyResult<eggsec::config::ExecutionS
     match surface {
         "cli-manual" => Ok(eggsec::config::ExecutionSurface::CliManual),
         "tui-manual" => Ok(eggsec::config::ExecutionSurface::TuiManual),
+        "desktop-gui-manual" => Ok(eggsec::config::ExecutionSurface::DesktopGuiManual),
         "cli-manual-strict" => Ok(eggsec::config::ExecutionSurface::CliManualStrict),
         "tui-manual-strict" => Ok(eggsec::config::ExecutionSurface::TuiManualStrict),
         "mcp-server" => Ok(eggsec::config::ExecutionSurface::McpServer),
@@ -593,7 +594,7 @@ fn parse_execution_surface(surface: &str) -> PyResult<eggsec::config::ExecutionS
         "rest-api" => Ok(eggsec::config::ExecutionSurface::RestApi),
         "grpc-api" => Ok(eggsec::config::ExecutionSurface::GrpcApi),
         _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "Invalid execution surface: '{}'. Must be one of: cli-manual, tui-manual, cli-manual-strict, tui-manual-strict, mcp-server, security-agent, ci, rest-api, grpc-api",
+            "Invalid execution surface: '{}'. Must be one of: cli-manual, tui-manual, desktop-gui-manual, cli-manual-strict, tui-manual-strict, mcp-server, security-agent, ci, rest-api, grpc-api",
             surface
         ))),
     }

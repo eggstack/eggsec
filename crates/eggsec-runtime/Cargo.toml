@@ -23,6 +23,17 @@ tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
 tokio-util = "0.7"
 tracing = { workspace = true }
 uuid = { workspace = true }
+# Optional: JSON Schema derivation over the canonical request DTOs.
+# Off by default so the runtime DTO crate stays dependency-light for every
+# consumer that does not publish or consume operation schemas.
+schemars = { workspace = true, optional = true }
+
+[features]
+default = []
+# Publishes a mechanically derived JSON Schema over `TaskKind` and its params
+# structs (ADR-0008). Descriptive only — never consulted on an authorization,
+# dispatch, scope, or policy path.
+schema = ["dep:schemars"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -11,9 +11,9 @@ behavior, and reason for retention.
 
 | Dependency | Owning Feature/Artifact | Platforms | Build-time | Runtime | Fallback | Reason for Retention |
 |-----------|------------------------|-----------|------------|---------|----------|---------------------|
-| `libpcap` | `packet-inspection` | Linux, macOS | Yes (`libpcap-dev`) | Yes | Compilation fails without dev package | Live packet capture requires pcap bindings |
+| `pnet` | `packet-inspection`, `stress-testing` | Linux, macOS | No (pure Rust) | No | — | Live capture and raw-socket stress use the pure-Rust `pnet` crate; there is no libpcap system dependency |
 | `wireless-tools` | `wireless` | Linux | No | Yes (`iwlist`) | WiFi scan commands fail | WiFi scanning needs `iwlist` scanner |
-| `libssl-dev` | `nse` | All | Yes | No | NSE TLS scripts fail at runtime | OpenSSL needed for NSE TLS protocol scripts |
+| `openssl` (vendored) | `nse` | All | Yes (C toolchain: `cc`, `perl`, `make`) | No | NSE TLS scripts fail at runtime | The published `eggsec-nse` crate vendors OpenSSL, so the build needs a C toolchain rather than a system `libssl-dev` |
 | `libssh2-1-dev` | `nse-ssh2` | All | Yes | No | NSE SSH scripts fail at compile time | libssh2 needed for NSE SSH2 support (Ubuntu noble package name; `libssh2-dev` does not exist there) |
 | `protobuf-compiler` | `grpc-api` | All | Yes (descriptor only) | No | tonic-reflection descriptor not generated | protoc generates reflection descriptor set; Rust code is checked-in |
 | `ring` | `rustls` (via tokio-rustls) | All | Yes (Rust) | No | TLS compilation fails | Rust TLS library; pure Rust with assembly |
@@ -21,8 +21,8 @@ behavior, and reason for retention.
 
 ### Build System Notes
 
-- **libpcap**: `pnet` and `pnet_packet` require `libpcap-dev` at build time. Feature-gated behind `packet-inspection`.
-- **OpenSSL**: required by the NSE runtime's TLS scripts, reached through the published `eggsec-nse` crates.io dependency (optional behind the engine `nse` feature). The engine manifest itself declares no `openssl`/`native-tls` dependency — the TLS binding and any vendoring live in the runtime crate, which is versioned and released independently.
+- **libpcap**: there is none. `pnet` and `pnet_packet` are pure Rust and link no system library, so `packet-inspection` and `stress-testing` build without any package. Live capture still needs the runtime privilege (`CAP_NET_RAW`), which is a privilege requirement, not a build dependency.
+- **OpenSSL**: required by the NSE runtime's TLS scripts, reached through the published `eggsec-nse` crates.io dependency (optional behind the engine `nse` feature). The engine manifest itself declares no `openssl`/`native-tls` dependency — the TLS binding and the vendoring live in the runtime crate, which is versioned and released independently. That crate **vendors** OpenSSL, so the build needs a C toolchain (`cc`, `perl`, `make`) and **not** a system `libssl-dev`.
 - **libssh2**: Required for `ssh2` crate. Optional behind `nse-ssh2` feature. System library required.
 - **protoc**: Only needed when `grpc-api` feature is enabled, and only for generating the tonic-reflection descriptor set (`tool_descriptor.bin`). The Rust proto code is checked in at `crates/eggsec/src/generated/eggsec.tool.v1.rs` and compiled via `include!()` — no protoc needed for ordinary builds.
 
@@ -41,19 +41,19 @@ when the proto schema changes (a maintainer task).
 
 | Feature | Required Packages | Install (Ubuntu/Debian) | Live prerequisite (fixture needs none) |
 |---------|-------------------|--------------------------|----------------------------------------|
-| `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` | Linux + `CAP_NET_RAW`/root + `ip` (netns fixture); see `scripts/setup_packet_netns.sh --check` |
+| `packet-inspection` | none (pure-Rust `pnet`) | — | Linux + `CAP_NET_RAW`/root + `ip` (netns fixture); see `scripts/setup_packet_netns.sh --check` |
 | `wireless` | `wireless-tools` | `sudo apt-get install wireless-tools` (provides `iwlist` scanner) | Linux + `CAP_NET_ADMIN`/root + managed/up lab interface; `--dry-run` needs nothing |
 | `mobile-dynamic` | Android SDK platform-tools (`adb`) | SDK platform-tools | Lab AVD/device you own; fixture (mock ADB) needs nothing; see `scripts/setup_android_emulator.sh --check` |
-| `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` | none (local fixtures) |
+| `nse` | C toolchain (`cc`, `perl`, `make`) for the **vendored** OpenSSL | `sudo apt-get install build-essential perl` | none (local fixtures) |
 | `nse-ssh2` | `libssh2-1-dev` | `sudo apt-get install libssh2-1-dev` | none beyond `nse` |
 | `grpc-api` | `protobuf-compiler` | `sudo apt-get install protobuf-compiler` (protoc for reflection descriptor; Rust proto code is checked-in) | none |
 
 ```bash
 # Ubuntu/Debian (all features)
-sudo apt-get install libpcap-dev libssl-dev wireless-tools libssh2-1-dev protobuf-compiler
+sudo apt-get install build-essential perl wireless-tools libssh2-1-dev protobuf-compiler
 
 # Fedora/RHEL
-sudo dnf install libpcap-devel openssl-devel wireless-tools libssh2-devel protobuf-compiler
+sudo dnf install gcc perl wireless-tools libssh2-devel protobuf-compiler
 ```
 
 ## Build Features

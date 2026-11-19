@@ -23,6 +23,12 @@ pub enum RuntimeSurface {
     CliManualStrict,
     TuiManual,
     TuiManualStrict,
+    /// Desktop GUI interactive session (default manual permissive).
+    ///
+    /// A peer of the CLI and TUI manual surfaces, not a new policy class: it
+    /// carries the same manual semantics, and the same `ExecutionSurface`
+    /// counterpart on the engine side.
+    DesktopGuiManual,
     Ci,
     McpServer,
     RestApi,
@@ -45,6 +51,7 @@ impl RuntimeSurface {
             Self::CliManualStrict => "cli-manual-strict",
             Self::TuiManual => "tui-manual",
             Self::TuiManualStrict => "tui-manual-strict",
+            Self::DesktopGuiManual => "desktop-gui-manual",
             Self::Ci => "ci",
             Self::McpServer => "mcp-server",
             Self::RestApi => "rest-api",
@@ -55,43 +62,114 @@ impl RuntimeSurface {
     }
 }
 
-/// Frontend-neutral task kind enum covering all TUI task categories.
+/// The canonical task-kind table.
 ///
-/// Each variant represents a distinct tool or operation that can be submitted
-/// to the runtime. Payload structs are serializable and TUI-free.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "params")]
-pub enum TaskKind {
-    LoadTest(LoadTestParams),
-    StressTest(StressTestParams),
-    PortScan(PortScanParams),
-    EndpointScan(EndpointScanParams),
-    Fingerprint(FingerprintParams),
-    Fuzz(FuzzParams),
-    Waf(WafParams),
-    WafStress(WafStressParams),
-    Pipeline(PipelineParams),
-    Resume(ResumeParams),
-    Recon(ReconParams),
-    PacketCapture(PacketCaptureParams),
-    PacketTraceroute(PacketTracerouteParams),
-    PacketSend(PacketSendParams),
-    GraphQl(GraphQlParams),
-    OAuth(OAuthParams),
-    AuthTest(AuthTestParams),
-    Nse(NseParams),
-    Hunt(HuntParams),
-    Browser(BrowserParams),
-    Compliance(ComplianceParams),
-    Storage(StorageParams),
-    Integrations(IntegrationsParams),
-    Workflow(WorkflowParams),
-    Vuln(VulnParams),
-    Wireless(WirelessParams),
-    WirelessActive(WirelessActiveParams),
-    DbPentest(DbPentestParams),
-    Intercept(InterceptParams),
-    C2(C2Params),
+/// This is the **single source of truth** for the task-kind set: it declares
+/// the variants, their wire capability names, and their published
+/// descriptions. The runtime's canonical capability list, the admission
+/// check's name lookup, and the published capability list are all generated
+/// from it, so a new variant cannot be added without the derived list
+/// noticing -- adding one is a compile error until the table covers it.
+///
+/// The macro is deliberate. The list is transcribed exactly once, and the
+/// generated matches are exhaustive by construction (no wildcard arm), which
+/// is the compile-time guarantee the workspace's single-table rule asks for.
+macro_rules! define_task_kinds {
+    (
+        $(
+            $(#[$meta:meta])*
+            $variant:ident($params:ty) => $name:literal, $description:literal;
+        )*
+    ) => {
+        /// Frontend-neutral task kind enum covering all TUI task categories.
+        ///
+        /// Each variant represents a distinct tool or operation that can be submitted
+        /// to the runtime. Payload structs are serializable and TUI-free.
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(tag = "kind", content = "params")]
+        #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+        pub enum TaskKind {
+            $(
+                $(#[$meta])*
+                $variant($params),
+            )*
+        }
+
+        impl TaskKind {
+            /// Wire capability name for this task kind variant.
+            ///
+            /// This name must match the entries in
+            /// [`crate::capabilities::RuntimeCapabilities::task_kinds`] for the
+            /// task to be supported by a given runtime configuration. It is
+            /// transport metadata, not the canonical operation identity (see
+            /// [`Self::operation_id`]).
+            pub fn capability_name(&self) -> &'static str {
+                match self {
+                    $( TaskKind::$variant(_) => $name, )*
+                }
+            }
+
+            /// Every task-kind variant, in declaration order.
+            ///
+            /// The payloads are defaults: this enumerates the *kinds*, not
+            /// runnable requests. Generated from the canonical table, so it
+            /// covers every variant by construction -- adding a variant to the
+            /// table adds it here, and there is no hand-maintained list to
+            /// fall out of step.
+            pub fn all_variants() -> Vec<TaskKind> {
+                vec![ $( TaskKind::$variant(<$params>::default()), )* ]
+            }
+
+            /// The published description of this variant's capability.
+            pub fn capability_description(&self) -> &'static str {
+                match self {
+                    $( TaskKind::$variant(_) => $description, )*
+                }
+            }
+        }
+
+        /// Curated published descriptions, keyed by capability name.
+        ///
+        /// Data, not identity: the *names* are derived from the task-kind set
+        /// above, while these strings are the wording the daemon publishes.
+        /// The key set is exactly the canonical name set, by construction.
+        pub const CAPABILITY_DESCRIPTIONS: &[(&str, &str)] = &[
+            $( ($name, $description), )*
+        ];
+    };
+}
+
+define_task_kinds! {
+    LoadTest(LoadTestParams) => "load-test", "HTTP load testing";
+    StressTest(StressTestParams) => "stress-test", "Network stress testing";
+    PortScan(PortScanParams) => "port-scan", "Port scanning";
+    EndpointScan(EndpointScanParams) => "endpoint-scan", "Endpoint discovery";
+    Fingerprint(FingerprintParams) => "fingerprint", "Service fingerprinting";
+    Fuzz(FuzzParams) => "fuzz", "Fuzzing";
+    Waf(WafParams) => "waf", "WAF detection";
+    WafStress(WafStressParams) => "waf-stress", "WAF stress testing";
+    Pipeline(PipelineParams) => "pipeline", "Security assessment pipeline";
+    Resume(ResumeParams) => "resume", "Resume a saved scan checkpoint";
+    Recon(ReconParams) => "recon", "Reconnaissance";
+    PacketCapture(PacketCaptureParams) => "packet-capture", "Packet capture";
+    PacketTraceroute(PacketTracerouteParams) => "traceroute", "Packet traceroute";
+    PacketSend(PacketSendParams) => "packet-send", "Packet sending";
+    GraphQl(GraphQlParams) => "graphql", "GraphQL testing";
+    OAuth(OAuthParams) => "oauth", "OAuth testing";
+    AuthTest(AuthTestParams) => "auth-test", "Authentication testing";
+    Nse(NseParams) => "nse", "NSE script execution";
+    Hunt(HuntParams) => "hunt", "Vulnerability hunting";
+    Browser(BrowserParams) => "browser", "Headless browser testing";
+    Compliance(ComplianceParams) => "compliance", "Compliance checking";
+    Storage(StorageParams) => "storage", "Storage operations";
+    Integrations(IntegrationsParams) => "integration", "External integrations";
+    Workflow(WorkflowParams) => "workflow", "Workflow execution";
+    Vuln(VulnParams) => "vuln", "Vulnerability scanning";
+    Wireless(WirelessParams) => "wireless", "WiFi reconnaissance";
+    WirelessActive(WirelessActiveParams) => "wireless-active", "WiFi active attacks";
+    DbPentest(DbPentestParams) => "db-pentest", "Database security testing";
+    Intercept(InterceptParams) => "intercept", "Traffic interception";
+    C2(C2Params) => "c2", "C2 simulation";
 }
 
 /// A runtime request to execute a task.
@@ -107,6 +185,7 @@ pub struct RunRequest {
 
 /// Load test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LoadTestParams {
     pub target: String,
     pub method: String,
@@ -125,6 +204,7 @@ pub struct LoadTestParams {
 
 /// Stress test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StressTestParams {
     pub target: String,
     pub flood_type: String,
@@ -135,6 +215,7 @@ pub struct StressTestParams {
 
 /// Port scan parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PortScanParams {
     pub target: String,
     pub ports: Option<String>,
@@ -149,6 +230,7 @@ pub struct PortScanParams {
 
 /// Endpoint scan parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct EndpointScanParams {
     pub target: String,
     pub methods: Option<Vec<String>>,
@@ -169,6 +251,7 @@ pub struct EndpointScanParams {
 
 /// Fingerprint parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FingerprintParams {
     pub target: String,
     pub ports: Option<String>,
@@ -178,6 +261,7 @@ pub struct FingerprintParams {
 
 /// Fuzz parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct FuzzParams {
     pub target: String,
     pub payload_type: Option<String>,
@@ -199,6 +283,7 @@ pub struct FuzzParams {
 
 /// WAF detection parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WafParams {
     pub target: String,
     pub bypass_mode: Option<bool>,
@@ -207,6 +292,7 @@ pub struct WafParams {
 
 /// WAF stress test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WafStressParams {
     pub target: String,
     pub requests: Option<u32>,
@@ -214,7 +300,8 @@ pub struct WafStressParams {
 }
 
 /// Pipeline parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PipelineParams {
     pub target: String,
     pub profile: Option<String>,
@@ -239,13 +326,15 @@ pub struct PipelineParams {
 ///
 /// The target is not carried here: it lives inside the checkpoint, and the
 /// engine reads it to build the enforcement descriptor for the resumed run.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ResumeParams {
     pub session_path: String,
 }
 
 /// Recon parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ReconParams {
     pub target: String,
     pub modules: Option<Vec<String>>,
@@ -253,6 +342,7 @@ pub struct ReconParams {
 
 /// Packet capture parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketCaptureParams {
     pub interface: Option<String>,
     pub filter: Option<String>,
@@ -262,7 +352,8 @@ pub struct PacketCaptureParams {
 }
 
 /// Packet traceroute parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketTracerouteParams {
     pub target: String,
     pub max_hops: Option<u32>,
@@ -270,6 +361,7 @@ pub struct PacketTracerouteParams {
 
 /// Packet send parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PacketSendParams {
     pub target: String,
     pub protocol: String,
@@ -281,6 +373,7 @@ pub struct PacketSendParams {
 
 /// GraphQL testing parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GraphQlParams {
     pub target: String,
     pub introspection: Option<bool>,
@@ -293,6 +386,7 @@ pub struct GraphQlParams {
 
 /// OAuth testing parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct OAuthParams {
     pub target: String,
     pub flow: Option<String>,
@@ -308,6 +402,7 @@ pub struct OAuthParams {
 
 /// Authentication test parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct AuthTestParams {
     pub target: String,
     pub username: Option<String>,
@@ -319,7 +414,8 @@ pub struct AuthTestParams {
 }
 
 /// NSE script parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NseParams {
     pub target: String,
     pub script: String,
@@ -342,21 +438,24 @@ pub struct NseParams {
 }
 
 /// Vulnerability hunt parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct HuntParams {
     pub target: String,
     pub hunt_type: Option<String>,
 }
 
 /// Browser testing parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct BrowserParams {
     pub target: String,
     pub headless: Option<bool>,
 }
 
 /// Compliance check parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ComplianceParams {
     pub target: String,
     pub framework: Option<String>,
@@ -364,6 +463,7 @@ pub struct ComplianceParams {
 
 /// Storage parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct StorageParams {
     pub storage_type: String,
     pub path: Option<String>,
@@ -393,28 +493,32 @@ pub struct StorageParams {
 }
 
 /// Integration parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct IntegrationsParams {
     pub integration_type: String,
     pub config: Option<serde_json::Value>,
 }
 
 /// Workflow parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WorkflowParams {
     pub workflow_id: Option<String>,
     pub steps: Option<Vec<String>>,
 }
 
 /// Vulnerability parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct VulnParams {
     pub target: String,
     pub vuln_type: Option<String>,
 }
 
 /// Wireless recon parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WirelessParams {
     pub interface: Option<String>,
     pub duration_secs: Option<u32>,
@@ -448,6 +552,7 @@ fn default_wireless_dry_run() -> bool {
 /// existed — or any payload that omits them — simulates the attack instead of
 /// transmitting live frames. Never invert this default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct WirelessActiveParams {
     pub interface: Option<String>,
     pub target_bssid: Option<String>,
@@ -485,6 +590,7 @@ impl Default for WirelessActiveParams {
 
 /// Database pentest parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DbPentestParams {
     pub db_type: String,
     pub target: String,
@@ -498,6 +604,7 @@ pub struct DbPentestParams {
 
 /// Intercept proxy parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct InterceptParams {
     pub listen_port: Option<u16>,
     pub target: Option<String>,
@@ -508,6 +615,7 @@ pub struct InterceptParams {
 
 /// C2 simulation parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct C2Params {
     pub profile: Option<String>,
     pub target: Option<String>,
@@ -515,50 +623,6 @@ pub struct C2Params {
 }
 
 impl TaskKind {
-    /// Wire capability name for this task kind variant.
-    ///
-    /// This name must match the entries in [`RuntimeCapabilities::task_kinds`]
-    /// for the task to be supported by a given runtime configuration. It is
-    /// transport metadata, not the canonical operation identity (see
-    /// [`Self::operation_id`]).
-    pub fn capability_name(&self) -> &'static str {
-        match self {
-            TaskKind::LoadTest(_) => "load-test",
-            TaskKind::StressTest(_) => "stress-test",
-            TaskKind::PortScan(_) => "port-scan",
-            TaskKind::EndpointScan(_) => "endpoint-scan",
-            TaskKind::Fingerprint(_) => "fingerprint",
-            TaskKind::Fuzz(_) => "fuzz",
-            TaskKind::Waf(_) => "waf",
-            TaskKind::WafStress(_) => "waf-stress",
-            TaskKind::Pipeline(_) => "pipeline",
-            // Resume is a distinct wire kind with its own capability name, so a
-            // runtime can advertise pipeline support without also advertising
-            // resume — the daemon conservative set deliberately omits it.
-            TaskKind::Resume(_) => "resume",
-            TaskKind::Recon(_) => "recon",
-            TaskKind::PacketCapture(_) => "packet-capture",
-            TaskKind::PacketTraceroute(_) => "traceroute",
-            TaskKind::PacketSend(_) => "packet-send",
-            TaskKind::GraphQl(_) => "graphql",
-            TaskKind::OAuth(_) => "oauth",
-            TaskKind::AuthTest(_) => "auth-test",
-            TaskKind::Nse(_) => "nse",
-            TaskKind::Hunt(_) => "hunt",
-            TaskKind::Browser(_) => "browser",
-            TaskKind::Compliance(_) => "compliance",
-            TaskKind::Storage(_) => "storage",
-            TaskKind::Integrations(_) => "integration",
-            TaskKind::Workflow(_) => "workflow",
-            TaskKind::Vuln(_) => "vuln",
-            TaskKind::Wireless(_) => "wireless",
-            TaskKind::WirelessActive(_) => "wireless-active",
-            TaskKind::DbPentest(_) => "db-pentest",
-            TaskKind::Intercept(_) => "intercept",
-            TaskKind::C2(_) => "c2",
-        }
-    }
-
     /// Canonical engine operation ID for this task kind (wire-compat accessor).
     ///
     /// This is the single wire-side match for operation identity. Engine
@@ -597,7 +661,11 @@ impl TaskKind {
             // enforcement the same way.
             TaskKind::Resume(_) => "pipeline",
             TaskKind::Recon(_) => "recon",
-            TaskKind::PacketCapture(_) => "packet",
+            // The capture half of the packet family owns its own operation:
+            // a capture binds to a **local interface**, while `packet` also
+            // serves `traceroute` and `packet-send`, which address a remote
+            // host and must keep requiring one.
+            TaskKind::PacketCapture(_) => "packet-capture",
             TaskKind::PacketTraceroute(_) => "packet",
             TaskKind::PacketSend(_) => "packet",
             TaskKind::GraphQl(_) => "graphql",
@@ -612,15 +680,26 @@ impl TaskKind {
             TaskKind::Workflow(_) => "workflow",
             TaskKind::Vuln(_) => "vuln",
             TaskKind::Wireless(_) => "wireless",
-            TaskKind::WirelessActive(_) => "wireless",
+            // An active wireless request performs a deauth/disassoc, which is
+            // the `wireless-deauth` operation -- risk `Intrusive`, capability
+            // `RawPacketProbe`, feature `wireless-advanced`. It must NOT be
+            // authorised under the passive `wireless` operation's risk level:
+            // the CLI already resolves its deauth command against
+            // `wireless-deauth`, so the daemon and the CLI have to agree.
+            TaskKind::WirelessActive(_) => "wireless-deauth",
             TaskKind::DbPentest(_) => "db-pentest",
             TaskKind::Intercept(_) => "proxy-intercept",
             TaskKind::C2(_) => "c2",
         }
     }
 
-    /// Canonical target for this task kind (`None` for `NoTarget` or
-    /// interface-bound operations). Wire-compat accessor; engine adapters
+    /// Canonical target for this task kind.
+    ///
+    /// `None` for a `NoTarget` operation. For an **interface-bound**
+    /// operation the value is the *local identifier* -- an interface name, a
+    /// BSSID -- not a remote host: the enforcement kernel carries it into the
+    /// descriptor and the audit record without matching it against the
+    /// scope's remote target rules. Wire-compat accessor; engine adapters
     /// delegate to this method (see [`Self::operation_id`]).
     ///
     /// Exhaustive for the same compile-failure guarantee as
@@ -643,7 +722,11 @@ impl TaskKind {
             // target from the selected session in their own descriptor path.
             TaskKind::Resume(_) => None,
             TaskKind::Recon(p) => Some(p.target.clone()),
-            TaskKind::PacketCapture(_) => None,
+            // The local identifier, not a remote host. It is carried into
+            // the descriptor and the audit record, and the enforcement
+            // kernel does not match it against the scope's remote target
+            // rules.
+            TaskKind::PacketCapture(p) => p.interface.clone(),
             TaskKind::PacketTraceroute(p) => Some(p.target.clone()),
             TaskKind::PacketSend(p) => Some(p.target.clone()),
             TaskKind::GraphQl(p) => Some(p.target.clone()),
@@ -657,8 +740,11 @@ impl TaskKind {
             TaskKind::Integrations(_) => None,
             TaskKind::Workflow(_) => None,
             TaskKind::Vuln(p) => Some(p.target.clone()),
-            TaskKind::Wireless(_) => None,
-            TaskKind::WirelessActive(_) => None,
+            TaskKind::Wireless(p) => p.interface.clone(),
+            // The deauth's local identifier is the BSSID it targets, with
+            // the interface as the fallback. The CLI passes the BSSID as the
+            // target for the same operation, so the two agree.
+            TaskKind::WirelessActive(p) => p.target_bssid.clone().or_else(|| p.interface.clone()),
             TaskKind::DbPentest(p) => Some(p.target.clone()),
             TaskKind::Intercept(p) => p.target.clone(),
             TaskKind::C2(p) => p.target.clone(),

@@ -580,6 +580,7 @@ impl TargetPolicyKindPy {
             eggsec::config::TargetPolicyKind::TargetRequired => "target-required",
             eggsec::config::TargetPolicyKind::ExplicitScopeRequired => "explicit-scope-required",
             eggsec::config::TargetPolicyKind::PrivateOrLocalRequired => "private-or-local-required",
+            eggsec::config::TargetPolicyKind::InterfaceBound => "interface-bound",
         }
         .to_string()
     }

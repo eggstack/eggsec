@@ -45,10 +45,6 @@ crates/eggsec-tui/src/
 │   ├── runtime_adapter/ # Phase 4: runtime event reducer
 │   │   └── mod.rs       # TuiRuntimeAdapter, TuiAction, reduce/apply pattern
 │   └── theme_runtime.rs # Theme loader lifecycle helpers
-├── runtime_client/   # Phase 8: remote attach mode
-│   ├── mod.rs             # TuiRuntimeClient trait, RuntimeEventReceiverHandle
-│   ├── embedded.rs        # EmbeddedRuntimeClient (in-process Runtime)
-│   └── daemon.rs          # DaemonRuntimeClient (Unix socket to eggsec-daemon)
 ├── tabs/         # Individual tab implementations (33 tabs)
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
 │   ├── spec.rs         # TabSpec registry (title, stable_id, category, risk, capabilities)
@@ -102,10 +98,14 @@ Daemon-backed execution reaches the same executor owner via `runtime_bridge` bun
 → `execute_approved`.
 
 ### Remote Attach Mode (Phase 8)
-The TUI supports two runtime backends via the `TuiRuntimeClient` trait:
+The TUI supports two runtime backends via the `RuntimeClient` trait, which lives in
+the frontend-neutral `eggsec-frontend-client` crate (not in this crate):
 
 - **Embedded** (default): `EmbeddedRuntimeClient` wraps `Arc<Runtime>` — full typed `TaskResult` rendering via `result_rx`.
 - **Daemon** (remote): `DaemonRuntimeClient` connects to `eggsec-daemon` via Unix socket. Uses envelope rendering fallback (`TuiAction::TabCompletedEnvelope`) since typed `TaskResult` is unavailable.
+
+The client contract is shared with every other interactive frontend, so the TUI
+must not grow its own copy. See the `eggsec-frontend-client` skill.
 
 CLI: `--runtime daemon --socket <path> [--session <id> | --new-session | --attach-latest]`
 
@@ -119,7 +119,8 @@ Key differences in daemon mode:
 - Observers cannot submit/cancel tasks (permission check returns `ErrorCode::PermissionDenied`)
 - On strict-surface sessions (McpServer, RestApi, etc.), only the session Owner can approve policies
 - Daemon uses `CommandPermission` enum for per-command RBAC (not stringly-typed names)
-- `ApprovePolicy` returns `ErrorCode::Unsupported` (not wired yet) instead of silently succeeding
+- `ApprovePolicy` resolves the daemon's pending decision; an answer for a task with nothing pending returns `ErrorCode::InvalidState` instead of silently succeeding
+- The TUI's own local approval flow is unchanged: `confirm_override` now calls the policy kernel's shared `ManualOverride::permitting_classes`, so the confirmation-class mapping exists in exactly one place
 
 ### Tab System
 - `Tab` has 33 variants (discriminants 0..=32, `tabs/mod.rs:154`), including
@@ -334,7 +335,17 @@ cargo check -p eggsec-tui --features full
 `make check-feature-profiles` covers the broad `db-pentest,web-proxy,c2` builders;
 `make check-features-individual` mechanically sweeps every declared TUI feature
 plus `full` (orphan guard fails if a new Cargo feature escapes the sweep).
-Guard 98 pins these invariants. TUI profiles need no system prerequisites.
+Guard 98 pins these invariants. TUI profiles need no system prerequisites. The
+sweep runs on bash 3.2, so it works from a stock macOS shell too — do not add a
+bash-4 construct to it (guard Check 196), because such a construct aborts the
+script rather than degrading it.
+
+A tab must not redefine a method the input macro it invokes already emits —
+that is a duplicate definition (E0201) and the gated feature stops compiling.
+The tab modules are feature-gated and `make check` builds the TUI with default
+features (`[]`), so only the sweep compiles them; guard Check 195 now catches
+this class statically. Prefer the macro's method over a hand-written copy, or
+drop the macro.
 
 ### Visual Regression Tests
 ```rust

@@ -525,7 +525,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
 
             zw.start_file("Payload/TestApp.app/Info.plist", opts)
@@ -733,7 +733,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             // Malicious entry
             zw.start_file("Payload/../../evil.plist", opts)
@@ -752,7 +752,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             zw.start_file("Payload/Weird.app/Other.plist", opts)
                 .expect("start other");
@@ -773,7 +773,7 @@ mod tests {
         let mut tmp = NamedTempFile::new().expect("tempfile");
         {
             let mut zw = ZipWriter::new(&mut tmp);
-            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
+            let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Stored);
             zw.start_file("Payload/TestApp.app/Info.plist", opts)
                 .expect("start oversized plist");

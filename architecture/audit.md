@@ -2,7 +2,7 @@
 
 ## Role & Responsibilities
 
-`audit.rs` provides a single `EnforcementAuditEvent` model for consistent audit records across all execution surfaces (CLI, TUI, REST, MCP, gRPC, Agent, CI). Every meaningful enforcement decision produces an audit event that can be used for debugging, compliance reporting, and agent workflow correlation.
+`audit.rs` provides a single `EnforcementAuditEvent` model for consistent audit records across all execution surfaces (CLI, TUI, desktop GUI, REST, MCP, gRPC, Agent, CI). Every meaningful enforcement decision produces an audit event that can be used for debugging, compliance reporting, and agent workflow correlation.
 
 > **Corrections (verified against source 2026-10-06):** `EnforcementAuditEvent` (15 fields), `AuditOutcome` (5 variants), all 21 tests + line cites, and all key-function cites re-verified **unchanged**. Fixed stale cites: `lib.rs` re-export `:205-206` → `:219-221`; REST audit site `rest.rs:743` → `:749`; gRPC audit site `grpc.rs:641` → `:649`; MCP audit site `server.rs:592` → `:598`; `tracing::info!` `:191` → `:192` and `tracing::warn!` `:205` → `:206`; `audit_event_from_preflight` hardcoded `confirmed=false` `:170` → `:169`.
 
@@ -147,6 +147,7 @@ Delegates to `audit_event_from_enforcement_outcome` with hardcoded:
 |---------|:------------:|----------------------|:--------------:|---------------|
 | CLI | Yes | Accepted overrides include class+reason | None | `commands/handlers/` (via `EnforcementContext`) |
 | TUI | Yes | Accepted overrides include class+reason | None | `eggsec-tui` (via `EnforcementContext`) |
+| Desktop GUI | Yes | Accepted overrides include class+reason | None | Via `EnforcementContext` (manual surface, same as CLI/TUI) |
 | REST | Yes | Never (REST never confirms) | `generate_correlation_id()` | `tool/protocol/rest.rs:749` |
 | MCP | Yes | Never (MCP never confirms) | JSON-RPC request id | `tool/protocol/mcp/handlers/server.rs:598` |
 | gRPC | Yes | Never (gRPC never confirms) | Request correlation | `tool/protocol/grpc.rs:649` |

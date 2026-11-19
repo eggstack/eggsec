@@ -2,14 +2,15 @@
 # test_python_nse_runtime.sh — NSE runtime Python integration tests
 #
 # Builds eggsec-python with the nse feature and runs the NSE test suite.
-# Skips gracefully if the nse feature cannot be compiled (e.g. missing libssl-dev).
+# Skips gracefully if the nse feature cannot be compiled (e.g. no C toolchain for the
+# vendored OpenSSL the nse runtime builds against).
 #
 # Usage:
 #   bash scripts/test_python_nse_runtime.sh
 #
 # Prerequisites:
 #   - Rust toolchain, maturin, pytest
-#   - libssl-dev (for nse feature)
+#   - a C toolchain (cc, perl, make) for the nse feature's vendored OpenSSL
 #
 # Exit codes:
 #   0 - all tests passed
@@ -50,8 +51,8 @@ fi
 echo "[1/3] Building eggsec-python with nse feature..."
 if ! timeout 600 maturin develop --release --features nse 2>&1 | tail -5; then
   echo ""
-  echo "WARN: maturin develop with nse feature failed (missing libssl-dev?)"
-  echo "      Install libssl-dev and retry. Skipping NSE tests."
+  echo "WARN: maturin develop with nse feature failed (missing C toolchain?)"
+  echo "      Install a C toolchain (cc, perl, make) and retry. Skipping NSE tests."
   skip "nse feature compilation failed"
   echo ""
   echo "Summary: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

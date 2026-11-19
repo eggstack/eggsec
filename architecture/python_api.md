@@ -344,9 +344,9 @@ in the wheel via `pyproject.toml` `include`.
 | `web-proxy` | `eggsec/web-proxy` | — | MITM proxy |
 | `mobile` | `eggsec/mobile` | — | APK/IPA static analysis |
 | `mobile-dynamic` | `eggsec/mobile-dynamic` | ADB | Android runtime testing |
-| `packet-inspection` | `eggsec/packet-inspection` | libpcap-dev | Packet capture |
+| `packet-inspection` | `eggsec/packet-inspection` | — (pure-Rust `pnet`) | Packet capture |
 | `stress-testing` | `eggsec/stress-testing` | — | Raw socket stress |
-| `nse` | `eggsec/nse` | libssl-dev | NSE script execution |
+| `nse` | `eggsec/nse` | C toolchain (vendored OpenSSL) | NSE script execution |
 | `container` | `eggsec/container` | — | Docker/K8s scanning |
 | `daemon-client` | — | — | Daemon IPC (eggsec-daemon, eggsec-runtime) |
 | `headless-browser` | `eggsec/headless-browser` | Chromium | Browser testing |

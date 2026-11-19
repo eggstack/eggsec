@@ -20,11 +20,35 @@ nor live support — so adding a platform-sensitive domain requires a matrix her
 | `wireless` (passive) | Linux for live; fixture anywhere | `CAP_NET_ADMIN`/root for live only | `iwlist` (wireless-tools), managed/up lab interface | `wireless` | parser/heuristic/fixtures: `cargo test -p eggsec --lib --features wireless wireless::fixture::` | lab scan: `sudo eggsec wireless wlan0 --dry-run` first, then real on owned nets |
 | `wireless-advanced` (active) | Linux, lab hardware | `CAP_NET_ADMIN`/root + monitor mode + `--allow-active-wireless` | monitor interface (e.g. `wlan0mon`) | `wireless-advanced` (`→wireless`) | frame crafting dry-run: `cargo test -p eggsec --lib --features wireless,wireless-advanced wireless::fixture::` | **manual lab only, never CI**: crafted frames are tested as bytes; RF transmission is a maintainer procedure |
 | `stress-testing` | Linux for live; fixture anywhere | `CAP_NET_RAW`/root for live only | none beyond scope+budgets | `stress-testing` | auth/metrics/caps: `cargo test -p eggsec --lib stress::` (no traffic) | manual, scoped, rate/duration-capped lab runs only |
-| `nse` | all | none | `libssl-dev` at build | `nse` | `./scripts/test-nse.sh` (safe scripts) | local only |
+| `nse` | all | none | C toolchain (`cc`, `perl`, `make`) at build — OpenSSL is vendored | `nse` | `./scripts/test-nse.sh` (safe scripts) | local only |
+
+`packet-inspection` and `stress-testing` need **no** system library: the engine
+uses pure-Rust `pnet` (`crates/eggsec/Cargo.toml:323`, `:326`), so there is no
+`libpcap-dev` to install. `nse` needs a C toolchain (`cc`, `perl`, `make`)
+because `eggsec-nse` **vendors** OpenSSL — it does not need a system
+`libssl-dev`. The runtime privileges above (`CAP_NET_RAW`, `CAP_NET_ADMIN`,
+monitor mode) are unchanged by this.
 
 A skipped live test prints e.g. `SKIP packet-inspection: CAP_NET_RAW (running
 without capture privilege) [root=false, caps=…] fix: …`. Fixture tests never skip
 for privilege or hardware.
+
+## The desktop GUI is not one of the six runtime domains
+
+The desktop GUI (`crates/eggsec-gui`) is **not** a runtime-probing domain, so it
+does not appear in the matrix above and `report_for()` does not know it. Its
+platform requirements are **build-time** requirements, not live-probe
+domains: the Tauri shell needs the platform webview development packages, and
+the daemon it connects to needs the engine feature profile the daemon was
+built with. Both are documented in
+[`GUI_PLATFORM_QUALIFICATION.md`](GUI_PLATFORM_QUALIFICATION.md) and
+[`DAEMON_FEATURE_PROFILE.md`](DAEMON_FEATURE_PROFILE.md) respectively.
+
+The GUI's **supported platforms** are Linux and macOS; Windows is out of scope
+by `plans/adrs/ADR-0010-gui-supported-platform-scope.md`. What was actually
+built and exercised per platform is recorded in the qualification matrix, and
+the daemon's engine-feature prerequisites are in the daemon feature profile
+document — the two are deliberately kept apart so they cannot drift.
 
 ## Fixture setup and teardown
 

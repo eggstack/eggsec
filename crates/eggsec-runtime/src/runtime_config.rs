@@ -29,7 +29,7 @@ impl Default for RuntimeConfig {
             default_task_timeout: Some(Duration::from_secs(300)),
             max_active_tasks_per_session: 1,
             event_channel_capacity: 256,
-            capabilities: crate::capabilities::RuntimeCapabilities::full_lab(),
+            capabilities: crate::capabilities::RuntimeCapabilities::canonical(),
         }
     }
 }

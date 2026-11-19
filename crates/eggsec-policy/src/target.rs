@@ -169,13 +169,48 @@ fn normalize_url(raw: &str) -> OperationTarget {
 }
 
 /// Target policy requirement for operation metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum TargetPolicyKind {
     NoTarget,
     OptionalTarget,
     TargetRequired,
     ExplicitScopeRequired,
     PrivateOrLocalRequired,
+    /// The operation binds to a **local** interface or local identifier — an
+    /// interface name, a BSSID, a checkpoint path — rather than to a network
+    /// target.
+    ///
+    /// The contract:
+    ///
+    /// 1. It accepts a `None` target: the operation takes no network target.
+    /// 2. It accepts an optional **local identifier** as the descriptor's
+    ///    target. The identifier is carried into the descriptor and the audit
+    ///    record, so it is never silently dropped.
+    /// 3. `requires_explicit_scope` stays `true`: the operator's explicit
+    ///    scope requirement is **not** relaxed.
+    /// 4. `requires_private_or_local_target` stays `false`: the local binding
+    ///    is not a network target to be matched against a private-range rule.
+    /// 5. The local identifier is **not** matched against the scope's remote
+    ///    target rules, because it is not a remote target.
+    ///
+    /// The scope model has no first-class local-host subject, so the scope
+    /// semantics of this value are exactly: *the operator's explicit scope is
+    /// still required, and the local binding is not a remote target.* This is
+    /// deliberately **not** "the scope check applies to the local host" —
+    /// the model cannot say that.
+    InterfaceBound,
+}
+
+impl Default for TargetPolicyKind {
+    /// The neutral default for a descriptor deserialized without the field.
+    ///
+    /// Only [`Self::InterfaceBound`] changes the kernel's behaviour, so any
+    /// non-interface-bound default is behaviour-preserving for a legacy
+    /// payload.
+    fn default() -> Self {
+        Self::OptionalTarget
+    }
 }
 
 impl std::fmt::Display for TargetPolicyKind {
@@ -186,7 +221,16 @@ impl std::fmt::Display for TargetPolicyKind {
             Self::TargetRequired => write!(f, "target-required"),
             Self::ExplicitScopeRequired => write!(f, "explicit-scope-required"),
             Self::PrivateOrLocalRequired => write!(f, "private-or-local-required"),
+            Self::InterfaceBound => write!(f, "interface-bound"),
         }
+    }
+}
+
+impl TargetPolicyKind {
+    /// Whether this policy binds the operation to a local identifier rather
+    /// than to a network target.
+    pub fn is_interface_bound(&self) -> bool {
+        matches!(self, Self::InterfaceBound)
     }
 }
 
